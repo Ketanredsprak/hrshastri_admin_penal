@@ -8,3 +8,5 @@
 /storage/framework/views
 /bootstrap/cache/*.php
 .ftpquota
+/public/assets/json/file-upload.php
+/public/assets/json/uploads
