@@ -1,0 +1,181 @@
+<style type="text/css">
+     html,
+     body {
+          height: 100%;
+     }
+</style>
+
+<div class="card-body">
+     <div class="row">
+          @if ($data->clock_in != "00:00:00")
+          <div class="col-sm-12 mb-4">
+               <h7>Clock In : {{Auth::user()->timeFormat($data->clock_in)}}</h7>
+               <br>
+               <label>Address: <span id="clock_in_address"></span></label>
+          </div>
+          @endif
+
+          @if ($data->clock_out != "00:00:00")
+          <div class="col-sm2 mb-4">
+               <h7>Clock Out : {{Auth::user()->timeFormat($data->clock_out)}}</h7>
+               <br>
+               <label>Address: <span id="clock_out_address"></span></label>
+          </div>
+          @endif
+     </div>
+     <div class="row">
+          <div class="col-sm-12 mb-4">
+               @php
+               $imagePath = getFilePathPrefix() . "images/clock_in_out/".$data->employee_id."/". $data->image;
+               @endphp
+               <img src="{{ $imagePath }}" class="img-fluid rounded-circle" alt="image" style="width:150px;height:150px" />
+          </div>
+          <div class="col-sm-12">
+               <div id="map" style="width: 700px; height: 400px"></div>
+          </div>
+     </div>
+
+
+     <br />
+
+     {{-- <div class="modal-footer pr-0">
+    <button type="button" class="btn dark btn-outline" data-dismiss="modal">{{ __('Cancel') }}</button>
+</div> --}}
+
+
+
+<script>
+     // Add markers to Google Maps based on the lat/long.
+
+     var map;
+
+     var clock_in_latitude = "{{ $data->clock_in_latitude }}";
+     var clock_in_longitude = "{{ $data->clock_in_longitude }}";
+
+     var clock_out_latitude = "{{ $data->clock_out_latitude }}";
+     var clock_out_longitude = "{{ $data->clock_out_longitude }}";
+
+     var infowindow = null;
+
+     clock_in_latitude = parseFloat(clock_in_latitude);
+     clock_in_longitude = parseFloat(clock_in_longitude);
+
+     clock_out_latitude = parseFloat(clock_out_latitude);
+     clock_out_longitude = parseFloat(clock_out_longitude);
+
+     // SHow Map with pins of clock in and out
+     function initializeMap() {
+          var mapOptions = {
+               center: {
+                    lat: clock_in_latitude,
+                    lng: clock_in_longitude
+               },
+               zoom: 13,
+               streetViewControl: false, // Disable Street View
+               styles: [{
+                    featureType: 'poi',
+                    elementType: 'labels',
+                    stylers: [{
+                         visibility: 'off'
+                    }],
+               }, ],
+          };
+
+          var map = new google.maps.Map(document.getElementById('map'), mapOptions);
+
+          var markers = [{
+                    position: {
+                         lat: clock_in_latitude,
+                         lng: clock_in_longitude
+                    },
+                    text: 'Clock In - {{Auth::user()->timeFormat($data->clock_in)}}',
+                    color: 'green'
+               },
+               {
+                    position: {
+                         lat: clock_out_latitude,
+                         lng: clock_out_longitude
+                    },
+                    text: 'Clock Out - {{Auth::user()->timeFormat($data->clock_out)}}',
+                    color: 'red'
+               },
+               // Add more markers as needed
+          ];
+
+          markers.forEach(function(markerData) {
+               var marker = new google.maps.Marker({
+                    position: markerData.position,
+                    map: map,
+                    title: markerData.text,
+                    icon: {
+                         path: google.maps.SymbolPath.CIRCLE,
+                         scale: 8, // Adjust the scale to make the circle bigger
+                         fillColor: markerData.color,
+                         fillOpacity: 1,
+                         strokeWeight: 1,
+                         strokeColor: 'white',
+                    },
+               });
+
+               // Set the pin color
+               marker.setIcon('http://maps.google.com/mapfiles/ms/icons/' + markerData.color + '-dot.png');
+
+               var infowindow = new google.maps.InfoWindow({
+                    content: markerData.text,
+               });
+
+               marker.addListener('mouseover', function() {
+                    infowindow.open(map, marker);
+               });
+
+               marker.addListener('mouseout', function() {
+                    infowindow.close();
+               });
+
+               // marker.addListener('click', function() {
+               //      infowindow.open(map, marker);
+               // });
+          });
+     }
+
+     google.maps.event.addDomListener(window, 'load', initializeMap);
+     // SHow Map with pins of clock in and out
+
+     initializeMap();
+
+
+     //  Get Google Map Address
+     function getAddressFromLatLng(lat, lng, element) {
+          // Create a Geocoder instance
+          var geocoder = new google.maps.Geocoder();
+
+          // Create a LatLng object
+          var latlng = new google.maps.LatLng(lat, lng);
+
+          // Perform reverse geocoding
+          geocoder.geocode({
+               'latLng': latlng
+          }, function(results, status) {
+               if (status == google.maps.GeocoderStatus.OK) {
+                    if (results[0]) {
+                         // Get the formatted address
+                         var address = results[0].formatted_address;
+
+                         // Display the address or use it as needed
+
+                         $("#" + element).html(address);
+                         // console.log('Address:', address);
+                    } else {
+                         // console.log('No results found');
+                         $("#" + element).html("");
+                    }
+               } else {
+                    // console.log('Geocoder failed due to: ' + status);
+                    $("#" + element).html("");
+               }
+          });
+     }
+
+     getAddressFromLatLng(clock_in_latitude, clock_in_longitude, "clock_in_address");
+     getAddressFromLatLng(clock_out_latitude, clock_out_longitude, "clock_out_address");
+</script>

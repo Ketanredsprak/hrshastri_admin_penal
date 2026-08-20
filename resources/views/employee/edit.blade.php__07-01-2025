@@ -1,0 +1,2952 @@
+<label for=""></label>@extends('layouts.admin')
+
+@section('page-title')
+    {{ __('Edit Employee') }}
+@endsection
+
+@section('breadcrumb')
+    <li class="breadcrumb-item"><a href="{{ route('home') }}">{{ __('Home') }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url('employee') }}">{{ __('Employee') }}</a></li>
+    <li class="breadcrumb-item">{{ __('Edit Employee') }}</li>
+@endsection
+
+@php
+    $isProfileEdit = false;
+    if (Auth::user()->type != 'company') {
+        $loggedInEmployee = App\Models\Employee::where('user_id', \Auth::user()->id)->first();
+        if ($employee->id == ($loggedInEmployee->id ?? 0)) {
+            $isProfileEdit = true;
+        }
+    }
+@endphp
+
+@section('header-section')
+    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+    <style>
+        #calendar {
+            margin-bottom: 100px;
+        }
+
+        #calendar .fc-view {
+            margin-top: 0;
+        }
+
+        .fc .fc-daygrid-day.fc-day-today {
+            background-color: rgba(255, 220, 40, 0.15);
+            background-color: rgba(81, 69, 157, 0.1);
+        }
+
+        .selected-event {
+            position: relative;
+            background-color: #4caf50;
+            /* Green fill for selected dates */
+            /* color: #fff; */
+            height: 100%;
+            width: 100%
+        }
+
+        
+    </style>
+@endsection
+
+@section('content')
+
+
+    <div class="row">
+        <div class="col-sm-12">
+            {{ Form::model($employee, ['route' => ['employee.update', $employee->id], 'id' => 'employee_update', 'method' => 'PUT', 'enctype' => 'multipart/form-data']) }}
+            <div class="card">
+                <div class="card-body">
+
+                    <div class="employ_dtl">
+                        <div class="emploimg">
+
+                            @php
+
+                                $profile = \App\Models\Utility::get_file('uploads/avatar/');
+
+                                $imagePath = '';
+
+                                if (Auth::user()->type == 'company') {
+                                    $imagePath = !empty($users->avatar)
+                                        ? $profile . $users->avatar
+                                        : $profile . 'avatar.png';
+                                } else {
+                                    if (empty($employee->employee_profile)) {
+                                        $imagePath = $profile . 'avatar.png';
+                                    } else {
+                                        $imagePath = $employee->employee_profile_image;
+                                    }
+                                }
+                            @endphp
+
+                            <img alt="#" src="{{ $imagePath }}" class="">
+                        </div>
+                        <div class="employctn">
+                            <div class="row">
+                                <div class="col-lg-3 col-sm-6">
+                                    <h5 class="mt-2"> {{ $employee->name }}</h5>
+                                    {{-- <p> {{ $employeesId }}</p> --}}
+                                </div>
+                                <div class="col-lg-3 col-sm-6">
+                                    <div class="info text-sm mb-3 font-style">
+                                        <strong class="font-bold">Email :</strong>
+                                        <span>{{ $employee->email }}</span>
+                                    </div>
+                                    <div class="info text-sm mb-3 font-style">
+                                        <strong class="font-bold">Personal Email :</strong>
+                                        <span>{{ $employee->personal_email }}</span>
+                                    </div>
+                                    <div class="info text-sm">
+                                        <strong class="font-bold">Phone :</strong>
+                                        <span>{{ $employee->phone }}</span>
+                                    </div>
+                                </div>
+
+                                <div class="col-lg-3 col-sm-6">
+                                    <div class="info mb-3 text-sm">
+                                        <strong class="font-bold">Phone :</strong>
+                                        <span>{{ $employee->phone }}</span>
+                                    </div>
+                                    <div class="info  text-sm">
+                                        <strong class="font-bold">Date of Birth :</strong>
+                                        <span>{{ date('d-m-Y', strtotime(\Auth::user()->dateFormat($employee->getRawOriginal('dob')))) }}</span>
+                                    </div>
+                                </div>
+
+                                @if ($isProfileEdit == false)
+                                    <div class="col-lg-3 col-sm-12">
+                                        <div class="info mb-3 text-sm">
+                                            <input type="checkbox" @if ($employee->employee_exit == 1) checked @endif
+                                                class="form-check-input isscheck isscheck_User" id="employee_exit"
+                                                name="employee_exit" value="1">
+                                            <strong class="form-label font-weight-500"
+                                                for="employee_exit">&nbsp;Exit</strong>
+                                        </div>
+
+                                        <div class="info mb-3 text-sm">
+                                            <input type="checkbox" @if ($employee->confirm_probation_period == 1) checked @endif
+                                                class="form-check-input isscheck isscheck_User"
+                                                id="confirm_probation_period" name="confirm_probation_period"
+                                                value="1">
+                                            <strong class="form-label font-weight-500"
+                                                for="employee_exit">&nbsp;Confirm</strong>
+                                        </div>
+
+                                    </div>
+                                @endif
+
+                            </div>
+                        </div>
+                    </div>
+                    <hr>
+                    <nav>
+                        <div class="nav nav-tabs tablists mb-3" id="nav-tab" role="tablist">
+
+                            <button class="nav-link active" id="nav-personal-details-tab" data-bs-toggle="tab"
+                                data-bs-target="#nav-personal-details" type="button" role="tab"
+                                aria-controls="nav-personal-details" aria-selected="true">Personal Detail</button>
+
+                            <button class="nav-link" id="nav-Allowance-tab" data-bs-toggle="tab"
+                                data-bs-target="#nav-Allowance" type="button" role="tab" aria-controls="nav-Allowance"
+                                aria-selected="false">Company</button>
+
+                            <button class="nav-link" id="nav-salary-and-deductions-tab" data-bs-toggle="tab"
+                                data-bs-target="#nav-salary-and-deductions" type="button" role="tab"
+                                aria-controls="nav-salary-and-deductions" aria-selected="false">Salary Structure</button>
+
+                            <button class="nav-link" id="nav-Experience-tab" data-bs-toggle="tab"
+                                data-bs-target="#nav-Experience" type="button" role="tab"
+                                aria-controls="nav-Experience" aria-selected="false">Experience</button>
+                            <button class="nav-link" id="nav-Education-tab" data-bs-toggle="tab"
+                                data-bs-target="#nav-Education" type="button" role="tab" aria-controls="nav-Education"
+                                aria-selected="false"> Education</button>
+                            <button class="nav-link" id="nav-Dependent-tab" data-bs-toggle="tab"
+                                data-bs-target="#nav-Dependent" type="button" role="tab" aria-controls="nav-Dependent"
+                                aria-selected="false">Dependent</button>
+                            <button class="nav-link" id="nav-Commission-tab" data-bs-toggle="tab"
+                                data-bs-target="#nav-Commission" type="button" role="tab"
+                                aria-controls="nav-Commission" aria-selected="false">Document</button>
+                            <button class="nav-link" id="nav-Loan-tab" data-bs-toggle="tab" data-bs-target="#nav-Loan"
+                                type="button" role="tab" aria-controls="nav-Loan" aria-selected="false">Bank
+                                Account</button>
+
+                            @if ($isProfileEdit == false)
+                                <button class="nav-link" id="nav-weekoff-tab" data-bs-toggle="tab"
+                                    data-bs-target="#nav-weekoff" type="button" role="tab"
+                                    aria-controls="nav-weekoff" aria-selected="false">Week
+                                    off</button>
+                            @endif
+                        </div>
+                    </nav>
+
+                    <div class="tab-content tab_ctn" id="nav-tabContent">
+
+                        <div class="tab-pane fade active show" id="nav-personal-details" role="tabpanel"
+                            aria-labelledby="nav-personal-details-tab">
+
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5>{{ __('Personal Detail') }}</h5>
+                                </div>
+                                <div class="card-body">
+
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="form-group">
+                                                {!! Form::label('employee_id', __('Employee Id'), ['class' => 'form-label']) !!}<span class="text-danger pl-1">*</span>
+                                                {!! Form::text('employee_id', $employee->employee_id, ['class' => 'form-control', 'readonly' => true]) !!}
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="form-group">
+                                                {!! Form::label('name', __('Name'), ['class' => 'form-label']) !!}<span class="text-danger pl-1">*</span>
+                                                {!! Form::text('name', null, ['class' => 'form-control']) !!}
+                                            </div>
+                                        </div>
+
+                                        <div class="col-md-6">
+                                            <div class="form-group">
+                                                {!! Form::label('phone', __('Phone'), ['class' => 'form-label']) !!}<span class="text-danger pl-1">*</span>
+                                                {!! Form::text('phone', null, ['class' => 'form-control']) !!}
+                                            </div>
+                                        </div>
+
+                                        <div class="col-md-6">
+                                            <div class="form-group">
+                                                {!! Form::label('dob', __('Date of Birth'), ['class' => 'form-label']) !!}<span class="text-danger pl-1">*</span>
+
+                                                <input type="date" name="dob"
+                                                    value="{{ date('Y-m-d', strtotime($employee->getRawOriginal('dob'))) }}"
+                                                    class='form-control' max="<?php echo date('Y-m-d'); ?>">
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="form-group">
+                                                {!! Form::label('employee_profile', __('Upload Employee Profile Picture'), ['class' => 'form-label']) !!}
+                                                <small><a
+                                                        href="{{ asset(Storage::url('uploads/employee_profile')) . '/' . $employee->employee_profile }}"
+                                                        target="_blank">View
+                                                        Profile Image</a></small>
+                                                <input type="file" class="form-control" id="employee_profile"
+                                                    name="employee_profile" accept="image/*">
+                                            </div>
+                                        </div>
+
+                                        <div class="col-md-6">
+                                            <div class="form-group ">
+                                                {!! Form::label('gender', __('Gender'), ['class' => 'form-label']) !!}<span class="text-danger pl-1">*</span>
+                                                <div class="d-flex radio-check">
+                                                    <div class="custom-control custom-radio custom-control-inline">
+                                                        <input type="radio" id="g_male" value="Male"
+                                                            name="gender" class="form-check-input"
+                                                            {{ $employee->gender == 'Male' ? 'checked' : '' }}>
+                                                        <label class="form-check-label"
+                                                            for="g_male">{{ __('Male') }}</label>
+                                                    </div>
+                                                    <div class="custom-control custom-radio ms-1 custom-control-inline">
+                                                        <input type="radio" id="g_female" value="Female"
+                                                            name="gender" class="form-check-input"
+                                                            {{ $employee->gender == 'Female' ? 'checked' : '' }}>
+                                                        <label class="form-check-label"
+                                                            for="g_female">{{ __('Female') }}</label>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="form-group col-sm-6">
+                                            {{ Form::label('marital_status', __('Select Marital '), ['class' => 'form-label']) }}
+                                            <div class="form-icon-user">
+                                                <select name="marital_status" id="marital_status"
+                                                    class="form-control select2">
+                                                    <option value="">-Select Marital-</option>
+                                                    <option @if ($employee->marital_status == 'Single') selected @endif
+                                                        class="form-check-input" value="Single">Single</option>
+                                                    <option @if ($employee->marital_status == 'Married') selected @endif
+                                                        class="form-check-input" value="Married">Married</option>
+                                                    <option @if ($employee->marital_status == 'Widowed') selected @endif
+                                                        class="form-check-input" value="Widowed">Widowed</option>
+                                                    <option @if ($employee->marital_status == 'Separated') selected @endif
+                                                        class="form-check-input" value="Separated">Separated</option>
+                                                    <option @if ($employee->marital_status == 'Divorced') selected @endif
+                                                        class="form-check-input"value="Divorced">Divorced</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="form-group col-md-6 marriage_anniversary_date_div"
+                                            style="display: {{ $employee->marital_status == 'Married' || $employee->marital_status == 'Widowed' ? '' : 'none' }}">
+                                            {!! Form::label('marriage_anniversary_date', __('Marriage Anniversary Date '), ['class' => 'form-label']) !!}
+                                            <input type="date" name="marriage_anniversary_date"
+                                                class="form-control current_date" max="<?php echo date('Y-m-d'); ?>"
+                                                value="{{ $employee->marriage_anniversary_date }}">
+                                        </div>
+
+                                        <div class="form-group col-md-6">
+                                            {!! Form::label('email', __('Email'), ['class' => 'form-label']) !!}<span class="text-danger pl-1">*</span>
+                                            {!! Form::email('email', null, ['class' => 'form-control', 'placeholder' => 'Enter employee email']) !!}
+                                        </div>
+                                        <div class="form-group col-md-6">
+                                            {!! Form::label('personal_email', __('Personal Email'), ['class' => 'form-label']) !!}
+                                            {!! Form::email('personal_email', null, ['class' => 'form-control', 'placeholder' => 'Enter employee personal email']) !!}
+                                        </div>
+                                        <div class="form-group  col-sm-6">
+                                            {!! Form::label('address', __('Address'), ['class' => 'form-label']) !!}<span class="text-danger pl-1">*</span>
+                                            {!! Form::textarea('address', null, ['class' => 'form-control', 'rows' => 2]) !!}
+                                        </div>
+                                    </div>
+
+                                    {{-- @if (\Auth::user()->type == 'employee')
+                                        {!! Form::submit('Update', ['class' => 'btn-create btn-xs badge-blue radius-10px float-right']) !!}
+                                    @endif --}}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="tab-pane fade" id="nav-Allowance" role="tabpanel"
+                            aria-labelledby="nav-Allowance-tab">
+                            @if ($isProfileEdit == false)
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h5>{{ __('Company') }}</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="row">
+                                            @csrf
+                                            {{-- <div class="form-group col-sm-6">
+                                                {!! Form::label('employee_id', __('Employee ID'), ['class' => 'form-label']) !!}
+                                                {!! Form::text('employee_id', $employeesId, ['class' => 'form-control', 'disabled' => 'disabled']) !!}
+                                            </div> --}}
+
+                                            <div class="form-group col-sm-6">
+
+                                                @php
+                                                    $branchesGeofencingStatus = $branches
+                                                        ->pluck('geofencing_status', 'id')
+                                                        ->toArray();
+                                                @endphp
+
+                                                <div class="col-lg-6 col-md-6 col-sm-6" id="geofencing_div">
+                                                    <div class="form-check form-switch">
+                                                        <label for="geofencing_status">
+                                                            <h5 class="">{{ __('Enable Geofencing') }}
+                                                            </h5>
+                                                        </label>
+                                                        <input type="checkbox" class="form-check-input"
+                                                            id="geofencing_status" name="geofencing_status"
+                                                            {{ $employee->geofencing_status == 1 ? 'checked' : '' }}
+                                                            {{ isset($branchesGeofencingStatus[$employee->branch_id]) && $branchesGeofencingStatus[$employee->branch_id] == 1 ? '' : 'disabled' }}>
+                                                    </div>
+                                                </div>
+                                                {{ Form::label('branch_id', __('Select Branch'), ['class' => 'form-label']) }}<span
+                                                    class="text-danger pl-1">*</span>
+                                                {{ Form::select('branch_id', $branches->pluck('name', 'id'), null, ['class' => 'form-control select2', 'id' => 'branch_id', 'placeholder' => 'Select Branch']) }}
+                                            </div>
+                                            <div class="form-group col-sm-6">
+                                                {{ Form::label('department_id', __('Select Department'), ['class' => 'form-label']) }}<span
+                                                    class="text-danger pl-1">*</span>
+                                                {{ Form::select('department_id', $departments, null, ['class' => 'form-control', 'id' => 'department_id']) }}
+                                            </div>
+                                            <div class="form-group col-sm-6">
+                                                {{ Form::label('designation_id', __('Select Designation'), ['class' => 'form-label']) }}<span
+                                                    class="text-danger pl-1">*</span>
+
+
+                                                <div class="form-icon-user">
+                                                    <div class="designation_div">
+                                                        <select class="form-control designation_id select2"
+                                                            name="designation_id" id="choices-multiple"
+                                                            placeholder="Select Designation">
+                                                        </select>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div class="form-group col-sm-6">
+                                                {{ Form::label('employe_status', __('Employee Status'), ['class' => 'form-label']) }}<span
+                                                    class="text-danger pl-1">*</span>
+                                                <div class="form-icon-user">
+                                                    <select name="employe_status" id="employe_status"
+                                                        class="form-control select2">
+
+                                                        <option @if ($employee->employe_status == 'Active') selected @else @endif
+                                                            value="Active">Active</option>
+                                                        <option @if ($employee->employe_status == 'Terminated') selected @else @endif
+                                                            value="Terminated">Terminated</option>
+                                                        <option @if ($employee->employe_status == 'Deceased') selected @else @endif
+                                                            value="Deceased">Deceased</option>
+                                                        <option @if ($employee->employe_status == 'Resigned') selected @else @endif
+                                                            value="Resigned">Resigned</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+
+                                            <div class="form-group col-sm-6">
+                                                {{ Form::label('employe_types', __('Employee Types'), ['class' => 'form-label']) }}<span
+                                                    class="text-danger pl-1">*</span>
+
+                                                <div class="form-icon-user">
+                                                    <select name="employe_types" id="employe_types"
+                                                        class="form-control select2">
+                                                        <option @if ($employee->employe_types == 'Permanent') selected @else @endif
+                                                            value="Permanent">Permanent</option>
+                                                        <option @if ($employee->employe_types == 'Temporary') selected @else @endif
+                                                            value="Temporary">Temporary</option>
+                                                        <option @if ($employee->employe_types == 'On Contract') selected @else @endif
+                                                            value="On Contract">On Contract</option>
+                                                        <option @if ($employee->employe_types == 'Trainee') selected @else @endif
+                                                            value="Trainee">Trainee</option>
+
+
+                                                    </select>
+                                                </div>
+                                            </div>
+
+                                            <div class="form-group col-sm-6">
+                                                {!! Form::label('Experience', __('Experience'), ['class' => 'form-label']) !!}
+                                                {!! Form::text('employee_experience', $employee->employee_experience, [
+                                                    'class' => 'form-control',
+                                                    'placeholder' => 'Enter Experience',
+                                                ]) !!}
+                                            </div>
+
+
+                                            <div class="form-group col-sm-6">
+                                                {!! Form::label('Job_description', __('Job Description'), ['class' => 'form-label']) !!}
+
+                                                {!! Form::textarea('Job_description', $employee->Job_description, [
+                                                    'class' => 'form-control',
+                                                    'rows' => 2,
+                                                    'placeholder' => 'Enter job description',
+                                                ]) !!}
+                                            </div>
+
+
+                                            <div class="form-group col-sm-6">
+                                                {!! Form::label('company_doj', 'Company date of joining', ['class' => 'form-label']) !!} <span class="text-danger pl-1">*</span>
+                                                <input type="date" name="company_doj"
+                                                    value="{{ $employee->getRawOriginal('company_doj') }}"
+                                                    class='form-control' max="<?php echo date('Y-m-d'); ?>">
+                                            </div>
+
+                                            <div class="form-group col-sm-6">
+                                                {!! Form::label('date_of_exit', __('Date on Exit'), ['class' => 'form-label']) !!}
+                                                <input type="date" name="date_of_exit"
+                                                    value="{{ $employee->getRawOriginal('date_of_exit') }}"
+                                                    class='form-control' max="<?php echo date('Y-m-d'); ?>">
+                                            </div>
+                                            <div class="form-group col-sm-6">
+                                                {!! Form::label('company_doj', 'Probation Period Date', ['class' => 'form-label']) !!} <span class="text-danger pl-1">*</span>
+                                                <input type="date"
+                                                    value="{{ $employee->getRawOriginal('probation_period_date') }}"
+                                                    name="probation_period_date" class='form-control'>
+                                                <span>Probation Period Months : {{ $probation_period_months }}</span>
+                                            </div>
+
+                                            <div class="form-group col-sm-6">
+                                                {!! Form::label('assign_shifts', 'Assign Shift', ['class' => 'form-label']) !!}
+                                                <select name="assign_shifts[]" class="select2" id="assign_shifts">
+                                                    <option value="">Select shift</option>
+                                                    @foreach ($workingShifts as $shift)
+                                                        <option value="{{ $shift->id }}"
+                                                            {{ in_array($shift->id, $assignedWorkingShifts) ? 'selected' : '' }}>
+                                                            {{ $shift->name }}</option>
+                                                    @endforeach
+                                                </select>
+                                            </div>
+
+
+                                        </div>
+                                    </div>
+                                </div>
+                            @else
+                                <div class="row">
+                                    <div class="col-sm-12 col-md-12">
+                                    </div>
+                                    <div class="col-sm-12 col-md-12">
+                                        <div class="card ">
+                                            <div class="card-body employee-detail-body fulls-card emp-card">
+                                                <div class="row">
+                                                    <div class="col-md-6">
+                                                        <div class="info text-sm">
+                                                            <strong class="font-bold">{{ __('Branch') }} : </strong>
+                                                            <span>{{ !empty($employee->branch) ? $employee->branch->name : '' }}</span>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <div class="info text-sm font-style">
+                                                            <strong class="font-bold">{{ __('Department') }} :</strong>
+                                                            <span>{{ !empty($employee->department) ? $employee->department->name : '' }}</span>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <div class="info text-sm">
+                                                            <strong class="font-bold">{{ __('Designation') }} :</strong>
+                                                            <span>{{ !empty($employee->designation) ? $employee->designation->name : '' }}</span>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <div class="info text-sm">
+                                                            <strong class="font-bold">{{ __('Employee Status') }}
+                                                                :</strong>
+                                                            <span>{{ $employee->employe_status }}</span>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <div class="info text-sm">
+                                                            <strong class="font-bold">{{ __('Employee Types') }}
+                                                                :</strong>
+                                                            <span>{{ $employee->employe_types }}</span>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <div class="info text-sm">
+                                                            <strong class="font-bold">{{ __('Experience') }} :</strong>
+                                                            <span>{{ $employee->employee_experience }}</span>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <div class="info text-sm">
+                                                            <strong class="font-bold">{{ __('Date on Exit') }} :</strong>
+                                                            <span>{{ \Auth::user()->dateFormat($employee->date_of_exit) }}</span>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <div class="info text-sm">
+                                                            <strong class="font-bold">{{ __('Date Of Joining') }}
+                                                                :</strong>
+                                                            <span>{{ \Auth::user()->dateFormat($employee->company_doj) }}</span>
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="col-md-6">
+                                                        <div class="info text-sm">
+                                                            <strong class="font-bold">{{ __('Pay Slab') }} :</strong>
+                                                            <span>{{ $employee->playslab()->get()->first()->name ?? '' }}</span>
+                                                        </div>
+                                                    </div>
+
+                                                    <?php
+                                                    
+                                                    $date = '';
+                                                    if ($employee->probation_period_date != null || !empty($employee->probation_period_date)) {
+                                                        if (date('Y-m-d') <= date('Y-m-d', strtotime($employee->probation_period_date))) {
+                                                            $date = \Auth::user()->dateFormat($employee->probation_period_date);
+                                                        } else {
+                                                            $date = \Auth::user()->dateFormat($employee->probation_period_date) . ' | Probation Period is over.';
+                                                        }
+                                                    }
+                                                    ?>
+
+                                                    <div class="col-md-6">
+                                                        <div class="info text-sm">
+                                                            <strong class="font-bold">{{ __('Probation Date') }}
+                                                                :</strong>
+                                                            <span>{{ $date }}</span>
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="col-md-6">
+                                                        <div class="info text-sm">
+                                                            <strong class="font-bold">{{ __('Facility For') }} :</strong>
+                                                            <span>{{ $employee->office_staff == 1 ? 'Office Staff' : 'Field Staff' }}</span>
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="col-md-6">
+                                                        <div class="info text-sm">
+                                                            <strong class="font-bold">{{ __('Job Description') }}
+                                                                :</strong>
+                                                            <span>{{ $employee->Job_description ?? '' }}</span>
+                                                        </div>
+                                                    </div>
+
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            @endif
+
+
+                        </div>
+
+                        <div class="tab-pane fade" id="nav-salary-and-deductions" role="tabpanel"
+                            aria-labelledby="nav-salary-and-deductions-tab">
+
+                            @if ($isProfileEdit == false)
+
+
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h5>{{ __('Salary & Deductions') }}</h5>
+                                    </div>
+                                    <div class="card-body employee-detail-create-body">
+
+                                        {{-- Salary Details Start --}}
+                                        <div class="row">
+
+                                            <div class="form-group col-md-6">
+                                                {!! Form::label('play_slab_id', __('Pay Slab'), ['class' => 'form-label']) !!}<span class="text-danger pl-1">*</span>
+                                                <select name="play_slab_id" id="play_slab_id"
+                                                    class="form-control select2">
+                                                    <option value="">Select Pay Slab</option>
+                                                    @foreach ($PayslipType as $playslab)
+                                                        <option @if ($employee->play_slab_id == $playslab->id) selected @endif
+                                                            value="{{ $playslab->id }}">{{ $playslab->name }}</option>
+                                                    @endforeach
+                                                </select>
+                                            </div>
+
+                                            <div class="form-group col-md-6">
+                                                {!! Form::label('office_staff', __('This facility is for Field'), ['class' => 'form-label']) !!}
+                                                <select name="office_staff" id="office_staff" class="form-control">
+                                                    <option value="">Select visit option</option>
+                                                    <option @if ($employee->office_staff == 1) selected @endif
+                                                        value="1">
+                                                        Office Staff</option>
+                                                    <option @if ($employee->office_staff == 2) selected @endif
+                                                        value="2">
+                                                        Field Staff</option>
+                                                </select>
+                                            </div>
+
+                                            <div class="form-group col-md-6 select_grade_type d-none">
+                                                {!! Form::label('grade_type_id', __('Grade Type'), ['class' => 'form-label']) !!}
+                                                <select name="grade_type_id" id="grade_type_id" class="form-control">
+                                                    <option value="">Select Grade</option>
+                                                    @foreach ($gradeTypes as $gradetype)
+                                                        <option @if ($gradetype->id == $employee->grade_type_id) selected @endif
+                                                            value="{{ $gradetype->id }}">{{ $gradetype->name }}</option>
+                                                    @endforeach
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                        <div class="row">
+                                            <div class="form-group col-md-3">
+                                                {!! Form::label('ctc_annual', __('CTC Annual'), ['class' => 'form-label']) !!}<span class="text-danger pl-1">*</span>
+                                                {!! Form::number('ctc_annual', old('ctc_annual'), [
+                                                    'class' => 'form-control salaryAmountValidation',
+                                                    'min' => '0',
+                                                    'placeholder' => 'Enter Employee Annual CTC',
+                                                    'id' => 'ctc_annual',
+                                                ]) !!}
+                                            </div>
+
+                                            <div class="form-group col-md-3">
+                                                {!! Form::label('ctc_monthely', __('CTC Monthly'), ['class' => 'form-label']) !!}<span class="text-danger pl-1">*</span>
+                                                {!! Form::number(
+                                                    'ctc_monthely',
+                                                    old('ctc_monthely', $employee->ctc_annual > 0 ? $employee->ctc_annual / 12 : 0),
+                                                    [
+                                                        'class' => 'form-control salaryAmountValidation',
+                                                        'min' => '0',
+                                                        'placeholder' => 'Employee Monthly CTC',
+                                                        'id' => 'ctc_monthely',
+                                                        'readonly',
+                                                    ],
+                                                ) !!}
+                                            </div>
+
+                                            <div class="form-group col-md-3">
+                                                {!! Form::label('ctc_percentage', __('Basic(%)'), ['class' => 'form-label']) !!}<span class="text-danger pl-1">*</span>
+                                                {!! Form::text('ctc_percentage', old('ctc_percentage', numberFormat($company_ctc_percentage)), [
+                                                    'class' => 'form-control salaryAmountValidation ctcPercentageValidator',
+                                                    'min' => '0',
+                                                    'placeholder' => 'Basic(%)',
+                                                    'id' => 'ctc_percentage',
+                                                    'min' => 1,
+                                                    'max' => 100,
+                                                ]) !!}
+                                            </div>
+
+                                            <div class="form-group col-md-3">
+                                                {!! Form::label('salary', __('Salary'), ['class' => 'form-label']) !!}<span class="text-danger pl-1">*</span>
+                                                {!! Form::number('salary', old('salary'), [
+                                                    'class' => 'form-control salaryAmountValidation',
+                                                    'min' => '0',
+                                                    'placeholder' => 'Enter Employee Salary',
+                                                    'id' => 'salary',
+                                                    'readonly',
+                                                ]) !!}
+                                            </div>
+                                        </div>
+
+                                        {{-- Salary Details End --}}
+
+
+
+                                        {{-- Salary Details End --}}
+
+
+                                        {{-- Earnings Section Start --}}
+
+                                        {{-- Statutory Bonus Start --}}
+                                        <hr>
+                                        <div class="row">
+
+                                            <div class="form-group col-md-12">
+                                                <div class="form-check form-switch">
+                                                    <label for="statutory_bonus_status">
+                                                        <h5 class="">{{ __('Statutory Bonus') }}
+                                                        </h5>
+                                                    </label>
+                                                    <input type="checkbox" class="form-check-input"
+                                                        id="statutory_bonus_status" name="statutory_bonus_status"
+                                                        {{ $employee->statutory_bonus_status == 1 ? 'checked' : '' }}>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="row" id="statutory_bonus_div"
+                                            style="display: {{ $employee->statutory_bonus_status == 1 ? '' : 'none' }};">
+                                            <div class="col-lg-3 col-md-3 col-sm-12 form-group">
+                                                {{ Form::label('statutory_bonus', __('Statutory Bonus'), ['class' => 'col-form-label']) }}
+                                                {{ Form::text('statutory_bonus', old('statutory_bonus', $employee->statutory_bonus), ['id' => 'statutory_bonus', 'class' => 'form-control salaryAmountValidation', 'placeholder' => 'Enter Amount']) }}
+                                            </div>
+                                        </div>
+                                        {{-- Statutory Bonus End --}}
+
+                                        {{-- Allowances Start --}}
+                                        @if ($allowancesList->count() >= 1)
+                                            <hr>
+                                            <div class="row">
+                                                <div class="form-group col-md-12">
+                                                    <h5 class="">{{ __('Allowances') }}</h5>
+                                                </div>
+                                            </div>
+
+                                            <div class="row" id="allowances_div">
+
+                                                @foreach ($allowancesList as $allowancesRow)
+                                                    @php
+                                                        $employeeEarningsDataRow = $employeeEarningsData
+                                                            ->where('earning_id', $allowancesRow->id)
+                                                            ->where('earning_type', 0)
+                                                            ->first();
+
+                                                        $earningChecked = '';
+                                                        $earningDisplay = 'style="display: none;"';
+                                                        $earningAmount = $allowancesRow->amount;
+                                                        if ($employeeEarningsDataRow != null) {
+                                                            $earningAmount = $employeeEarningsDataRow->amount;
+                                                            $earningChecked =
+                                                                $employeeEarningsDataRow->status == 1 ? 'checked' : '';
+                                                            $earningDisplay =
+                                                                $employeeEarningsDataRow->status == 1
+                                                                    ? ''
+                                                                    : 'style="display: none;"';
+                                                        }
+                                                    @endphp
+                                                    <div class="form-group col-md-12">
+                                                        <div class="form-check form-switch">
+                                                            <label for="allowances_status_{{ $allowancesRow->id }}">
+                                                                <h5 class="">{{ $allowancesRow->name }}</h5>
+                                                            </label>
+                                                            <input type="checkbox" class="form-check-input hideShowDiv"
+                                                                id="allowances_status_{{ $allowancesRow->id }}"
+                                                                name="earning_id[]" value="{{ $allowancesRow->id }}"
+                                                                divId="allowancesDiv_{{ $allowancesRow->id }}"
+                                                                {{ $earningChecked }}>
+                                                            <input type="hidden"
+                                                                name="earning_type[{{ $allowancesRow->id }}]"
+                                                                value="0">
+                                                            <input type="hidden"
+                                                                name="earning_amount_type[{{ $allowancesRow->id }}]"
+                                                                value="{{ $allowancesRow->type }}">
+                                                        </div>
+                                                        <div class="col-lg-3 col-md-3 col-sm-12 form-group"
+                                                            id="allowancesDiv_{{ $allowancesRow->id }}"
+                                                            {!! $earningDisplay !!}>
+                                                            {{ Form::label('allowances_amount_' . $allowancesRow->id, __('Amount'), ['class' => 'col-form-label']) }}
+                                                            @if ($allowancesRow->type == 'percentage')
+                                                                <small>(%)</small>
+                                                            @endif
+                                                            {{ Form::text('earning_amount[' . $allowancesRow->id . ']', $earningAmount, ['id' => 'allowances_amount_' . $allowancesRow->id, 'class' => 'form-control numberValidation', 'placeholder' => 'Enter Amount']) }}
+                                                        </div>
+                                                    </div>
+                                                @endforeach
+                                            </div>
+                                            <hr>
+                                        @endif
+                                        {{-- Allowances End --}}
+
+                                        {{-- Commission Start --}}
+                                        @if ($commissionList->count() >= 1)
+                                            <div class="row">
+                                                <div class="form-group col-md-12">
+                                                    <h5 class="">{{ __('Commission') }}</h5>
+                                                </div>
+                                            </div>
+
+                                            <div class="row" id="allowances_div">
+
+                                                @foreach ($commissionList as $commissionRow)
+                                                    @php
+                                                        $employeeEarningsDataRow = $employeeEarningsData
+                                                            ->where('earning_id', $commissionRow->id)
+                                                            ->where('earning_type', 1)
+                                                            ->first();
+
+                                                        $earningChecked = '';
+                                                        $earningDisplay = 'style="display: none;"';
+                                                        $earningAmount = $commissionRow->amount;
+                                                        if ($employeeEarningsDataRow != null) {
+                                                            $earningAmount = $employeeEarningsDataRow->amount;
+                                                            $earningChecked =
+                                                                $employeeEarningsDataRow->status == 1 ? 'checked' : '';
+                                                            $earningDisplay =
+                                                                $employeeEarningsDataRow->status == 1
+                                                                    ? ''
+                                                                    : 'style="display: none;"';
+                                                        }
+                                                    @endphp
+                                                    <div class="form-group col-md-12">
+                                                        <div class="form-check form-switch">
+                                                            <label for="commission_status_{{ $commissionRow->id }}">
+                                                                <h5 class="">{{ $commissionRow->name }}</h5>
+                                                            </label>
+
+                                                            <input type="checkbox" class="form-check-input hideShowDiv"
+                                                                id="commission_status_{{ $commissionRow->id }}"
+                                                                name="earning_id[]" value="{{ $commissionRow->id }}"
+                                                                divId="commissionDiv_{{ $commissionRow->id }}"
+                                                                {{ $earningChecked }}>
+                                                            <input type="hidden"
+                                                                name="earning_type[{{ $commissionRow->id }}]"
+                                                                value="1">
+                                                            <input type="hidden"
+                                                                name="earning_amount_type[{{ $commissionRow->id }}]"
+                                                                value="{{ $commissionRow->type }}">
+                                                        </div>
+                                                        <div class="col-lg-3 col-md-3 col-sm-12 form-group"
+                                                            id="commissionDiv_{{ $commissionRow->id }}"
+                                                            {!! $earningDisplay !!}>
+                                                            {{ Form::label('commission_amount_' . $commissionRow->id, __('Amount'), ['class' => 'col-form-label']) }}
+                                                            @if ($commissionRow->type == 'percentage')
+                                                                <small>(%)</small>
+                                                            @endif
+                                                            {{ Form::text('earning_amount[' . $commissionRow->id . ']', $earningAmount, ['id' => 'commission_amount_' . $commissionRow->id, 'class' => 'form-control numberValidation', 'placeholder' => 'Enter Amount']) }}
+                                                        </div>
+                                                    </div>
+                                                @endforeach
+                                            </div>
+                                            <hr>
+                                        @endif
+                                        {{-- Commission End --}}
+
+
+                                        {{-- Other Payment Start --}}
+
+                                        @if ($otherPaymentList->count() >= 1)
+                                            <div class="row">
+                                                <div class="form-group col-md-12">
+                                                    <h5 class="">{{ __('Other Payments') }}</h5>
+                                                </div>
+                                            </div>
+
+                                            <div class="row" id="allowances_div">
+
+                                                @foreach ($otherPaymentList as $otherPaymentRow)
+                                                    @php
+                                                        $employeeEarningsDataRow = $employeeEarningsData
+                                                            ->where('earning_id', $otherPaymentRow->id)
+                                                            ->where('earning_type', 2)
+                                                            ->first();
+
+                                                        $earningChecked = '';
+                                                        $earningDisplay = 'style="display: none;"';
+                                                        $earningAmount = $otherPaymentRow->amount;
+                                                        if ($employeeEarningsDataRow != null) {
+                                                            $earningAmount = $employeeEarningsDataRow->amount;
+                                                            $earningChecked =
+                                                                $employeeEarningsDataRow->status == 1 ? 'checked' : '';
+                                                            $earningDisplay =
+                                                                $employeeEarningsDataRow->status == 1
+                                                                    ? ''
+                                                                    : 'style="display: none;"';
+                                                        }
+                                                    @endphp
+                                                    <div class="form-group col-md-12">
+                                                        <div class="form-check form-switch">
+                                                            <label for="other_payment_status_{{ $otherPaymentRow->id }}">
+                                                                <h5 class="">{{ $otherPaymentRow->name }}</h5>
+                                                            </label>
+                                                            <input type="checkbox" class="form-check-input hideShowDiv"
+                                                                id="other_payment_status_{{ $otherPaymentRow->id }}"
+                                                                name="earning_id[]" value="{{ $otherPaymentRow->id }}"
+                                                                divId="other_paymentDiv_{{ $otherPaymentRow->id }}"
+                                                                {{ $earningChecked }}>
+                                                            <input type="hidden"
+                                                                name="earning_type[{{ $otherPaymentRow->id }}]"
+                                                                value="2">
+
+                                                            <input type="hidden"
+                                                                name="earning_amount_type[{{ $otherPaymentRow->id }}]"
+                                                                value="{{ $otherPaymentRow->type }}">
+                                                        </div>
+                                                        <div class="col-lg-3 col-md-3 col-sm-12 form-group"
+                                                            id="other_paymentDiv_{{ $otherPaymentRow->id }}"
+                                                            {!! $earningDisplay !!}>
+                                                            {{ Form::label('other_payment_amount_' . $otherPaymentRow->id, __('Amount'), ['class' => 'col-form-label']) }}
+                                                            @if ($otherPaymentRow->type == 'percentage')
+                                                                <small>(%)</small>
+                                                            @endif
+                                                            {{ Form::text('earning_amount[' . $otherPaymentRow->id . ']', $earningAmount, ['id' => 'other_payment_amount_' . $otherPaymentRow->id, 'class' => 'form-control numberValidation', 'placeholder' => 'Enter Amount']) }}
+                                                        </div>
+                                                    </div>
+                                                @endforeach
+                                            </div>
+                                            <hr>
+                                        @endif
+                                        {{-- Other Payment End --}}
+
+                                        {{-- Earnings Section End --}}
+
+
+                                        {{-- ------------------------------------------------------------------------------------------------------ --}}
+
+                                        {{-- Deductions Section Start --}}
+
+                                        <div class="row">
+                                            <div class="form-group col-md-12">
+                                                <h5 class="">{{ __('Deductions') }}</h5>
+                                            </div>
+                                        </div>
+
+                                        @if ($deductionList->count() >= 1)
+                                            <div class="row" id="allowances_div">
+
+                                                @foreach ($deductionList as $deductionRow)
+                                                    @php
+                                                        $employeeEarningsDataRow = $employeeDeductionData
+                                                            ->where('deduction_id', $deductionRow->id)
+                                                            ->where('deduction_type', 0)
+                                                            ->first();
+
+                                                        $earningChecked = '';
+                                                        $earningDisplay = 'style="display: none;"';
+                                                        $earningAmount = $deductionRow->amount;
+                                                        if ($employeeEarningsDataRow != null) {
+                                                            $earningAmount = $employeeEarningsDataRow->amount;
+                                                            $earningChecked =
+                                                                $employeeEarningsDataRow->status == 1 ? 'checked' : '';
+                                                            $earningDisplay =
+                                                                $employeeEarningsDataRow->status == 1
+                                                                    ? ''
+                                                                    : 'style="display: none;"';
+                                                        }
+                                                    @endphp
+
+
+                                                    <div class="form-group col-md-12">
+                                                        <div class="form-check form-switch">
+                                                            <label for="deduction_status_{{ $deductionRow->id }}">
+                                                                <h5 class="">{{ $deductionRow->name }}</h5>
+                                                            </label>
+                                                            <input type="checkbox" class="form-check-input hideShowDiv"
+                                                                id="deduction_status_{{ $deductionRow->id }}"
+                                                                name="deduction_id[]" value="{{ $deductionRow->id }}"
+                                                                divId="other_paymentDiv_{{ $deductionRow->id }}"
+                                                                {{ $earningChecked }}>
+                                                            <input type="hidden"
+                                                                name="deduction_type[{{ $deductionRow->id }}]"
+                                                                value="0">
+
+                                                            <input type="hidden"
+                                                                name="deduction_amount_type[{{ $deductionRow->id }}]"
+                                                                value="{{ $deductionRow->type }}">
+                                                        </div>
+                                                        <div class="col-lg-3 col-md-3 col-sm-12 form-group"
+                                                            id="other_paymentDiv_{{ $deductionRow->id }}"
+                                                            {!! $earningDisplay !!}>
+                                                            {{ Form::label('deduction_amount_' . $deductionRow->id, __('Amount'), ['class' => 'col-form-label']) }}
+                                                            @if ($deductionRow->type == 'percentage')
+                                                                <small>(%)</small>
+                                                            @endif
+                                                            {{ Form::text('deduction_amount[' . $deductionRow->id . ']', $earningAmount, ['id' => 'deduction_amount_' . $deductionRow->id, 'class' => 'form-control numberValidation', 'placeholder' => 'Enter Amount']) }}
+                                                        </div>
+                                                    </div>
+                                                @endforeach
+                                            </div>
+                                        @endif
+
+                                        {{-- EPF | Employee Provident Fund --}}
+                                        @if ($companyEpf != null)
+                                            <hr>
+                                            <div class="row">
+
+                                                <div class="form-group col-md-12">
+                                                    <div class="form-check form-switch">
+                                                        <label for="epf_status">
+                                                            <h5 class="">{{ __('EPF | Employee Provident Fund') }}
+                                                            </h5>
+                                                        </label>
+                                                        <input type="checkbox" class="form-check-input" id="epf_status"
+                                                            name="epf_status"
+                                                            {{ $employee->epf_status == 1 ? 'checked' : '' }}>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div class="row" id="epf_div"
+                                                style="display: {{ $employee->epf_status == 0 ? 'none' : '' }};">
+                                                <div class="col-lg-3 col-md-3 col-sm-12 form-group">
+                                                    {{ Form::label('epf_number', __('PF Account No / Member Id'), ['class' => 'col-form-label']) }}
+                                                    {{ Form::text('epf_number', old('epf_number', $employee->epf_number), ['id' => 'epf_number', 'class' => 'form-control', 'placeholder' => 'PF Account No / Member Id']) }}
+                                                </div>
+
+                                                <div class="col-lg-3 col-md-3 col-sm-12 form-group">
+                                                    {{ Form::label('uan_no', __('UAN Number'), ['class' => 'col-form-label']) }}
+                                                    {{ Form::text('uan_no', old('uan_no', $employee->uan_no), ['id' => 'uan_no', 'class' => 'form-control', 'placeholder' => 'UAN Number']) }}
+                                                </div>
+
+                                                @if ($companyEpf->override_employee_pf == 1)
+                                                    <div class="col-lg-3 col-md-3 col-sm-12 form-group">
+                                                        {{ Form::label('employee_contribution_rate', __('Employee Contribution Rate (%)'), ['class' => 'col-form-label']) }}
+                                                        {{ Form::text('employee_contribution_rate', old('employee_contribution_rate', $employee->epf_employee_contribution_rate), ['id' => 'employee_contribution_rate', 'class' => 'form-control salaryAmountValidation text-right', 'placeholder' => 'Employee Contribution Rate (%)', 'max' => '100']) }}
+                                                    </div>
+
+                                                    <div class="col-lg-3 col-md-3 col-sm-12 form-group">
+                                                        {{ Form::label('employer_contribution_rate', __('Employer Contribution Rate (%)'), ['class' => 'col-form-label']) }}
+                                                        {{ Form::text('employer_contribution_rate', old('employer_contribution_rate', $employee->epf_employer_contribution_rate), ['id' => 'employer_contribution_rate', 'class' => 'form-control salaryAmountValidation text-right', 'placeholder' => 'Employer Contribution Rate (%)', 'max' => '100']) }}
+                                                    </div>
+                                                @endif
+                                            </div>
+                                            <hr>
+                                        @endif
+                                        {{-- EPF | Employee Provident Fund --}}
+
+                                        {{-- ESI | Employees State Insurance --}}
+                                        @if ($companyEsi != null)
+                                            <hr>
+                                            <div class="row">
+
+                                                <div class="form-group col-md-12">
+                                                    <div class="form-check form-switch">
+                                                        <label for="esi_status">
+                                                            <h5 class="">
+                                                                {{ __('ESI | Employees State Insurance') }}
+                                                            </h5>
+                                                            Note: ESI deductions will be made only if the employee’s monthly
+                                                            salary is less than or equal to ₹21,000. If the employee gets a
+                                                            salary revision which increases their monthly salary above
+                                                            ₹21,000,
+                                                            they would have to continue making ESI contributions till the
+                                                            end of
+                                                            the contribution period in which the salary was revised
+                                                            (April-September or October-March).
+                                                        </label>
+                                                        <input type="checkbox" class="form-check-input" id="esi_status"
+                                                            name="esi_status"
+                                                            {{ $employee->esi_status == 1 ? 'checked' : '' }}>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div class="row" id="esi_div"
+                                                style="display: {{ $employee->esi_status == 0 ? 'none' : '' }};">
+                                                <div class="col-lg-3 col-md-3 col-sm-12 form-group">
+                                                    {{ Form::label('esi_number', __('Esi Account No'), ['class' => 'col-form-label']) }}
+                                                    {{ Form::text('esi_number', old('esi_number', $employee->esi_number), ['id' => 'esi_number', 'class' => 'form-control', 'placeholder' => 'Esi Account No']) }}
+                                                </div>
+                                            </div>
+                                            <hr>
+                                        @endif
+                                        {{-- ESI | Employees State Insurance --}}
+
+                                        {{-- EPT | Employees Professional Tax --}}
+                                        @if ($professional_tax_status == 1)
+                                            <hr>
+                                            <div class="row">
+
+                                                <div class="form-group col-md-12">
+                                                    <div class="form-check form-switch">
+                                                        <label for="ept_status">
+                                                            <h5 class="">
+                                                                {{ __('EPT | Employees Professional Tax') }}
+                                                            </h5>
+                                                        </label>
+                                                        <input type="checkbox" class="form-check-input" id="ept_status"
+                                                            name="ept_status"
+                                                            {{ $employee->ept_status == 1 ? 'checked' : '' }}>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div class="row" id="ept_div"
+                                                style="display: {{ $employee->ept_status == 0 ? 'none' : '' }};">
+
+                                                <div class="col-lg-3 col-md-3 col-sm-12 form-group">
+                                                    {{ Form::label('ept_number', __('Ept Account No'), ['class' => 'col-form-label']) }}
+                                                    {{ Form::text('ept_number', old('ept_number', $employee->ept_number), ['id' => 'ept_number', 'class' => 'form-control', 'placeholder' => 'Ept Account No']) }}
+                                                </div>
+                                            </div>
+                                            <hr>
+                                        @endif
+                                        {{-- EPT | Employees Professional Tax --}}
+
+
+                                        {{-- Tax Deducted at Source Start --}}
+                                        <hr>
+                                        <div class="row">
+
+                                            <div class="form-group col-md-12">
+                                                <div class="form-check form-switch">
+                                                    <label for="tax_deducted_at_source_status">
+                                                        <h5 class="">{{ __('TDS | Tax Deducted at Source') }}
+                                                        </h5>
+                                                    </label>
+                                                    <input type="checkbox" class="form-check-input"
+                                                        id="tax_deducted_at_source_status"
+                                                        name="tax_deducted_at_source_status"
+                                                        {{ $employee->tax_deducted_at_source_status == 1 ? 'checked' : '' }}>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="row" id="tax_deducted_at_source_div"
+                                            style="display: {{ $employee->tax_deducted_at_source_status == 1 ? '' : 'none' }};">
+                                            <div class="col-lg-3 col-md-3 col-sm-12 form-group">
+                                                {{ Form::label('tax_deducted_at_source', __('Tax Deducted at Source'), ['class' => 'col-form-label']) }}
+                                                {{ Form::text('tax_deducted_at_source', old('tax_deducted_at_source', $employee->tax_deducted_at_source), ['id' => 'tax_deducted_at_source', 'class' => 'form-control salaryAmountValidation', 'placeholder' => 'Enter Amount']) }}
+                                            </div>
+                                        </div>
+                                        {{-- Tax Deducted at Source End --}}
+
+                                        {{-- Deductions Section End --}}
+
+                                    </div>
+                                </div>
+                            @else
+                                <div class="card-body employee-detail-create-body">
+
+                                    {{-- @dd($payslipDetail) --}}
+                                    @if (empty($payslipDetail) || $payslipDetail == '')
+                                        <div class="row">
+                                            <div class="col-md-12">
+                                                <div class="info text-sm text-center">
+                                                    <br>
+                                                    <br>
+                                                    <h5>{{ __('Setup Salary Structure') }}</h5>
+
+                                                    <?php
+                                                    
+                                                    //   if (Auth::user()->type != 'employee' && Auth::user()->hasPermissionTo('Edit Employee')) {
+                                                    $editLink = '<div class="action-btn bg-info ms-2"><a href="' . route('employee.edit', \Illuminate\Support\Facades\Crypt::encrypt($employee->id)) . '" class="mx-3 btn btn-sm  align-items-center" data-bs-toggle="tooltip" title="" data-bs-original-title="' . __('Edit') . '"><i class="ti ti-pencil text-white"></i></a></div>';
+                                                    
+                                                    echo $editLink;
+                                                    //   }
+                                                    ?>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    @else
+                                        @php
+                                            $digit = new NumberFormatter('en', NumberFormatter::SPELLOUT);
+                                        @endphp
+
+                                        {{-- Monthely Ctc --}}
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <div class="info text-sm">
+                                                    <h5>{{ __('Monthly CTC') }}</h5>
+                                                    <span>{{ $payslipDetail->monthlyCtc }}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <hr>
+                                        {{-- Monthely Ctc --}}
+
+
+                                        {{-- Earnings --}}
+                                        <div class="row">
+
+                                            <div class="col-md-12">
+                                                <u>
+                                                    <h5 style="text-align:left;">{{ __('Earnings') }}
+                                                    </h5>
+                                                </u>
+                                            </div>
+                                            <div class="col-md-12">
+                                                <div class="table-responsive">
+                                                    <table class="table" id="">
+                                                        <thead>
+                                                            <tr>
+                                                                <th class="text-left">{{ __('Salary Components') }}</th>
+                                                                <th class="text-right">{{ __('Monthly Amount') }}</th>
+                                                                <th class="text-right">{{ __('Annual Amount') }}</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+
+                                                            <tr>
+                                                                <td class="text-left">Basic
+                                                                    ({{ $payslipDetail->ctcPercentage }}% of CTC)</td>
+                                                                <td class="text-right">
+                                                                    {{ priceFormat($payslipDetail->monthelySalaryByCtc) }}
+                                                                </td>
+                                                                <td class="text-right">
+                                                                    {{ priceFormat($payslipDetail->yearlySalaryByCtc) }}
+                                                                </td>
+                                                            </tr>
+
+                                                            @foreach ($payslipDetail->earnings as $earningName => $earnings)
+                                                                @if (is_object($earnings))
+                                                                    @foreach ($earnings->data as $earnongRow)
+                                                                        @php
+                                                                            $rowTitle = '';
+
+                                                                            if ($earnongRow->type == 'percentage') {
+                                                                                $rowTitle =
+                                                                                    $earnongRow->name .
+                                                                                    " ($earnongRow->percentage%)";
+                                                                            } else {
+                                                                                $rowTitle = $earnongRow->name;
+                                                                            }
+                                                                        @endphp
+
+                                                                        <tr>
+                                                                            <td class="text-left">{{ $rowTitle }}
+                                                                            </td>
+                                                                            <td class="text-right">
+                                                                                {{ priceFormat($earnongRow->amount) }}
+                                                                            </td>
+                                                                            <td class="text-right">
+                                                                                {{ priceFormat($earnongRow->amount * 12) }}
+                                                                            </td>
+                                                                        </tr>
+                                                                    @endforeach
+                                                                @endif
+                                                            @endforeach
+
+                                                        </tbody>
+                                                        <tr>
+                                                            <td></td>
+                                                            <td class="text-right"><b>Gross Earnings :
+                                                                    {{ priceFormat($payslipDetail->grossSalary) }}</td>
+                                                            <td></b></td>
+                                                        </tr>
+                                                        <tfoot>
+
+                                                        </tfoot>
+                                                    </table>
+
+                                                </div>
+                                            </div>
+                                        </div>
+                                        {{-- Earnings --}}
+
+                                        <br>
+
+                                        {{-- Deductions --}}
+                                        <div class="row">
+                                            <div class="col-md-12">
+                                                <u>
+                                                    <h5 style="text-align:left;">{{ __('Deductions') }}
+                                                    </h5>
+                                                </u>
+                                            </div>
+                                            <div class="col-md-12">
+                                                <div class="table-responsive">
+                                                    <table class="table" id="">
+                                                        <thead>
+                                                            <tr>
+                                                                <th class="text-left">{{ __('Salary Components') }}</th>
+                                                                <th class="text-right">{{ __('Monthly Amount') }}</th>
+                                                                <th class="text-right">{{ __('Annual Amount') }}</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+
+                                                            @foreach ($payslipDetail->deductions as $deductionName => $deductions)
+                                                                @if (is_object($deductions))
+                                                                    @foreach ($deductions->data as $deductionsRow)
+                                                                        @php
+                                                                            $rowTitle = '';
+
+                                                                            if ($deductionsRow->type == 'percentage') {
+                                                                                $rowTitle =
+                                                                                    $deductionsRow->name .
+                                                                                    " ($deductionsRow->percentage%)";
+                                                                            } else {
+                                                                                $rowTitle = $deductionsRow->name;
+                                                                            }
+                                                                        @endphp
+
+                                                                        <tr>
+                                                                            <td class="text-left">{{ $rowTitle }}
+                                                                            </td>
+                                                                            <td class="text-right">
+                                                                                {{ priceFormat($deductionsRow->amount) }}
+                                                                            </td>
+                                                                            <td class="text-right">
+                                                                                {{ priceFormat($deductionsRow->amount * 12) }}
+                                                                            </td>
+                                                                        </tr>
+                                                                    @endforeach
+                                                                @endif
+                                                            @endforeach
+
+                                                        </tbody>
+                                                        <tr>
+                                                            <td></td>
+                                                            <td class="text-right"><b>Gross Deductions :
+                                                                    {{ priceFormat($payslipDetail->totalDeductions) }}
+                                                            </td>
+                                                            <td></b></td>
+                                                        </tr>
+                                                        <tfoot>
+
+                                                        </tfoot>
+                                                    </table>
+
+                                                </div>
+                                            </div>
+                                        </div>
+                                        {{-- Deductions --}}
+
+                                        <br>
+                                        {{-- Employer's Contribution Deductions --}}
+                                        <div class="row">
+                                            <div class="col-md-12">
+                                                <u>
+                                                    <h5 style="text-align:left;">{{ __("Employer's Contribution") }}
+                                                    </h5>
+                                                </u>
+                                            </div>
+                                            <div class="col-md-12">
+                                                <div class="table-responsive">
+                                                    <table class="table" id="">
+                                                        <thead>
+                                                            <tr>
+                                                                <th class="text-left">{{ __('Salary Components') }}</th>
+                                                                <th class="text-right">{{ __('Monthly Amount') }}</th>
+                                                                <th class="text-right">{{ __('Annual Amount') }}</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+
+                                                            {{-- GROSS EARNING  --}}
+                                                            <tr>
+                                                                <td class="text-left">Gross Earnings </td>
+                                                                <td class="text-right">
+                                                                    {{ priceFormat($payslipDetail->employeeBasicSalary + $payslipDetail->totalEarnings) }}
+                                                                </td>
+                                                                <td class="text-right">
+                                                                    {{ priceFormat(($payslipDetail->employeeBasicSalary + $payslipDetail->totalEarnings) * 12) }}
+                                                                </td>
+                                                            </tr>
+                                                            {{-- GROSS EARNING  --}}
+
+
+                                                            {{-- EMPLOYER'S PROVIDENT FUND --}}
+                                                            @php
+                                                                $providentFundCompanyDeductionTotal =
+                                                                    $payslipDetail->providentFundCompanyDeduction
+                                                                        ->total;
+                                                                $providentFundCompanyDeductionData =
+                                                                    $payslipDetail->providentFundCompanyDeduction->data;
+                                                            @endphp
+                                                            @if (!empty($providentFundCompanyDeductionData))
+                                                                <tr>
+                                                                    <td class="text-left">
+                                                                        {{ $providentFundCompanyDeductionData->name }}
+                                                                    </td>
+                                                                    <td class="text-right">
+                                                                        {{ priceFormat($providentFundCompanyDeductionData->amount) }}
+                                                                    </td>
+                                                                    <td class="text-right">
+                                                                        {{ priceFormat($providentFundCompanyDeductionData->amount * 12) }}
+                                                                    </td>
+                                                                </tr>
+                                                            @endif
+                                                            {{-- EMPLOYER'S PROVIDENT FUND   --}}
+
+                                                            {{-- EMPLOYER'S STATE INSURANCE --}}
+                                                            @php
+                                                                $employeesStateInsuranceCompanyDeductionTotal =
+                                                                    $payslipDetail
+                                                                        ->employeesStateInsuranceCompanyDeduction
+                                                                        ->total;
+                                                                $employeesStateInsuranceCompanyDeductionData =
+                                                                    $payslipDetail
+                                                                        ->employeesStateInsuranceCompanyDeduction->data;
+                                                            @endphp
+                                                            @if (!empty($employeesStateInsuranceCompanyDeductionData))
+                                                                <tr>
+                                                                    <td class="text-left">
+                                                                        {{ $employeesStateInsuranceCompanyDeductionData->name }}
+                                                                    </td>
+
+                                                                    <td class="text-right">
+                                                                        {{ priceFormat($employeesStateInsuranceCompanyDeductionData->amount) }}
+                                                                    </td>
+                                                                    <td class="text-right">
+                                                                        {{ priceFormat($employeesStateInsuranceCompanyDeductionData->amount * 12) }}
+                                                                    </td>
+                                                                </tr>
+                                                            @endif
+                                                            {{-- EMPLOYER'S STATE INSURANCE --}}
+
+                                                            {{-- STATUTORY BONUS  --}}
+                                                            @php
+                                                                $statutoryBonusTotal =
+                                                                    $payslipDetail->statutoryBonus->total;
+                                                                $statutoryBonusData =
+                                                                    $payslipDetail->statutoryBonus->data;
+
+                                                            @endphp
+                                                            @if (!empty($statutoryBonusData))
+                                                                <tr class="row-border">
+                                                                    <td class="text-left">
+                                                                        {{ $statutoryBonusData->name }}
+                                                                    </td>
+
+                                                                    <td class="text-right">
+                                                                        {{ priceFormat($statutoryBonusData->amount) }}
+                                                                    </td>
+                                                                    <td class="text-right">
+                                                                        {{ priceFormat($statutoryBonusData->amount * 12) }}
+                                                                    </td>
+                                                                </tr>
+                                                            @endif
+                                                            {{-- STATUTORY BONUS  --}}
+
+                                                            {{-- Total --}}
+                                                            <tr class="row-border" style="display: ;">
+                                                                @php
+                                                                    $ctc =
+                                                                        $payslipDetail->employeeBasicSalary +
+                                                                        $payslipDetail->totalEarnings +
+                                                                        $providentFundCompanyDeductionTotal +
+                                                                        $employeesStateInsuranceCompanyDeductionTotal +
+                                                                        $statutoryBonusTotal;
+                                                                @endphp
+
+                                                                <td colspan="2" class="text-right">
+                                                                    <b>Total : {{ priceFormat($ctc) }}</b>
+                                                                </td>
+                                                            </tr>
+                                                            {{-- Total --}}
+
+                                                            {{-- CTC --}}
+                                                            <tr style="display: none;">
+                                                                <td class="text-left">
+                                                                    <b>Total CTC : {{ priceFormat($ctc) }}</b>
+                                                                </td>
+                                                            </tr>
+
+                                                            <tr style="display: none;">
+                                                                <td class="text-left">
+                                                                    <b>In Words :
+                                                                        {{ ucwords($digit->format($ctc)) }}</b>
+                                                                </td>
+                                                            </tr>
+                                                            {{-- CTC --}}
+
+                                                        </tbody>
+
+                                                        <tfoot>
+
+                                                        </tfoot>
+                                                    </table>
+
+                                                </div>
+                                            </div>
+                                        </div>
+                                        {{-- Employer's Contribution Deductions --}}
+
+                                        <br>
+                                        {{-- Net Pay --}}
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <div class="info text-sm">
+                                                    <h5>Net Pay :
+                                                        {{ priceFormat($payslipDetail->employeeNewPayableSalary) }}
+                                                    </h5>
+                                                    <h5>In Words :
+                                                        ({{ ucwords($digit->format($payslipDetail->employeeNewPayableSalary)) }})
+                                                    </h5>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <hr>
+                                        {{-- Net Pay --}}
+                                    @endif
+                                </div>
+
+                            @endif
+                        </div>
+
+                        <div class="tab-pane fade" id="nav-Experience" role="tabpanel"
+                            aria-labelledby="nav-Experience-tab">
+
+
+                            {{-- //Work Experience-TABLE --}}
+                            @if (!empty($EXPTableData[0]))
+                                @foreach ($EXPTableData as $key => $exp)
+                                    <div class="col-md-12">
+                                        <div class="card">
+                                            <div class="card-header">
+                                                <div class="row d-flex align-items-center">
+                                                    <div class="col col-6">
+                                                        <h5>{{ __('Experience') }}</h5>
+                                                    </div>
+                                                    <div class="col col-6 text-end">
+
+                                                        @if ($key == 0)
+                                                            <div class="btn btn-success" id='add_sub_form'>
+                                                                {{ '+' }}
+                                                            </div>
+                                                        @else
+                                                            <a href="{{ route('exp_table_remove', $exp->id) }}"
+                                                                class="btn btn-danger"
+                                                                id='add_sub_form'>{{ 'remove' }}</a>
+                                                        @endif
+
+                                                    </div>
+                                                </div>
+
+
+                                            </div>
+                                            <div class="card-body employee-detail-create-body">
+                                                <div class="row">
+                                                    <div class="form-group col-md-6">
+                                                        {!! Form::label('previous_company_name', __('Previous Company'), ['class' => 'form-label']) !!}
+                                                        {!! Form::text('previous_company_name[]', $exp->previous_company_name, [
+                                                            'class' => 'form-control',
+                                                        
+                                                            'placeholder' => 'Enter previous company',
+                                                        ]) !!}
+
+                                                    </div>
+                                                    <div class="form-group col-md-6">
+                                                        {!! Form::label('previous_job_title', __('Job Title'), ['class' => 'form-label']) !!}
+                                                        {!! Form::text('previous_job_title[]', $exp->previous_job_title, [
+                                                            'class' => 'form-control',
+                                                        
+                                                            'placeholder' => 'Enter job title',
+                                                        ]) !!}
+                                                    </div>
+                                                    <div class="form-group col-md-6">
+                                                        {!! Form::label('previous_from_date', __('From Date'), ['class' => 'form-label']) !!}
+                                                        <input type="date" name="previous_from_date[]"
+                                                            value="{{ $exp->getRawOriginal('previous_from_date') }}"
+                                                            class='form-control' max="<?php echo date('Y-m-d'); ?>">
+                                                    </div>
+
+                                                    <div class="form-group col-md-6">
+                                                        {!! Form::label('previous_to_date', __('To Date'), ['class' => 'form-label']) !!}
+                                                        <input type="date" name="previous_to_date[]"
+                                                            value="{{ $exp->getRawOriginal('previous_to_date') }}"
+                                                            class='form-control' max="<?php echo date('Y-m-d'); ?>">
+
+                                                    </div>
+
+                                                    <div class="form-group col-md-12">
+                                                        {{ Form::label('previous_company_designation_id', __('Previous Company designation'), ['class' => 'form-label']) }}
+                                                        <input type="text" class='form-control'
+                                                            name='previous_company_designation_id[]'
+                                                            placeholder='Enter previous company designation'
+                                                            value='{{ $exp->previous_company_designation_id }}'>
+                                                    </div>
+
+                                                    <div class="form-group col-md-12">
+                                                        {!! Form::label('experiance_Job_description', __('Experience Job Description'), ['class' => 'form-label']) !!}
+
+                                                        {!! Form::textarea('experiance_Job_description[]', $exp->experiance_Job_description, [
+                                                            'class' => 'form-control',
+                                                        
+                                                            'rows' => 2,
+                                                            'placeholder' => 'Enter Experience job description',
+                                                        ]) !!}
+                                                    </div>
+
+
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                @endforeach
+                            @else
+                                <div class="col-md-12">
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <div class="row d-flex align-items-center">
+                                                <div class="col col-6">
+                                                    <h5>{{ __('Experience') }}</h5>
+                                                </div>
+                                                <div class="col col-6 text-end">
+                                                    <div class="btn btn-success" id='add_sub_form'>{{ '+' }}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+
+                                        </div>
+                                        <div class="card-body employee-detail-create-body">
+                                            <div class="row">
+                                                <div class="form-group col-md-6">
+                                                    {!! Form::label('previous_company_name', __('Previous Company'), ['class' => 'form-label']) !!}
+                                                    {!! Form::text('previous_company_name[]', null, [
+                                                        'class' => 'form-control',
+                                                    
+                                                        'placeholder' => 'Enter previous company',
+                                                    ]) !!}
+
+                                                </div>
+                                                <div class="form-group col-md-6">
+                                                    {!! Form::label('previous_job_title', __('Job Title'), ['class' => 'form-label']) !!}
+                                                    {!! Form::text('previous_job_title[]', null, [
+                                                        'class' => 'form-control',
+                                                    
+                                                        'placeholder' => 'Enter job title',
+                                                    ]) !!}
+                                                </div>
+                                                <div class="form-group col-md-6">
+                                                    {!! Form::label('previous_from_date', __('From Date'), ['class' => 'form-label']) !!}
+                                                    <input type="date" name="previous_from_date[]"
+                                                        class='form-control' max="<?php echo date('Y-m-d'); ?>">
+
+                                                </div>
+
+                                                <div class="form-group col-md-6">
+                                                    {!! Form::label('previous_to_date', __('To Date'), ['class' => 'form-label']) !!}
+                                                    <input type="date" name="previous_to_date[]" class='form-control'
+                                                        max="<?php echo date('Y-m-d'); ?>">
+
+                                                </div>
+
+                                                <div class="form-group col-md-12">
+                                                    {{ Form::label('previous_company_designation_id', __('Previous Company designation'), ['class' => 'form-label']) }}
+                                                    <input type="text" class='form-control'
+                                                        name='previous_company_designation_id'
+                                                        id='previous_company_designation_id'
+                                                        placeholder='Enter previous company designation'>
+
+                                                </div>
+
+                                                <div class="form-group col-md-12">
+                                                    {!! Form::label('experiance_Job_description', __('Experience Job Description'), ['class' => 'form-label']) !!}
+                                                    {!! Form::textarea('experiance_Job_description[]', null, [
+                                                        'class' => 'form-control',
+                                                        'rows' => 2,
+                                                        'placeholder' => 'Enter Experience job description',
+                                                    ]) !!}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            @endif
+                            <div id='append_sub_form'></div>
+
+
+
+                        </div>
+
+                        <div class="tab-pane fade" id="nav-Education" role="tabpanel"
+                            aria-labelledby="nav-Education-tab">
+
+                            {{-- //Education tables --}}
+
+                            @if (count($EducationData) > 0)
+                                @foreach ($EducationData as $key => $edu)
+                                    <div class="col-md-12 ">
+                                        <div class="card">
+                                            <div class="card-header">
+                                                <div class="row d-flex align-items-center">
+                                                    <div class="col col-6">
+                                                        <h5>{{ __('Education') }}</h5>
+                                                    </div>
+                                                    <div class="col col-6 text-end">
+                                                        @if ($key == 0)
+                                                            <p class="btn btn-success"
+                                                                id='append_sub_form_eduction_table'>
+                                                                {{ '+' }}
+                                                            </p>
+                                                        @else
+                                                            <a href="{{ route('eduction_table_remove', $edu->id) }}"
+                                                                class="btn btn-danger"
+                                                                id='add_sub_form'>{{ 'remove' }}</a>
+                                                        @endif
+                                                    </div>
+                                                </div>
+
+
+                                            </div>
+                                            <div class="card-body employee-detail-create-body">
+                                                <div class="row">
+                                                    <div class="form-group col-md-6">
+                                                        {!! Form::label('institute_name', __('Institute Name'), ['class' => 'form-label']) !!}
+                                                        {!! Form::text('institute_name[]', $edu->institute_name, [
+                                                            'class' => 'form-control',
+                                                            'placeholder' => 'Enter institute name',
+                                                        ]) !!}
+
+                                                    </div>
+                                                    <div class="form-group col-md-6">
+                                                        {!! Form::label('education', __('Education'), ['class' => 'form-label']) !!}
+                                                        {!! Form::text('education[]', $edu->education, [
+                                                            'class' => 'form-control',
+                                                        
+                                                            'placeholder' => 'Enter education',
+                                                        ]) !!}
+
+                                                    </div>
+                                                    <div class="form-group col-md-6">
+                                                        {!! Form::label('specialization', __('Specialization'), ['class' => 'form-label']) !!}
+                                                        {!! Form::text('specialization[]', $edu->specialization, [
+                                                            'class' => 'form-control',
+                                                        
+                                                            'placeholder' => 'Enter specialization',
+                                                        ]) !!}
+                                                    </div>
+
+                                                    <div class="form-group col-md-6">
+                                                        {!! Form::label('date_of_completion', __('Date of birth'), ['class' => 'form-label']) !!}
+                                                        <input type="date" name="date_of_completion[]"
+                                                            id="date_of_completion"
+                                                            value="{{ $edu->getRawOriginal('date_of_completion') }}"
+                                                            class='form-control'>
+
+                                                    </div>
+
+
+
+                                                    <div class="form-group col-md-12">
+                                                        {!! Form::label('notes', __('Notes'), ['class' => 'form-label']) !!}
+
+                                                        {!! Form::textarea('notes[]', $edu->notes, [
+                                                            'class' => 'form-control',
+                                                            'rows' => 2,
+                                                            'placeholder' => 'Enter notes',
+                                                        ]) !!}
+                                                    </div>
+
+
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                @endforeach
+                            @else
+                                <div class="col-md-12">
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <div class="row d-flex align-items-center">
+                                                <div class="col col-6">
+                                                    <h5>{{ __('Education') }}</h5>
+
+                                                </div>
+                                                <div class="col col-6 text-end">
+                                                    @php $i = 0; @endphp
+                                                    @if ($i == 0)
+                                                        <p class="btn btn-success" id='append_sub_form_eduction_table'>
+                                                            {{ '+' }}
+                                                        </p>
+                                                    @else
+                                                        <a href="{{ route('eduction_table_remove', null) }}"
+                                                            class="btn btn-danger"
+                                                            id='add_sub_form'>{{ 'remove' }}</a>
+                                                    @endif
+                                                </div>
+                                            </div>
+
+                                        </div>
+                                        <div class="card-body employee-detail-create-body">
+                                            <div class="row">
+                                                <div class="form-group col-md-6">
+                                                    {!! Form::label('institute_name', __('Institute Name'), ['class' => 'form-label']) !!}
+                                                    {!! Form::text('institute_name[]', null, ['class' => 'form-control', 'placeholder' => 'Enter institute name']) !!}
+                                                </div>
+                                                <div class="form-group col-md-6">
+                                                    {!! Form::label('education', __('Education'), ['class' => 'form-label']) !!}
+                                                    {!! Form::text('education[]', null, [
+                                                        'class' => 'form-control',
+                                                        'placeholder' => 'Enter education',
+                                                    ]) !!}
+
+                                                </div>
+                                                <div class="form-group col-md-6">
+                                                    {!! Form::label('specialization', __('Specialization'), ['class' => 'form-label']) !!}
+                                                    {!! Form::text('specialization[]', null, [
+                                                        'class' => 'form-control',
+                                                    
+                                                        'placeholder' => 'Enter specialization',
+                                                    ]) !!}
+                                                </div>
+
+                                                <div class="form-group col-md-6">
+                                                    {!! Form::label('date_of_completion', __('Date of birth'), [
+                                                        'class' => 'form-label',
+                                                        'id' => 'date_of_completion',
+                                                    ]) !!}
+                                                    <input type="date" name="date_of_completion[]"
+                                                        id="date_of_completion" class='form-control'
+                                                        max="<?php echo date('Y-m-d'); ?>">
+
+                                                </div>
+
+
+
+                                                <div class="form-group col-md-12">
+                                                    {!! Form::label('notes', __('Notes'), ['class' => 'form-label']) !!}
+
+                                                    {!! Form::textarea('notes[]', null, [
+                                                        'class' => 'form-control',
+                                                        'rows' => 2,
+                                                        'placeholder' => 'Enter notes',
+                                                    ]) !!}
+                                                </div>
+
+
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            @endif
+                            <div id='append_sub_form_eduction_table_add_form'></div>
+
+                        </div>
+
+                        <div class="tab-pane fade" id="nav-Dependent" role="tabpanel"
+                            aria-labelledby="nav-Dependent-tab">
+
+
+                            {{-- //Dependenttables --}}
+
+                            @if (!empty($DependentData[0]))
+                                @foreach ($DependentData as $key => $exp)
+                                    <div class="col-md-12">
+                                        <div class="card">
+                                            <div class="card-header">
+                                                <div class="row d-flex align-items-center">
+                                                    <div class="col col-6">
+                                                        <h5>{{ __('Dependent') }}</h5>
+                                                    </div>
+                                                    <div class="col col-6">
+                                                        <div class="text-end">
+                                                            @if ($key == 0)
+                                                                <div class="btn btn-success"
+                                                                    id='Dependent_sub_form_eduction_table'>
+                                                                    {{ '+' }}
+                                                                </div>
+                                                            @else
+                                                                <a href="{{ route('Dependent_table_remove', $exp->id) }}"
+                                                                    class="btn btn-danger"
+                                                                    id='add_sub_form'>{{ 'remove' }}</a>
+                                                            @endif
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="card-body employee-detail-create-body">
+                                                <div class="row">
+                                                    <div class="form-group col-md-12">
+                                                        {!! Form::label('dependent_name', __('Name'), ['class' => 'form-label']) !!}
+                                                        {!! Form::text('dependent_name[]', $exp->dependent_name, [
+                                                            'class' => 'form-control dependent_name',
+                                                            'placeholder' => 'Enter dependent name',
+                                                        ]) !!}
+
+                                                    </div>
+
+                                                    <div class="form-group col-md-12">
+                                                        {{ Form::label('dependent_relation', __('Relation Types '), ['class' => 'form-label']) }}<span
+                                                            class="text-danger pl-1 relation_type_label"
+                                                            style="display: {{ empty($exp->dependent_name) ? 'none' : '' }}">*</span>
+                                                        <div class="form-icon-user">
+                                                            <select name="dependent_relation[]" id="dependent_relation"
+                                                                class="form-control select2">
+
+                                                                <option
+                                                                    @if ($exp->dependent_relation == 'Permanent') selected @else @endif
+                                                                    value="Father">Father</option>
+                                                                <option
+                                                                    @if ($exp->dependent_relation == 'Mother') selected @else @endif
+                                                                    value="Mother">Mother</option>
+                                                                <option
+                                                                    @if ($exp->dependent_relation == 'Brother') selected @else @endif
+                                                                    value="Brother">Brother</option>
+                                                                <option
+                                                                    @if ($exp->dependent_relation == 'Sister') selected @else @endif
+                                                                    value="Sister">Sister</option>
+                                                                <option
+                                                                    @if ($exp->dependent_relation == 'Husband') selected @else @endif
+                                                                    value="Husband">Husband</option>
+                                                                <option
+                                                                    @if ($exp->dependent_relation == 'Wife') selected @else @endif
+                                                                    value="Wife">Wife</option>
+                                                                <option
+                                                                    @if ($exp->dependent_relation == 'Child') selected @else @endif
+                                                                    value="Child">Child</option>
+
+                                                            </select>
+                                                        </div>
+                                                    </div>
+
+
+                                                    <div class="form-group col-md-12">
+                                                        {!! Form::label('dependent_dob', __('Date of birth'), ['class' => 'form-label']) !!}
+                                                        <input type="date" name="dependent_dob[]"
+                                                            value="{{ $exp->getRawOriginal('dependent_dob') }}"
+                                                            class='form-control' max="<?php echo date('Y-m-d'); ?>">
+
+                                                    </div>
+
+                                                    <div class="form-group col-md-12">
+                                                        {!! Form::label('dependent_dob', __('Emergency phone no.'), ['class' => 'form-label']) !!}
+                                                        {{ Form::number('emergency_phone_no[]', $exp->emergency_phone_no, ['class' => 'form-control', 'autocomplete' => 'off', 'placeholder' => 'Emergency phone no']) }}
+                                                    </div>
+
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                @endforeach
+                            @else
+                                <div class="col-md-12">
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <div class="row d-flex align-items-center">
+                                                <div class="col col-6">
+                                                    <h5>{{ __('Dependent') }}</h5>
+                                                </div>
+                                                <div class="col col-6 text-end">
+                                                    <div class="btn btn-success" id='Dependent_sub_form_eduction_table'>
+                                                        {{ '+' }}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="card-body employee-detail-create-body">
+                                            <div class="row">
+                                                <div class="form-group col-md-12">
+                                                    {!! Form::label('dependent_name', __('Name'), ['class' => 'form-label']) !!}
+                                                    {!! Form::text('dependent_name[]', null, [
+                                                        'class' => 'form-control dependent_name',
+                                                        'placeholder' => 'Enter dependent name',
+                                                    ]) !!}
+
+                                                </div>
+
+                                                <div class="form-group col-md-12">
+                                                    {{ Form::label('dependent_relation', __('Relation Types '), ['class' => 'form-label']) }}
+                                                    <span class="text-danger pl-1 relation_type_label"
+                                                        style="display:none"> *</span>
+                                                    <div class="form-icon-user">
+                                                        <select name="dependent_relation[]" id="dependent_relation"
+                                                            class="form-control select2">
+                                                            <option value="">Select option</option>
+                                                            <option value="Father">Father</option>
+                                                            <option value="Mother">Mother</option>
+                                                            <option value="Brother">Brother</option>
+                                                            <option value="Sister">Sister</option>
+                                                            <option value="Husband">Husband</option>
+                                                            <option value="Wife">Wife</option>
+                                                            <option value="Child">Child</option>
+                                                        </select>
+                                                    </div>
+                                                </div>
+                                                <div class="form-group col-md-12">
+                                                    {!! Form::label('dependent_dob', __('Date of birth'), ['class' => 'form-label']) !!}
+                                                    <input type="date" name="dependent_dob[]" class='form-control'
+                                                        max="<?php echo date('Y-m-d'); ?>">
+                                                </div>
+
+                                                <div class="form-group col-md-12">
+                                                    {!! Form::label('dependent_dob', __('Emergency phone no.'), ['class' => 'form-label']) !!}
+                                                    {{ Form::number('emergency_phone_no[]', null, ['class' => 'form-control', 'autocomplete' => 'off', 'placeholder' => 'Emergency phone no']) }}
+                                                </div>
+
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            @endif
+                            <div id='Dependent_sub_form_eduction_table_add_form'></div>
+                        </div>
+
+                        <div class="tab-pane fade" id="nav-Commission" role="tabpanel"
+                            aria-labelledby="nav-Commission-tab">
+                            <div class="col-md-12 ">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h5>{{ __('Document') }}</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="row">
+                                            @foreach ($documents as $key => $document)
+                                                <div class="col-sm-4 col-md-3">
+                                                    <div class="form-group upload-box">
+                                                        <label for="document" class=" form-label">{{ $document->name }}
+                                                            @if ($document->is_ == 1)
+                                                                <span class="text-danger">*</span>
+                                                            @endif
+                                                        </label>
+                                                        <div class="upload-files-box">
+                                                            <input type="hidden" name="emp_doc_id[{{ $document->id }}]"
+                                                                id="" value="{{ $document->id }}">
+
+                                                            @php
+                                                                $employeedoc = !empty($employee->documents())
+                                                                    ? $employee
+                                                                        ->documents()
+                                                                        ->pluck('document_value', __('document_id'))
+                                                                    : [];
+                                                            @endphp
+
+                                                            <div class="uploaded-files">
+                                                                @php
+                                                                    $logo = \App\Models\Utility::get_file(
+                                                                        'uploads/document/',
+                                                                    );
+
+                                                                @endphp
+                                                                @if (!empty($employeedoc[$document->id]))
+                                                                    @if (substr($employeedoc[$document->id], -4) == '.pdf')
+                                                                        <span class="text-xs-1"><a
+                                                                                href="{{ !empty($employeedoc[$document->id]) ? asset(Storage::url('uploads/document')) . '/' . $employeedoc[$document->id] : '' }}"
+                                                                                target="_blank">{{ $employeedoc[$document->id] }}</a>
+                                                                        </span>
+                                                                    @else
+                                                                        <img id="{{ 'blah' . $key }}"
+                                                                            src="{{ isset($employeedoc[$document->id]) && !empty($employeedoc[$document->id]) ? $logo . '/' . $employeedoc[$document->id] : '' }}" />
+                                                                    @endif
+                                                                @else
+                                                                    <img id="{{ 'blah' . $key }}" src="" />
+                                                                @endif
+                                                            </div>
+                                                            <div class="choose-files">
+
+                                                                <label for="document[{{ $document->id }}]">
+
+                                                                    <div class=" bg-primary document "> <i
+                                                                            class="ti ti-upload px-1"></i>{{ __('Choose file here') }}
+                                                                    </div>
+                                                                    @trunc
+                                                                    <input type="file"
+                                                                        class="form-control file d-none @error('document') is-invalid @enderror"
+                                                                        @if ($document->is_ == 1)  @endif
+                                                                        name="document[{{ $document->id }}]"
+                                                                        id="document[{{ $document->id }}]"
+                                                                        data-filename="{{ $document->id . '_filename' }}"
+                                                                        onchange="document.getElementById('{{ 'blah' . $key }}').src = window.URL.createObjectURL(this.files[0])">
+                                                                </label>
+
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            @endforeach
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="tab-pane fade" id="nav-Loan" role="tabpanel" aria-labelledby="nav-Loan-tab">
+
+                            {{-- // --}}
+
+                            @if ($isProfileEdit == false)
+                                <div class="col-md-12">
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <h5>{{ __('Bank Account') }}</h5>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="row">
+                                                <div class="form-group col-md-6">
+                                                    {!! Form::label('account_holder_name', __('Account Holder Name'), ['class' => 'form-label']) !!}
+                                                    <span class="text-danger">*</span>
+                                                    {!! Form::text('account_holder_name', null, ['class' => 'form-control']) !!}
+
+                                                </div>
+                                                <div class="form-group col-md-6">
+                                                    {!! Form::label('account_number', __('Account Number'), ['class' => 'form-label']) !!}
+                                                    <span class="text-danger">*</span>
+                                                    {!! Form::number('account_number', null, ['class' => 'form-control']) !!}
+
+                                                </div>
+                                                <div class="form-group col-md-6">
+                                                    {!! Form::label('bank_name', __('Bank Name'), ['class' => 'form-label']) !!}
+                                                    {!! Form::text('bank_name', null, ['class' => 'form-control']) !!}
+
+                                                </div>
+                                                <div class="form-group col-md-6">
+                                                    {!! Form::label('bank_identifier_code', __('Bank Identifier Code'), ['class' => 'form-label']) !!}
+                                                    <span class="text-danger">*</span>
+                                                    {!! Form::text('bank_identifier_code', null, ['class' => 'form-control']) !!}
+                                                </div>
+                                                <div class="form-group col-md-6">
+                                                    {!! Form::label('branch_location', __('Branch Location'), ['class' => 'form-label']) !!}
+                                                    <span class="text-danger">*</span>
+                                                    {!! Form::text('branch_location', null, ['class' => 'form-control']) !!}
+                                                </div>
+                                                <div class="form-group col-md-6">
+                                                    {!! Form::label('tax_payer_id', __('Tax Payer Id'), ['class' => 'form-label']) !!}
+                                                    {!! Form::text('tax_payer_id', null, ['class' => 'form-control']) !!}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            @else
+                                @if (
+                                    !empty($employee->account_holder_name) ||
+                                        !empty($employee->account_number) ||
+                                        !empty($employee->bank_name) ||
+                                        !empty($employee->bank_identifier_code) ||
+                                        !empty($employee->branch_location) ||
+                                        !empty($employee->tax_payer_id))
+                                    <div class="col-sm-12 col-md-12">
+                                        <div class="card ">
+                                            <div class="card-body employee-detail-body fulls-card emp-card">
+                                                {{-- <h5>{{ __('Bank Account') }}</h5> --}}
+                                                {{-- <hr> --}}
+                                                <div class="row">
+                                                    <div class="col-md-6">
+                                                        <div class="info text-sm">
+                                                            <strong class="font-bold">{{ __('Account Holder Name') }} :
+                                                            </strong>
+                                                            <span>{{ $employee->account_holder_name }}</span>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <div class="info text-sm font-style">
+                                                            <strong class="font-bold">{{ __('Account Number') }}
+                                                                :</strong>
+                                                            <span>{{ $employee->account_number }}</span>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <div class="info text-sm">
+                                                            <strong class="font-bold">{{ __('Bank Name') }} :</strong>
+                                                            <span>{{ $employee->bank_name }}</span>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <div class="info text-sm">
+                                                            <strong class="font-bold">{{ __('Bank Identifier Code') }}
+                                                                :</strong>
+                                                            <span>{{ $employee->bank_identifier_code }}</span>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <div class="info text-sm">
+                                                            <strong class="font-bold">{{ __('Branch Location') }}
+                                                                :</strong>
+                                                            <span>{{ $employee->branch_location }}</span>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <div class="info text-sm">
+                                                            <strong class="font-bold">{{ __('Tax Payer Id') }} :</strong>
+                                                            <span>{{ $employee->tax_payer_id }}</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                @else
+                                    <div class="col-sm-12 col-md-12">
+                                        <div class="card">
+                                            <br>
+                                            <h5 class="text-center"> No bank account have been added!</h5>
+                                        </div>
+                                    </div>
+                                @endif
+                            @endif
+
+
+                        </div>
+
+                        <div class="tab-pane fade" id="nav-weekoff" role="tabpanel" aria-labelledby="nav-weekoff-tab">
+
+                            @if ($isProfileEdit == false)
+                                <div class="card">
+                                    <div class="card-header">
+                                        <div class="row">
+                                            <div class="col-2"><span class="text-dark"><i
+                                                        class="badge bg-dark p-2  rounded">{{ __('WO') }}</i>&nbsp;
+                                                    {{ __('Week Off') }}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+
+                                <div class="form-group">
+                                    <div class="form-check form-switch">
+                                        <label for="is_custom_weekoffs">
+                                            <h5 class="">{{ __('Enable Custom Weekoff') }}
+                                            </h5>
+                                        </label>
+                                        <input type="checkbox" class="form-check-input" id="is_custom_weekoffs"
+                                            name="is_custom_weekoffs"
+                                            {{ $employee->is_custom_weekoffs == 1 ? 'checked' : '' }}>
+                                    </div>
+                                </div>
+
+
+
+                                <div class="row">
+                                    <div class="col-md-6 m-auto">
+                                        {{-- calender --}}
+                                        <input type="hidden" name="weekoffs_data" id="weekoffs_data"
+                                            class="weekoffs_data" value="{{ $employee->weekoffs_data ?? '' }}">
+                                        <div id='calendar'></div>
+
+                                    </div>
+                                </div>
+                            @endif
+
+                        </div>
+
+                        {{-- @if (\Auth::user()->type != 'employee') --}}
+                        <div class="text-end">
+                            <button type="submit" class="btn  btn-primary">{{ 'Update' }}</button>
+                        </div>
+                        {{-- @endif --}}
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+
+
+    {{-- <div class="row">
+        <div class="">
+            <div class="">
+
+
+                <div class="row">
+                    <div class="col-md-6 ">
+
+                    </div>
+
+                </div>
+                <div class="row">
+                    <div class="col-md-6 ">
+                        <div class="employee-detail-wrap">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5>{{ __('Document Detail') }}</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row">
+                                        @php
+                                            $employeedoc = $employee
+                                                ->documents()
+                                                ->pluck('document_value', __('document_id'));
+                                            $logo = \App\Models\Utility::get_file('uploads/document/');
+
+                                        @endphp
+                                        @foreach ($documents as $key => $document)
+                                            <div class="col-md-12">
+                                                <div class="info">
+
+                                                    <strong>{{ $document->name }}</strong>
+                                                    <span><a href="{{ !empty($employeedoc[$document->id]) ? $logo . '/' . $employeedoc[$document->id] : '' }}"
+                                                            target="_blank">{{ !empty($employeedoc[$document->id]) ? $employeedoc[$document->id] : '' }}</a></span>
+                                                </div>
+                                            </div>
+                                        @endforeach
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 ">
+                        <div class="employee-detail-wrap">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5>{{ __('Bank Account Detail') }}</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="info">
+                                                <strong>{{ __('Account Holder Name') }}</strong>
+                                                <span>{{ $employee->account_holder_name }}</span>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="info font-style">
+                                                <strong>{{ __('Account Number') }}</strong>
+                                                <span>{{ $employee->account_number }}</span>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="info font-style">
+                                                <strong>{{ __('Bank Name') }}</strong>
+                                                <span>{{ $employee->bank_name }}</span>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="info">
+                                                <strong>{{ __('Bank Identifier Code') }}</strong>
+                                                <span>{{ $employee->bank_identifier_code }}</span>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="info">
+                                                <strong>{{ __('Branch Location') }}</strong>
+                                                <span>{{ $employee->branch_location }}</span>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="info">
+                                                <strong>{{ __('Tax Payer Id') }}</strong>
+                                                <span>{{ $employee->tax_payer_id }}</span>
+                                            </div>
+                                        </div>
+
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+
+
+                <div class="col-12">
+                    {!! Form::close() !!}
+                </div>
+            </div>
+        </div>
+    </div> --}}
+@endsection
+
+<link href="https://stackpath.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet" />
+
+@push('script-page')
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.14/index.global.min.js"></script>
+
+
+    @if ($isProfileEdit == false)
+        <script>
+            var isCalenderInitialize = false;
+            $('#is_custom_weekoffs').change(function() {
+                if ($(this).prop('checked')) {
+
+                    $("#calendar").show();
+
+                    showCalender()
+                } else {
+                    $("#calendar").hide()
+                }
+            });
+            var selectedDates = {};
+
+            $('#nav-tab >button').on('shown.bs.tab', function(e) {
+                console.log("clicked id", e.target.id);
+
+                if (e.target.id == "nav-weekoff-tab" && $("#is_custom_weekoffs").prop('checked')) {
+                    $("#calendar").show();
+                    showCalender()
+                } else {
+                    $("#calendar").hide();
+                    //  $("#weekoffs_data").val("");
+                }
+            });
+
+            @if ($employee->is_custom_weekoffs == 1)
+                //   showCalender();
+            @endif
+
+            function showCalender() {
+
+                if (isCalenderInitialize) {
+                    return;
+                }
+
+                var calendarEl = document.getElementById('calendar');
+
+                var calendar = new FullCalendar.Calendar(calendarEl, {
+                    initialView: 'dayGridMonth',
+                    selectable: true,
+                    buttonText: {
+                        today: 'Today'
+                    },
+                    dateClick: function(info) {
+                        var dateStr = info.dateStr;
+
+                        // Check if the date is already selected
+                        if (selectedDates[dateStr]) {
+                            // Date is already selected, remove it
+                            //     selectedDates[dateStr].remove();
+                            //     delete selectedDates[dateStr];
+                        } else {
+                            // Select new date and add event
+                            var event = calendar.addEvent({
+                                title: 'Week Off',
+                                start: dateStr,
+                                allDay: true,
+                                className: 'selected-event',
+                                color: '#1C232F'
+                            });
+
+                            selectedDates[dateStr] = event;
+                        }
+
+                        // saveToLocalStorage(Object.keys(selectedDates));
+
+                        $("#weekoffs_data").val(JSON.stringify(Object.keys(selectedDates)));
+                        // sendSelectedDates();
+                    },
+                    eventContent: function(info) {
+                        var deleteButton = document.createElement('button');
+                        deleteButton.className = 'delete-button';
+                        deleteButton.innerHTML = '<span class="material-icons">delete</span>';
+                        deleteButton.onclick = function() {
+                            info.event.remove();
+                            delete selectedDates[info.event.startStr];
+                            //     saveToLocalStorage(Object.keys(selectedDates));
+                            //     sendSelectedDates();
+                            $("#weekoffs_data").val(JSON.stringify(Object.keys(selectedDates)));
+                        };
+
+                        var arrayOfDomNodes = [deleteButton]
+                        return {
+                            domNodes: arrayOfDomNodes
+                        }
+                    }
+                });
+                calendar.render();
+
+
+                // add data
+
+                console.log("weekoffs_data")
+                console.log('{!! $employee->weekoffs_data ?? '' !!}');
+
+                @if (!empty($employee->weekoffs_data) && $employee->weekoffs_data != '[]' && $employee->weekoffs_data != null)
+
+                    //  alert("in");
+
+                    var storedDates = JSON.parse('{!! $employee->weekoffs_data ?? '' !!}');
+
+
+
+                    for (var dateStr of storedDates) {
+                        var event = calendar.addEvent({
+                            title: 'Week Off',
+                            start: dateStr,
+                            allDay: true,
+                            className: 'selected-event',
+                            color: '#1C232F'
+                        });
+
+                        selectedDates[dateStr] = event;
+                    }
+                @endif
+                // add data
+
+                isCalenderInitialize = true;
+                console.log("Calendar initialize.");
+            }
+        </script>
+    @endif
+
+    <script type="text/javascript">
+        var branchesGeofencingStatus = <?php echo json_encode(@$branchesGeofencingStatus); ?>;
+
+        function getDesignation(did) {
+
+
+            $.ajax({
+                url: "{{ route('employee.json') }}",
+                type: 'POST',
+                data: {
+                    "department_id": did,
+                    "_token": "{{ csrf_token() }}",
+                },
+                success: function(data) {
+                    $('.designation_id').empty();
+                    var emp_selct = `<select class="form-control col-md-12 designation_id select2" name="designation_id" id="choices-multiple"
+                                            placeholder="Select Designation" >
+                                            </select>`;
+                    $('.designation_div').html(emp_selct);
+                    $('.designation_id').append('<option value="">Select any Designation</option>');
+                    $.each(data, function(key, value) {
+                        var select = '';
+                        if (key == '{{ $employee->designation_id }}') {
+                            select = 'selected';
+                        }
+
+                        $('.designation_id').append('<option value="' + key + '"  ' + select + '>' +
+                            value + '</option>');
+                    });
+                    new Choices('#choices-multiple', {
+                        removeItemButton: true,
+                    });
+                }
+            });
+        }
+
+        function calculateSalary() {
+            var salary = 0;
+
+            try {
+                var ctc_annual = $("#ctc_annual").val() ?? 0;
+                var ctc_monthely = parseFloat(ctc_annual / 12).toFixed(2);
+                $("#ctc_monthely").val(ctc_monthely);
+
+                var ctc_percentage = parseFloat($("#ctc_percentage").val() ?? 0).toFixed(2);
+                if (isNaN(ctc_percentage)) {
+                    ctc_percentage = 0;
+                }
+
+                var salary = parseFloat(parseFloat(ctc_monthely * ctc_percentage / 100)).toFixed(0);
+                $("#salary").val(salary);
+            } catch (error) {
+                console.log("error", error);
+                $("#salary").val(0);
+            }
+        }
+
+        $(document).ready(function() {
+
+            $('.numberValidation').on('input keypress keyup paste dragover', function(e) {
+                // Check if the entered value is a valid number
+                var inputValue = $(this).val() + String.fromCharCode(e.which);
+                if (!$.isNumeric(inputValue)) {
+                    // Prevent the input if it's not a number
+                    e.preventDefault();
+                }
+            });
+
+            $('.salaryAmountValidation').on('input keypress keyup paste dragover', function(e) {
+                // Check if the entered value is a valid number
+                var inputValue = $(this).val() + String.fromCharCode(e.which);
+                if (!$.isNumeric(inputValue)) {
+                    // Prevent the input if it's not a number
+                    e.preventDefault();
+                }
+                calculateSalary();
+            });
+
+            $('.ctcPercentageValidator').on('input keypress keyup paste dragover', function(e) {
+                // Check if the entered value is a valid number
+                var inputValue = parseFloat($(this).val());
+                if (inputValue > 100) {
+                    $(this).val(100);
+                }
+                calculateSalary();
+            });
+
+
+            //branch_id
+            $(document).on('change', 'select[name=branch_id]', function() {
+                var branch_id = $(this).val();
+
+
+                try {
+                    if (branchesGeofencingStatus[branch_id] == 1 && branch_id != "") {
+                        $("#geofencing_status").prop("disabled", false);
+                    } else {
+                        $("#geofencing_status").prop("disabled", true);
+                    }
+
+                } catch (error) {
+                    $("#geofencing_status").prop("disabled", true);
+                }
+
+                //  if (branch_id == {{ $employee->branch_id }} && {{ $employee->geofencing_status }} ==
+                //      1) {
+                //      $("#geofencing_status").prop("checked", true);
+                //  } else {
+                //      $("#geofencing_status").prop("checked", false);
+                //  }
+                $("#geofencing_status").prop("checked", false);
+
+                $.ajax({
+                    url: "{{ route('employee.Branch_department_json') }}",
+                    type: 'POST',
+                    data: {
+                        "branch_id": branch_id,
+                        "_token": "{{ csrf_token() }}",
+                    },
+                    success: function(data) {
+                        $('#department_id').empty('');
+                        $('#department_id').append(
+                            '<option value="">{{ __('Select Department ') }}</option>');
+                        $.each(data, function(key, value) {
+                            console.log('<option value="' + key + '">' + value +
+                                '</option>');
+                            $('#department_id').append('<option value="' + key + '">' +
+                                value + '</option>');
+                        });
+                    }
+                });
+            });
+
+            var checked = $('#office_staff').find(":selected").val();
+
+            if (checked == 1) {
+                $('.select_grade_type').addClass('d-none');
+            } else {
+                if (checked == '') {
+                    $('.select_grade_type').addClass('d-none');
+                } else {
+                    $('.select_grade_type').removeClass('d-none');
+                }
+            }
+
+            //check select_office_staff
+            $(document).on('change', '#office_staff', function() {
+                var office_staff = $(this).val();
+                if (office_staff == 2) {
+                    $('.select_grade_type').removeClass('d-none');
+                } else {
+                    $('#grade_type_id').val('');
+                    $('.select_grade_type').addClass('d-none');
+                }
+            });
+            $("#employee_update").submit(function(e) {
+                event.preventDefault();
+                var form_cust = this;
+                var formData = new FormData(form_cust);
+                var url = $(this).attr('action');
+                var type = "POST";
+                $.ajax({
+                    context: 'commonModal',
+                    type: type,
+                    url: url,
+                    data: formData,
+                    processData: false,
+                    contentType: false,
+                    success: function(response) {
+                        if (response.status == 1) {
+                            show_toastr('Success', response.message, 'success');
+                            //    window.location.href = "{{ route('employee.index') }}";
+                            window.location.href = response.redirect;
+                        }
+                        if (response.status == 0) {
+                            $.each(response.message, function(key, value) {
+                                toastr.error(value)
+                            });
+                        }
+                    },
+                })
+                return false;
+            });
+
+            var now = new Date();
+            var month = (now.getMonth() + 1);
+            var day = now.getDate();
+            if (month < 10) month = "0" + month;
+            if (day < 10) day = "0" + day;
+            var today = now.getFullYear() + '-' + month + '-' + day;
+
+
+            var d_id = $('#department_id').val();
+            var designation_id = '{{ $employee->designation_id }}';
+            getDesignation(d_id);
+
+
+            //autometically ajax call
+            //  var country_id = $('#select_roles').val();
+            //     var selct = ''
+            //     var state_id = {{ $employee->users_types_id }}
+            //     $.ajax({
+            //         type:'get',
+            //         url: '{{ url('get_users_data') }}' + '/' + country_id,
+            //         data:{},
+            //             success:function(state){
+            //             $.each(state, function (key, value) {
+            //                     if(value.id == state_id){
+            //                         selct  = 'selected';
+            //                     }else{
+            //                         selct  = '';
+            //                     }
+            //                     $("#select_users").append('<option ' + selct + ' value="' + value.id + '">' + value.name + '</option>');
+            //             });
+            //         }
+            // });
+
+            // $("#select_roles").change(function() {
+
+            //     var id = $('#select_roles').val();
+            //     $.ajax({
+            //         type: 'get',
+            //         url: '{{ url('get_users_data') }}' + '/' + id,
+            //         data: {},
+            //         success: function(state) {
+            //             $('#select_users').html('');
+            //             $('#select_users').append('<option value="">Select a users</option>');
+            //             $.each(state, function(key, value) {
+            //                 $("#select_users").append('<option value="' + value
+            //                 .id + '">' + value.name + '</option>');
+            //             });
+            //         }
+            //     });
+            // });
+
+
+
+            //ajax
+            var index = "{{ $EXPTableDatacount }}";
+            $("#add_sub_form").click(function() {
+
+                var now = new Date();
+                var month = (now.getMonth() + 1);
+                var day = now.getDate();
+                if (month < 10) month = "0" + month;
+                if (day < 10) day = "0" + day;
+                var today = now.getFullYear() + '-' + month + '-' + day;
+
+
+                index++;
+                var designations = <?php echo json_encode($designations); ?>;
+
+                $('#append_sub_form').append('<div class="col-md-12" id="delete_sub_form">' +
+                    '<div class="card">' +
+                    '<div class="card-header">' +
+                    '<h5>Experience</h5>' +
+                    '<p class="btn btn-danger float-end" id="programings_btn_remove">- remove</p>' +
+                    '</div>' + '<div class="card-body employee-detail-create-body">' +
+                    '<div class="row">' +
+                    '<div class="form-group col-md-6">' +
+                    '<lable class="form-label">Previous Company</lable>' +
+                    '<input type="text" name="previous_company_name[' + index +
+                    ']" class="form-control" placeholder="Enter previous company" ></input>' +
+                    '</div>' +
+                    '<div class="form-group col-md-6">' +
+                    '<lable class="form-label">Job Title</lable>' +
+                    '<input type="text" name="previous_job_title[' + index +
+                    ']" class="form-control" placeholder="Enter previous job title"></input>' +
+                    '</div>' +
+                    '<div class="form-group col-md-6">' +
+                    '<lable class="form-label">From Date</lable>' +
+                    '<input type="date" max=' + today + ' name="previous_from_date[' + index +
+                    ']" class="form-control" placeholder="Enter previous job title"></input>' +
+                    '</div>' +
+                    '<div class="form-group col-md-6">' +
+                    '<lable class="form-label">To Date</lable>' +
+                    '<input type="date" max=' + today + ' name="previous_to_date[' + index +
+                    ']" class="form-control" placeholder="Enter previous job title"></input>' +
+                    '</div>' +
+
+                    '<div class="form-group col-md-12">' +
+
+                    '<lable class="form-label">Previous Company designation</lable>' +
+                    '<input type="text" name="previous_company_designation_id[' + index +
+                    ']" id="previous_company_designation_id[' + index +
+                    ']"class="form-control" placeholder="Enter previous company designation"></input>' +
+                    '</div>' +
+                    '<div class="form-group col-md-12">' +
+                    '<lable class="form-label">Experience Job Description</lable>' +
+                    '<textarea type="text" name="experiance_Job_description[' + index +
+                    ']" class="form-control" placeholder="Enter Experience job description"></textarea>' +
+                    '</div>' +
+                    '</div></div></div></div>');
+            });
+            $(document).on('click', '#programings_btn_remove', function() {
+                $(this).closest('div#delete_sub_form').remove();
+            });
+        });
+
+        //education table
+        var eduction_table = "{{ $EducationDatacount }}";
+        $("#append_sub_form_eduction_table").click(function() {
+
+
+            var now = new Date();
+            var month = (now.getMonth() + 1);
+            var day = now.getDate();
+            if (month < 10) month = "0" + month;
+            if (day < 10) day = "0" + day;
+            var today = now.getFullYear() + '-' + month + '-' + day;
+
+            eduction_table++;
+
+            $('#append_sub_form_eduction_table_add_form').append(
+                '<div class="col-md-12" id="delete_sub_form_eduction_table">' +
+                '<div class="card">' +
+                '<div class="card-header">' +
+                '<h5>Education</h5>' +
+                '<p class="btn btn-danger float-end" id="programings_btn_remove_eduction_table">- remove</p>' +
+                '</div>' + '<div class="card-body employee-detail-create-body">' +
+                '<div class="row">' +
+                '<div class="form-group col-md-6">' +
+                '<lable class="form-label">Institute Name</lable>' +
+                '<input type="text" name="institute_name[' + eduction_table +
+                ']" class="form-control" placeholder="Enter institute name" ></input>' +
+                '</div>' +
+                '<div class="form-group col-md-6">' +
+                '<lable class="form-label">Education</lable>' +
+                '<input type="text" name="education[' + eduction_table +
+                ']" class="form-control" placeholder="Enter previous job title"></input>' +
+                '</div>' +
+                '<div class="form-group col-md-6">' +
+                '<lable class="form-label">Specialization</lable>' +
+                '<input type="text" name="specialization[' + eduction_table +
+                ']" class="form-control" placeholder="Enter specialization"></input>' +
+                '</div>' +
+                '<div class="form-group col-md-6">' +
+                '<lable class="form-label">Date of birth</lable>' +
+                '<input type="date" max=' + today + ' id="date_of_completion" name="date_of_completion[' +
+                eduction_table +
+                ']" class="form-control" placeholder="Enter previous job title"></input>' + '</div>' +
+
+                '<div class="form-group col-md-12">' +
+                '<lable class="form-label">Notes</lable>' +
+                '<textarea type="text" name="notes[' + eduction_table +
+                ']" class="form-control" placeholder="Enter notes"></textarea>' +
+                '</div>' +
+                '</div></div></div></div>');
+        });
+        $(document).on('click', '#programings_btn_remove_eduction_table', function() {
+            $(this).closest('div#delete_sub_form_eduction_table').remove();
+        });
+
+        //Dependent
+        //Dependent-TABLE add-more
+        var Dependent = "{{ $DependentDatacount }}";
+        $("#Dependent_sub_form_eduction_table").click(function() {
+
+
+            var now = new Date();
+            var month = (now.getMonth() + 1);
+            var day = now.getDate();
+            if (month < 10) month = "0" + month;
+            if (day < 10) day = "0" + day;
+            var today = now.getFullYear() + '-' + month + '-' + day;
+
+            Dependent++;
+
+            $('#Dependent_sub_form_eduction_table_add_form').append(
+                '<div class="col-md-12" id="delete_programings_btn_remove_Dependent_table">' +
+                '<div class="card">' +
+                '<div class="card-header">' +
+                '<h5>Dependent</h5>' +
+                '<p class="btn btn-danger float-end" id="programings_btn_remove_Dependent_table">- remove</p>' +
+                '</div>' + '<div class="card-body employee-detail-create-body">' +
+                '<div class="row">' +
+                '<div class="form-group col-md-12">' +
+                '<lable class="form-label">Name</lable>' +
+                '<input type="text" name="dependent_name[' + Dependent +
+                ']" class="form-control dependent_name" placeholder="Enter dependent name" ></input>' +
+                '</div>' +
+                '<div class="form-group col-md-12">' +
+                '<lable class="form-label">Education</lable>' +
+                '<span class="text-danger pl-1 relation_type_label" style="display:none"> *</span>' +
+                '<select  name="dependent_relation[' + Dependent + ']" id="dependent_relation' + Dependent +
+                '" class="form-control select2">' +
+                '<option value="">-Select Relation</option>' +
+                '<option vale="Father">Father</option>' +
+                '<option value="Mother">Mother</option>' +
+                '<option value="Brother">Brother</option>' +
+                '<option value="Sister">Sister</option>' +
+                '<option value="Husband">Husband</option>' +
+                '<option value="Wife">Wife</option>' +
+                '<option value="Child">Child</option>' +
+                '</select>' +
+                '</div>' +
+                '<div class="form-group col-md-12">' +
+                '<lable class="form-label">Date of birth</lable>' +
+                '<input type="date" max=' + today + ' name="dependent_dob[' + Dependent +
+                ']" class="form-control" placeholder="Enter specialization"></input>' +
+                '</div>' +
+
+                '<div class="form-group col-md-12">' +
+                '<lable class="form-label">Emergency phone no.</lable>' +
+                '<input type="number" name="emergency_phone_no[' + Dependent +
+                ']" class="form-control" placeholder="Emergency phone no."></input>' +
+                '</div>' +
+                '</div></div></div></div>');
+        });
+        $(document).on('click', '#programings_btn_remove_Dependent_table', function() {
+            $(this).closest('div#delete_programings_btn_remove_Dependent_table').remove();
+        });
+
+
+        $(document).on('change', 'select[name=department_id]', function() {
+            var department_id = $(this).val();
+            getDesignation(department_id);
+        });
+
+        $('.dependent_name').on('input', function() {
+
+            var inputValue = $(this).val();
+
+            var closestRequiredLabel = $(this).parent().parent().find('.relation_type_label');
+            //console.log('closestRequiredLabel:', closestRequiredLabel);
+
+            if ($.trim(inputValue) == '') {
+                closestRequiredLabel.hide();
+            } else {
+                closestRequiredLabel.show();
+            }
+        });
+    </script>
+
+    <script>
+        $('#epf_status').change(function() {
+            if ($(this).prop('checked')) {
+                $("#epf_div").show();
+            } else {
+                $("#epf_div").hide();
+            }
+        });
+
+        $('#esi_status').change(function() {
+            if ($(this).prop('checked')) {
+                $("#esi_div").show();
+            } else {
+                $("#esi_div").hide();
+            }
+        });
+
+        $('#ept_status').change(function() {
+            if ($(this).prop('checked')) {
+                $("#ept_div").show();
+            } else {
+                $("#ept_div").hide();
+            }
+        });
+
+        $('.hideShowDiv').change(function() {
+            var divId = $(this).attr("divId");
+            if ($(this).prop('checked')) {
+                $("#" + divId).show();
+            } else {
+                $("#" + divId).hide();
+            }
+        });
+
+        $('#statutory_bonus_status').change(function() {
+            if ($(this).prop('checked')) {
+                $("#statutory_bonus_div").show();
+            } else {
+                $("#statutory_bonus_div").hide();
+            }
+        });
+
+        $('#tax_deducted_at_source_status').change(function() {
+            if ($(this).prop('checked')) {
+                $("#tax_deducted_at_source_div").show();
+            } else {
+                $("#tax_deducted_at_source_div").hide();
+            }
+        });
+
+        $('#marital_status').change(function() {
+            if ($(this).val() == "Married" || $(this).val() == "Widowed") {
+                $(".marriage_anniversary_date_div").show();
+            } else {
+                $(".marriage_anniversary_date_div").hide();
+            }
+        });
+    </script>
+@endpush

@@ -1,0 +1,1339 @@
+@extends('layouts.admin')
+@section('page-title')
+    {{ __('Settings') }}
+@endsection
+@php
+    // $logo = asset(Storage::url('uploads/logo/'));
+    $logo = \App\Models\Utility::get_file('uploads/logo/');
+    $company_logo = \App\Models\Utility::getValByName('company_logo');
+    $company_logo_light = \App\Models\Utility::getValByName('company_logo_light');
+    $company_favicon = \App\Models\Utility::getValByName('company_favicon');
+    $color = isset($settings['theme_color']) ? $settings['theme_color'] : 'theme-4';
+
+    $settings = App\Models\Utility::settings();
+
+    $currantLang = \App\Models\Utility::languages();
+    $SITE_RTL = \App\Models\Utility::getValByName('SITE_RTL');
+@endphp
+
+
+
+@section('breadcrumb')
+    <li class="breadcrumb-item"><a href="{{ route('home') }}">{{ __('Home') }}</a></li>
+    <li class="breadcrumb-item">{{ __('Settings') }}</li>
+@endsection
+
+@push('script-page')
+    <script src="{{ asset('assets/js/plugins/tinymce/tinymce.min.js') }}"></script>
+
+    <script>
+        if ($(".pc-tinymce-2").length) {
+            tinymce.init({
+                selector: '.pc-tinymce-2',
+                height: "400",
+                content_style: 'body { font-family: "Inter", sans-serif; }'
+            });
+        }
+    </script>
+    <script>
+        if ($(".pc-tinymce-3").length) {
+            tinymce.init({
+                selector: '.pc-tinymce-3',
+                height: "400",
+                content_style: 'body { font-family: "Inter", sans-serif; }'
+            });
+        }
+    </script>
+    <script>
+        if ($(".pc-tinymce-4").length) {
+            tinymce.init({
+                selector: '.pc-tinymce-4',
+                height: "400",
+                content_style: 'body { font-family: "Inter", sans-serif; }'
+            });
+        }
+    </script>
+    <script>
+        if ($(".pc-tinymce-5").length) {
+            tinymce.init({
+                selector: '.pc-tinymce-5',
+                height: "400",
+                content_style: 'body { font-family: "Inter", sans-serif; }'
+            });
+        }
+    </script>
+    <script>
+        $(document).on('change', '.email-template-checkbox', function() {
+            var url = $(this).data('url');
+            var chbox = $(this);
+
+            $.ajax({
+                url: url,
+                type: 'GET',
+                data: {
+                    _token: $('meta[name="csrf-token"]').attr('content'),
+                    status: chbox.val()
+                },
+                success: function(data) {
+
+                },
+            });
+        });
+    </script>
+    <script>
+        var scrollSpy = new bootstrap.ScrollSpy(document.body, {
+            target: '#useradd-sidenav',
+            offset: 300
+        })
+
+        $('.themes-color-change').on('click', function() {
+            var color_val = $(this).data('value');
+            $('.theme-color').prop('checked', false);
+            $('.themes-color-change').removeClass('active_color');
+            $(this).addClass('active_color');
+            $(`input[value=${color_val}]`).prop('checked', true);
+
+        });
+    </script>
+    <script>
+        document.getElementById('company_logo').onchange = function() {
+            var src = URL.createObjectURL(this.files[0])
+            document.getElementById('image').src = src
+        }
+    </script>
+    <script>
+        document.getElementById('company_logo_light').onchange = function() {
+            var src = URL.createObjectURL(this.files[0])
+            document.getElementById('image1').src = src
+        }
+    </script>
+    <script>
+        document.getElementById('company_favicon').onchange = function() {
+            var src = URL.createObjectURL(this.files[0])
+            document.getElementById('image2').src = src
+        }
+    </script>
+
+
+    <script>
+        $('.radio_working_days').change(function() {
+            if ($(this).prop('checked')) {
+                // console.log('Checkbox checked: ' + $(this).val());
+
+                // 0 = current month working days, 1 = company working days defined by company,
+                if ($(this).val() == 0) {
+                    $("#company_working_days").prop("disabled", true);
+                    $("#working_days_date").prop("disabled", true);
+                } else if ($(this).val() == 1) {
+                    $("#company_working_days").prop("disabled", false);
+                    $("#working_days_date").prop("disabled", true);
+                } else if ($(this).val() == 2) {
+                    $("#working_days_date").prop("disabled", false);
+                    $("#company_working_days").prop("disabled", true);
+                }
+            } else {
+                // console.log('Checkbox unchecked: ' + $(this).val());
+            }
+        });
+
+        function companySettingFormSubmit() {
+            return false;
+        }
+    </script>
+
+    <script>
+        $(".numberValidation").on("keypress", function(event) {
+
+
+            if (!isNumberDecimalKey(this, event)) {
+                event.preventDefault();
+            }
+        });
+
+        function isNumberDecimalKey(el, evt) {
+
+            var charCode = (evt.which) ? evt.which : event.keyCode;
+            var number = el.value.split('.');
+
+            if (charCode != 46 && charCode > 31 && (charCode < 48 || charCode > 57) || charCode == 46) {
+                return false;
+            }
+
+            // //just one dot
+            // if (number.length > 1 && charCode == 46) {
+            //      return false;
+            // }
+
+            // //get the carat position
+            // var caratPos = getSelectionStart(el);
+            // var dotPos = el.value.indexOf(".");
+            // if (caratPos > dotPos && dotPos > -1 && (number[1].length > 1)) {
+            //      return false;
+            // }
+
+            return true;
+        }
+
+        $(".numberValidation").on("paste dragover", function(event) {
+            // Prevent paste and drag-and-drop actions
+            event.preventDefault();
+        });
+    </script>
+@endpush
+@section('content')
+    <div class="row">
+
+        <div class="col-sm-12">
+            <div class="row">
+                {{-- <div class="col-xl-3">
+                    <div class="card sticky-top">
+                         <div class="list-group list-group-flush" id="useradd-sidenav">
+
+                              <a href="#business-settings" id="business-setting-tab" class="list-group-item list-group-item-action border-0">{{ __('Business Settings') }}
+                                   <div class="float-end"><i class="ti ti-chevron-right"></i></div>
+                              </a>
+
+                              <a href="#system-settings" id="system-setting-tab" class="list-group-item list-group-item-action border-0">{{ __('System Settings') }}
+                                   <div class="float-end"><i class="ti ti-chevron-right"></i></div>
+                              </a>
+
+                              <a href="#company-settings" id="company-setting-tab" class="list-group-item list-group-item-action border-0">{{ __('Company Settings') }}
+                                   <div class="float-end"><i class="ti ti-chevron-right"></i></div>
+                              </a>
+
+                              <a id="email-notification-tab" data-toggle="tab" href="#email-notification-settings" role="tab" aria-controls="" aria-selected="false" class="list-group-item list-group-item-action border-0">{{ __('Email Notification Settings') }}
+                                   <div class="float-end"><i class="ti ti-chevron-right"></i></div>
+                              </a>
+
+                              <a href="#google-calender" id="google-calendar-tab" class="list-group-item list-group-item-action border-0">{{ __('Google Calendar Settings') }}
+                                   <div class="float-end"><i class="ti ti-chevron-right"></i></div>
+                              </a>
+
+                              <a href="#Leave-setting" id="google-calendar-tab" class="list-group-item list-group-item-action border-0">{{ __('Leave setting') }}
+                                   <div class="float-end"><i class="ti ti-chevron-right"></i></div>
+                              </a>
+                         </div>
+
+                    </div>
+               </div> --}}
+
+                <div class="col-xl-12">
+                    <div class="" id="business-settings">
+                        {{ Form::model($settings, ['route' => 'business.setting', 'method' => 'POST', 'enctype' => 'multipart/form-data']) }}
+                        <div class="row">
+                            <div class="col-lg-12 col-sm-12 col-md-12">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h5>{{ __('Business Settings') }}</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="row">
+                                            <div class="col-lg-4 col-sm-6 col-md-6">
+                                                <div class="card">
+                                                    <div class="card-header">
+                                                        <h5>{{ __('Logo dark') }}</h5>
+                                                    </div>
+                                                    <div class="card-body pt-0">
+                                                        <div class=" setting-card">
+                                                            <div class="logo-content mt-4 setting-logo">
+
+                                                                <a href="{{ $logo . (isset($company_logo) && !empty($company_logo) ? $company_logo : 'logo-dark.png') }}"
+                                                                    target="_blank">
+                                                                    <img id="image" alt="your image"
+                                                                        src="{{ $logo . (isset($company_logo) && !empty($company_logo) ? $company_logo : 'logo-dark.png') }}"
+                                                                        width="150px" class="big-logo">
+                                                                </a>
+                                                            </div>
+                                                            <div class="choose-files mt-3">
+
+                                                                <label for="company_logo">
+                                                                    <div class=" bg-primary "> <i
+                                                                            class="ti ti-upload px-1"></i>{{ __('Choose file here') }}
+                                                                    </div>
+                                                                    <input type="file" class="form-control file"
+                                                                        name="company_logo" id="company_logo"
+                                                                        data-filename="company_logo">
+                                                                </label>
+
+                                                            </div>
+                                                            @error('company_logo')
+                                                                <div class="row">
+                                                                    <span class="invalid-company_logo" role="alert">
+                                                                        <strong
+                                                                            class="text-danger">{{ $message }}</strong>
+                                                                    </span>
+                                                                </div>
+                                                            @enderror
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <!-- <div class="col-lg-4 col-sm-6 col-md-6">
+                                                        <div class="card">
+                                                            <div class="card-header">
+                                                                <h5>{{ __('Logo Light') }}</h5>
+                                                            </div>
+
+                                                            <div class="card-body pt-0">
+                                                                <div class=" setting-card">
+                                                                    <div class="logo-content mt-4  setting-logo">
+                                                                        {{-- <img id="image1" src="{{ $logo . '/' . (isset($company_logo_light) && !empty($company_logo_light) ? $company_logo_light : 'logo-light.png') }}"
+                                                                           class="logo logo-sm img_setting"
+                                                                           style="filter: drop-shadow(2px 3px 7px #011c4b);"> --}}
+                                                                        <a href="{{ $logo . (isset($company_logo_light) && !empty($company_logo_light) ? $company_logo_light : 'logo-light.png') }}"
+                                                                            target="_blank">
+                                                                            <img id="image1" alt="your image"
+                                                                                src="{{ $logo . (isset($company_logo_light) && !empty($company_logo_light) ? $company_logo_light : 'logo-light.png') }}"
+                                                                                width="150px" class="big-logo"
+                                                                                style="filter: drop-shadow(2px 3px 7px #011c4b);">
+                                                                        </a>
+
+                                                                    </div>
+                                                                    <div class="choose-files mt-3">
+                                                                        <label for="company_logo_light">
+                                                                            <div class=" bg-primary dark_logo_update"> <i
+                                                                                    class="ti ti-upload px-1"></i>{{ __('Choose file here') }}
+                                                                            </div>
+                                                                            <input type="file" class="form-control file"
+                                                                                name="company_logo_light" id="company_logo_light"
+                                                                                data-filename="dark_logo_update">
+                                                                        </label>
+                                                                    </div>
+                                                                    @error('company_logo_light')
+        <div class="row">
+                                                                                    <span class="invalid-company_logo_light" role="alert">
+                                                                                        <strong
+                                                                                            class="text-danger">{{ $message }}</strong>
+                                                                                    </span>
+                                                                                </div>
+    @enderror
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-lg-4 col-sm-6 col-md-6">
+                                                        <div class="card">
+                                                            <div class="card-header">
+                                                                <h5>{{ __('Favicon') }}</h5>
+                                                            </div>
+                                                            <div class="card-body pt-0">
+                                                                <div class=" setting-card">
+                                                                    <div class="logo-content mt-4 setting-logo ">
+                                                                        {{-- <img src="{{ $logo . '/' . (isset($company_favicon) && !empty($company_favicon) ? $company_favicon : 'favicon.png') }}"
+                                                                           width="50px" class="logo logo-sm img_setting"> --}}
+                                                                        <a href="{{ $logo . (isset($company_favicon) && !empty($company_favicon) ? $company_favicon : 'favicon.png') }}"
+                                                                            target="_blank">
+                                                                            <img id="image2" alt="your image"
+                                                                                src="{{ $logo . (isset($company_favicon) && !empty($company_favicon) ? $company_favicon : 'favicon.png') }}"
+                                                                                width="50px" class="big-logo"
+                                                                                style="filter: drop-shadow(2px 3px 7px #011c4b);">
+                                                                        </a>
+                                                                    </div>
+                                                                    <div class="choose-files mt-3">
+
+                                                                        <label for="company_favicon">
+                                                                            <div class=" bg-primary company_favicon"> <i
+                                                                                    class="ti ti-upload px-1"></i>{{ __('Choose file here') }}
+                                                                            </div>
+                                                                            <input type="file" class="form-control file"
+                                                                                name="company_favicon" id="company_favicon"
+                                                                                data-filename="company_favicon">
+                                                                        </label>
+                                                                    </div>
+                                                                    @error('company_favicon')
+        <div class="row">
+                                                                                    <span class="invalid-logo" role="alert">
+                                                                                        <strong
+                                                                                            class="text-danger">{{ $message }}</strong>
+                                                                                    </span>
+                                                                                </div>
+    @enderror
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="form-group col-md-6">
+
+                                                        {{ Form::label('title_text', __('Title Text'), ['class' => 'col-form-label']) }}
+                                                        {{ Form::text('title_text', null, ['class' => 'form-control', 'placeholder' => __('Enter Title Text')]) }}
+
+                                                        @error('title_text')
+        <span class="invalid-title_text" role="alert">
+                                                                        <strong class="text-danger">{{ $message }}</strong>
+                                                                    </span>
+    @enderror
+                                                    </div>
+
+
+                                                    <div class="form-group col-md-6">
+
+                                                        <label for="metakeyword" class="col-form-label">{{ __('Meta Keywords') }}
+                                                        </label>
+                                                        <textarea class="form-control" rows="4" cols="8"
+                                                            value="{{ isset($settings['metakeyword']) ? $settings['metakeyword'] : '' }}" name="metakeyword"
+                                                            id="metakeyword" style="resize: vertical; height: 42px;" placeholder="Enter Meta Keyword">{{ isset($settings['metakeyword']) ? $settings['metakeyword'] : '' }}</textarea>
+
+                                                    </div>
+
+
+                                                    <div class="form-group col-md-6">
+
+                                                        <label for="metadesc"
+                                                            class="col-form-label">{{ __('Meta Description') }}</label>
+                                                        <textarea class="form-control" rows="4" cols="8"
+                                                            value="{{ isset($settings['metadesc']) ? $settings['metadesc'] : '' }}" name="metadesc" id="metadesc"
+                                                            style="resize: vertical; height: 42px;" placeholder="Enter Meta Description">{{ isset($settings['metadesc']) ? $settings['metadesc'] : '' }}</textarea>
+
+                                                    </div>
+                                                    <div class="col-3 ">
+                                                        <div class="col switch-width">
+                                                            <div class="form-group ml-2 mr-3">
+                                                                {{ Form::label('SITE_RTL', __('Enable RTL'), ['class' => 'col-form-label']) }}
+                                                                <div class="custom-control custom-switch">
+                                                                    <input type="checkbox" data-toggle="switchbutton"
+                                                                        data-onstyle="primary" class="" name="SITE_RTL"
+                                                                        id="SITE_RTL"
+                                                                        {{ $SITE_RTL == 'on' ? 'checked="checked"' : '' }}>
+                                                                    <label class="custom-control-label mb-1"
+                                                                        for="SITE_RTL"></label>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <h5 class="mt-3 mb-3">{{ __('Theme Customizer') }}</h5>
+                                                    <div class="col-12">
+                                                        <div class="pct-body">
+                                                            <div class="row">
+                                                                <div class="col-4">
+                                                                    <h6 class="">
+                                                                        <i data-feather="credit-card"
+                                                                            class="me-2"></i>{{ __('Primary color Settings') }}
+                                                                    </h6>
+                                                                    <hr class="my-2" />
+                                                                    <div class="theme-color themes-color">
+                                                                        <a href="#!"
+                                                                            class="themes-color-change {{ $color == 'theme-1' ? 'active_color' : '' }}"
+                                                                            data-value="theme-1"></a>
+                                                                        <input type="radio" class="theme_color d-none"
+                                                                            name="theme_color" value="theme-1"
+                                                                            {{ $color == 'theme-1' ? 'checked' : '' }}>
+                                                                        <a href="#!"
+                                                                            class="themes-color-change {{ $color == 'theme-2' ? 'active_color' : '' }}"
+                                                                            data-value="theme-2"></a>
+                                                                        <input type="radio" class="theme_color d-none"
+                                                                            name="theme_color" value="theme-2"
+                                                                            {{ $color == 'theme-2' ? 'checked' : '' }}>
+                                                                        <a href="#!"
+                                                                            class="themes-color-change {{ $color == 'theme-3' ? 'active_color' : '' }}"
+                                                                            data-value="theme-3"></a>
+                                                                        <input type="radio" class="theme_color d-none"
+                                                                            name="theme_color" value="theme-3"
+                                                                            {{ $color == 'theme-3' ? 'checked' : '' }}>
+                                                                        <a href="#!"
+                                                                            class="themes-color-change {{ $color == 'theme-4' ? 'active_color' : '' }}"
+                                                                            data-value="theme-4"></a>
+                                                                        <input type="radio" class="theme_color d-none"
+                                                                            name="theme_color" value="theme-4"
+                                                                            {{ $color == 'theme-4' ? 'checked' : '' }}>
+                                                                    </div>
+
+                                                                </div>
+                                                                <div class="col-4">
+                                                                    <h6 class=" ">
+                                                                        <i data-feather="layout"
+                                                                            class="me-2"></i>{{ __('Sidebar Settings') }}
+                                                                    </h6>
+                                                                    <hr class="my-2 " />
+                                                                    <div class="form-check form-switch ">
+                                                                        <input type="checkbox" class="form-check-input"
+                                                                            id="cust_theme_bg" name="cust_theme_bg"
+                                                                            @if ($settings['cust_theme_bg'] == 'on') checked @endif />
+
+                                                                        <label class="form-check-label f-w-600 pl-1"
+                                                                            for="cust_theme_bg">{{ __('Transparent layout') }}</label>
+                                                                    </div>
+                                                                </div>
+                                                                <div class="col-4">
+                                                                    <h6 class=" ">
+                                                                        <i data-feather="sun"
+                                                                            class=""></i>{{ __('Layout Settings') }}
+                                                                    </h6>
+                                                                    {{-- {{ dd($settings['cust_darklayout']) }} --}}
+                                                                    <hr class=" my-2  " />
+                                                                    <div class="form-check form-switch mt-2 ">
+                                                                        <input type="hidden" name="cust_darklayout"
+                                                                            value="off">
+                                                                        <input type="checkbox" class="form-check-input"
+                                                                            id="cust_darklayout" name="cust_darklayout"
+                                                                            @if ($settings['cust_darklayout'] == 'on') checked @endif />
+
+                                                                        <label class="form-check-label f-w-600 pl-1"
+                                                                            for="cust_darklayout">{{ __('Dark Layout') }}</label>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div> -->
+                                        </div>
+                                    </div>
+                                    <div class="card-footer ">
+                                        <div class="col-sm-12 px-2">
+                                            <div class="text-end">
+                                                {{ Form::submit(__('Save Changes'), ['class' => 'btn btn-xs btn-primary']) }}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {!! Form::close() !!}
+                    </div>
+
+                    <div class="" id="system-settings">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5>{{ __('System Settings') }}</h5>
+                            </div>
+                            {{ Form::model($settings, ['route' => 'system.settings', 'method' => 'post']) }}
+                            <div class="card-body">
+                                <div class="row company-setting">
+                                    <div class="form-group col-md-4">
+                                        {{ Form::label('site_currency', __('Currency *'), ['class' => 'col-form-label']) }}
+                                        {{ Form::text('site_currency', $settings['site_currency'] ?? 'INR', ['class' => 'form-control ']) }}
+                                        <small class="text-xs">
+                                            {{ __('Note: Add currency code as per three-letter ISO code') }}.
+                                            <a href="https://stripe.com/docs/currencies"
+                                                target="_blank">{{ __('You can find out how to do that here.') }}</a>
+                                        </small>
+                                        @error('site_currency')
+                                            <br>
+                                            <span class="text-xs text-danger invalid-site_currency"
+                                                role="alert">{{ $message }}</span>
+                                        @enderror
+                                    </div>
+                                    <div class="form-group col-md-4">
+                                        {{ Form::label('site_currency_symbol', __('Currency Symbol *'), ['class' => 'col-form-label']) }}
+                                        {{ Form::text('site_currency_symbol', $settings['site_currency_symbol'] ?? '₹', ['class' => 'form-control']) }}
+                                        @error('site_currency_symbol')
+                                            <span class="text-xs text-danger invalid-site_currency_symbol"
+                                                role="alert">{{ $message }}</span>
+                                        @enderror
+                                    </div>
+                                    <div class="form-group col-md-4">
+                                        <label class="col-form-label">{{ __('Currency Symbol Position') }}</label>
+                                        <div class="form-check form-check">
+                                            <input class="form-check-input" type="radio" id="pre" value="pre"
+                                                name="site_currency_symbol_position"
+                                                @if ($settings['site_currency_symbol_position'] == 'pre') checked @endif>
+                                            <label class="form-check-label" for="pre">
+                                                {{ __('Pre') }}
+                                            </label>
+                                        </div>
+                                        <div class="form-check form-check">
+                                            <input class="form-check-input" type="radio" id="post" value="post"
+                                                name="site_currency_symbol_position"
+                                                @if ($settings['site_currency_symbol_position'] == 'post') checked @endif>
+                                            <label class="form-check-label" for="post">
+                                                {{ __('Post') }}
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="form-group col-md-4">
+                                        <label for="site_date_format"
+                                            class="col-form-label">{{ __('Date Format') }}</label>
+                                        <select type="text" name="site_date_format" class="form-control select2"
+                                            id="site_date_format">
+                                            <option value="M j, Y"
+                                                @if (@$settings['site_date_format'] == 'M j, Y') selected="selected" @endif>
+                                                Jan 1,2015</option>
+                                            <option value="d-m-Y"
+                                                @if (@$settings['site_date_format'] == 'd-m-Y') selected="selected" @endif>
+                                                d-m-y</option>
+                                            <option value="m-d-Y"
+                                                @if (@$settings['site_date_format'] == 'm-d-Y') selected="selected" @endif>
+                                                m-d-y</option>
+                                            <option value="Y-m-d"
+                                                @if (@$settings['site_date_format'] == 'Y-m-d') selected="selected" @endif>
+                                                y-m-d</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group col-md-4">
+                                        <label for="site_time_format"
+                                            class="col-form-label">{{ __('Time Format') }}</label>
+                                        <select type="text" name="site_time_format" class="form-control select2"
+                                            id="site_time_format">
+                                            <option value="g:i A"
+                                                @if (@$settings['site_time_format'] == 'g:i A') selected="selected" @endif>
+                                                10:30 PM</option>
+                                            <option value="g:i a"
+                                                @if (@$settings['site_time_format'] == 'g:i a') selected="selected" @endif>
+                                                10:30 pm</option>
+                                            <option value="H:i"
+                                                @if (@$settings['site_time_format'] == 'H:i') selected="selected" @endif>
+                                                22:30</option>
+                                        </select>
+                                    </div>
+
+                                    <div class="form-group col-md-4">
+                                        {{-- {{Form::label('bug_prefix',__('Bug Prefix'),['class'=>'col-form-label']) }}
+                                             {{Form::text('bug_prefix',null,array('class'=>'form-control'))}}
+                                             @error('bug_prefix')
+                                             <span class="text-xs text-danger invalid-bug_prefix" role="alert">{{ $message }}</span>
+                                             @enderror --}}
+
+
+                                        {{ Form::label('employee_prefix', __('Employee Prefix'), ['class' => 'col-form-label']) }}
+                                        {{ Form::text('employee_prefix', null, ['class' => 'form-control']) }}
+                                        @error('employee_prefix')
+                                            <span class="text-xs text-danger invalid-employee_prefix" role="alert">
+                                                <small class="text-danger">{{ $message }}</small>
+                                            </span>
+                                        @enderror
+
+                                    </div>
+
+                                </div>
+                            </div>
+
+                            <div class="card-footer ">
+                                <div class="col-sm-12 px-2">
+                                    <div class="text-end">
+                                        {{ Form::submit(__('Save Changes'), ['class' => 'btn btn-xs btn-primary']) }}
+                                    </div>
+                                </div>
+                            </div>
+                            {!! Form::close() !!}
+                        </div>
+                    </div>
+
+                    <div class="" id="company-settings">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5>{{ __('Company Settings') }}</h5>
+                            </div>
+                            {{ Form::model($settings, ['route' => 'company.settings', 'method' => 'post']) }}
+                            <div class="card-body">
+
+                                <div class="row">
+                                    <div class="form-group col-md-4">
+                                        {{ Form::label('company_name *', __('Company Name *'), ['class' => 'col-form-label']) }}
+                                        {{ Form::text('company_name', null, ['class' => 'form-control ', 'placeholder' => 'Enter Company Name']) }}
+
+                                        @error('company_name')
+                                            <span class="invalid-company_name" role="alert">
+                                                <strong class="text-danger">{{ $message }}</strong>
+                                            </span>
+                                        @enderror
+
+                                    </div>
+                                    <div class="form-group col-md-4">
+                                        {{ Form::label('company_address', __('Address'), ['class' => 'col-form-label']) }}
+                                        {{ Form::text('company_address', null, ['class' => 'form-control ', 'placeholder' => 'Enter Address']) }}
+                                        @error('company_address')
+                                            <span class="invalid-company_address" role="alert">
+                                                <strong class="text-danger">{{ $message }}</strong>
+                                            </span>
+                                        @enderror
+                                    </div>
+                                    <div class="form-group col-md-4">
+                                        {{ Form::label('company_city', __('City'), ['class' => 'col-form-label']) }}
+                                        {{ Form::text('company_city', null, ['class' => 'form-control ', 'placeholder' => 'Enter City']) }}
+                                        @error('company_city')
+                                            <span class="invalid-company_city" role="alert">
+                                                <strong class="text-danger">{{ $message }}</strong>
+                                            </span>
+                                        @enderror
+                                    </div>
+                                    <div class="form-group col-md-4">
+                                        {{ Form::label('company_state', __('State'), ['class' => 'col-form-label']) }}
+                                        {{ Form::text('company_state', null, ['class' => 'form-control ', 'placeholder' => 'Enter State']) }}
+                                        @error('company_state')
+                                            <span class="invalid-company_state" role="alert">
+                                                <strong class="text-danger">{{ $message }}</strong>
+                                            </span>
+                                        @enderror
+                                    </div>
+                                    <div class="form-group col-md-4">
+                                        {{ Form::label('company_zipcode', __('Zip/Post Code'), ['class' => 'col-form-label']) }}
+                                        {{ Form::text('company_zipcode', null, ['class' => 'form-control', 'placeholder' => 'Enter Zip/Post Code']) }}
+                                        @error('company_zipcode')
+                                            <span class="invalid-company_zipcode" role="alert">
+                                                <strong class="text-danger">{{ $message }}</strong>
+                                            </span>
+                                        @enderror
+                                    </div>
+                                    <div class="form-group col-md-4">
+                                        {{ Form::label('company_country', __('Country'), ['class' => 'col-form-label']) }}
+                                        {{ Form::text('company_country', null, ['class' => 'form-control', 'placeholder' => 'Enter Country']) }}
+                                        @error('company_country')
+                                            <span class="invalid-company_country" role="alert"><strong
+                                                    class="text-danger">{{ $message }}</strong></span>
+                                        @enderror
+                                    </div>
+                                    <div class="form-group col-md-4">
+                                        {{ Form::label('company_telephone', __('Telephone'), ['class' => 'col-form-label']) }}
+                                        {{ Form::text('company_telephone', null, ['class' => 'form-control', 'placeholder' => 'Enter Telephone']) }}
+                                        @error('company_telephone')
+                                            <span class="invalid-company_telephone" role="alert"><strong
+                                                    class="text-danger">{{ $message }}</strong></span>
+                                        @enderror
+                                    </div>
+                                    <div class="form-group col-md-4">
+                                        {{ Form::label('company_email', __('System Email *'), ['class' => 'col-form-label']) }}
+                                        {{ Form::text('company_email', null, ['class' => 'form-control', 'placeholder' => 'Enter System Email']) }}
+                                        @error('company_email')
+                                            <span class="invalid-company_email" role="alert"><strong
+                                                    class="text-danger">{{ $message }}</strong></span>
+                                        @enderror
+                                    </div>
+                                    <div class="form-group col-md-4">
+                                        {{ Form::label('company_email_from_name', __('Email (From Name) *'), ['class' => 'col-form-label']) }}
+                                        {{ Form::text('company_email_from_name', null, ['class' => 'form-control ', 'placeholder' => 'Enter Email']) }}
+                                        @error('company_email_from_name')
+                                            <span class="invalid-company_email_from_name" role="alert"><strong
+                                                    class="text-danger">{{ $message }}</strong></span>
+                                        @enderror
+                                    </div>
+                                    {{-- //add new column add by viral --}}
+                                    <div class="form-group col-md-4">
+                                        {{ Form::label('company_phone_numbar', __('Phone'), ['class' => 'col-form-label']) }}
+                                        {{ Form::text('company_phone_numbar', null, ['class' => 'form-control ', 'placeholder' => 'Enter Company Phone']) }}
+                                        @error('company_phone_numbar')
+                                            <span class="invalid-company_phone_numbar" role="alert"><strong
+                                                    class="text-danger">{{ $message }}</strong></span>
+                                        @enderror
+                                    </div>
+
+                                    <div class="form-group col-md-4">
+                                        {{ Form::label('company_gstin_numbar', __('GSTIN'), ['class' => 'col-form-label']) }}
+                                        {{ Form::text('company_gstin_numbar', null, ['class' => 'form-control ', 'placeholder' => 'Enter Company GSTIN']) }}
+                                        @error('company_gstin_numbar')
+                                            <span class="invalid-company_gstin_numbar" role="alert"><strong
+                                                    class="text-danger">{{ $message }}</strong></span>
+                                        @enderror
+                                    </div>
+
+                                    <div class="form-group col-md-4">
+                                        {{ Form::label('company_esic_numbar', __('ESIC'), ['class' => 'col-form-label']) }}
+                                        {{ Form::text('company_esic_numbar', null, ['class' => 'form-control ', 'placeholder' => 'Enter Company ESIC']) }}
+                                        @error('company_esic_numbar')
+                                            <span class="invalid-company_esic_numbar" role="alert"><strong
+                                                    class="text-danger">{{ $message }}</strong></span>
+                                        @enderror
+                                    </div>
+
+                                    <div class="form-group col-md-4">
+                                        {{ Form::label('company_pf_numbar', __('PF Number '), ['class' => 'col-form-label']) }}
+                                        {{ Form::text('company_pf_numbar', null, ['class' => 'form-control ', 'placeholder' => 'Enter Company PF Number']) }}
+                                        @error('company_pf_numbar')
+                                            <span class="invalid-company_pf_numbar" role="alert"><strong
+                                                    class="text-danger">{{ $message }}</strong></span>
+                                        @enderror
+                                    </div>
+
+                                    <div class="form-group col-md-4">
+                                        {{ Form::label('company_tan_numbar', __('TAN '), ['class' => 'col-form-label']) }}
+                                        {{ Form::text('company_tan_numbar', null, ['class' => 'form-control ', 'placeholder' => 'Enter Company TAN']) }}
+                                        @error('company_tan_numbar')
+                                            <span class="invalid-company_tan_numbar" role="alert"><strong
+                                                    class="text-danger">{{ $message }}</strong></span>
+                                        @enderror
+                                    </div>
+
+
+                                    <div class="form-group col-md-4">
+                                        {{ Form::label('company_pec_numbar', __('PEC '), ['class' => 'col-form-label']) }}
+                                        {{ Form::text('company_pec_numbar', null, ['class' => 'form-control ', 'placeholder' => 'Enter Company PEC']) }}
+                                        @error('company_pec_numbar')
+                                            <span class="invalid-company_pec_numbar" role="alert"><strong
+                                                    class="text-danger">{{ $message }}</strong></span>
+                                        @enderror
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <div class="row">
+                                            <div class="form-group col-md-6">
+                                                {{ Form::label('company_start_time', __('Company Start Time *'), ['class' => 'col-form-label']) }}
+
+                                                {{ Form::time('company_start_time', null, ['class' => 'form-control timepicker_format']) }}
+                                                @error('company_start_time')
+                                                    <span class="invalid-company_start_time" role="alert">
+                                                        <small class="text-danger">{{ $message }}</small>
+                                                    </span>
+                                                @enderror
+                                            </div>
+                                            <div class="form-group col-md-6">
+                                                {{ Form::label('company_end_time', __('Company End Time *'), ['class' => 'col-form-label']) }}
+                                                {{ Form::time('company_end_time', null, ['class' => 'form-control timepicker_format']) }}
+                                                @error('company_end_time')
+                                                    <span class="invalid-company_end_time" role="alert">
+                                                        <small class="text-danger">{{ $message }}</small>
+                                                    </span>
+                                                @enderror
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="row">
+                                            <div class="form-group col-md-6">
+                                                {{ Form::label('company_latitude', __('Company Latitude'), ['class' => 'col-form-label']) }}
+                                                {{ Form::text('company_latitude', null, ['class' => 'form-control', 'placeholder' => 'Company Latitude']) }}
+                                            </div>
+                                            <div class="form-group col-md-6">
+                                                {{ Form::label('company_longitude', __('Company Longitude'), ['class' => 'col-form-label']) }}
+                                                {{ Form::text('company_longitude', null, ['class' => 'form-control', 'placeholder' => 'Company Longitude']) }}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="form-group col-md-6">
+                                        {{ Form::label('timezone', __('Timezone'), ['class' => 'col-form-label']) }}
+                                        <select type="text" name="timezone" class="form-control select2"
+                                            id="timezone">
+                                            <option value="">{{ __('Select Timezone') }}</option>
+                                            @if (!empty($timezones))
+                                                @foreach ($timezones as $k => $timezone)
+                                                    <option value="{{ $k }}"
+                                                        {{ env('TIMEZONE') == $k ? 'selected' : '' }}>
+                                                        {{ $timezone }}
+                                                    </option>
+                                                @endforeach
+                                            @endif
+                                        </select>
+                                        @error('timezone')
+                                            <span class="invalid-timezone" role="alert">
+                                                <small class="text-danger">{{ $message }}</small>
+                                            </span>
+                                        @enderror
+                                    </div>
+                                    <div class="row">
+                                        <div class="form-group col-md-4">
+                                            {{ Form::label('company_start_time', __('Company Flexi Hours (In Minutes)'), ['class' => 'col-form-label']) }}
+                                            {{ Form::text('company_flexi_hours', null, ['class' => 'form-control numberValidation']) }}
+                                        </div>
+                                        <div class="form-group col-md-4">
+                                            {{ Form::label('company_end_time', __('Company Flexi Days'), ['class' => 'col-form-label']) }}
+                                            {{ Form::number('company_flexi_days', null, ['class' => 'form-control numberValidation', 'placeholder' => 'Company flexi days', 'min' => 0, 'max' => 31]) }}
+                                        </div>
+                                    </div>
+                                    <div class="form-group col-md-4">
+                                        <div class="custom-control custom-switch">
+                                            <input type="checkbox" class=" form-check-input" data-toggle="switchbutton"
+                                                data-onstyle="primary" name="ip_restrict" id="ip_restrict"
+                                                {{ $settings['ip_restrict'] == 'on' ? 'checked="checked"' : '' }}>
+                                            <label class=" col-form-label p-0"
+                                                for="ip_restrict">{{ __('Ip Restrict') }}</label>
+                                        </div>
+                                    </div>
+                                    <div class="form-group col-md-4">
+                                        <div class="custom-control custom-switch">
+                                            <input type="checkbox" class=" form-check-input" data-toggle="switchbutton"
+                                                data-onstyle="primary" name="auto_leave_deduction"
+                                                id="auto_leave_deduction"
+                                                {{ $settings['auto_leave_deduction'] == 'on' ? 'checked="checked"' : '' }}>
+                                            <label class=" col-form-label p-0"
+                                                for="auto_leave_deduction">{{ __('Auto Leave Deduction') }}</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-12">
+                                        <h6 class=" ">
+                                            <i data-feather="layout" class="me-2"></i>{{ __('Office Week Off') }}
+                                        </h6>
+                                        <hr class="my-2 " />
+                                        <div class="pct-body">
+                                            <div class="row">
+                                                <div class="col-3">
+                                                    <div class="form-check form-switch ">
+                                                        <input type="checkbox" class="form-check-input"
+                                                            id="company_office_week_off_monday"
+                                                            name="company_office_week_off_monday"
+                                                            @if ($settings['company_office_week_off_monday'] == 'on') checked @endif />
+
+                                                        <label class="form-check-label f-w-600 pl-1"
+                                                            for="company_office_week_off_monday">{{ __('Monday') }}</label>
+                                                    </div>
+                                                </div>
+                                                <div class="col-3">
+                                                    <div class="form-check form-switch ">
+                                                        <input type="checkbox" class="form-check-input"
+                                                            id="company_office_week_off_tuesday"
+                                                            name="company_office_week_off_tuesday"
+                                                            @if ($settings['company_office_week_off_tuesday'] == 'on') checked @endif />
+
+                                                        <label class="form-check-label f-w-600 pl-1"
+                                                            for="company_office_week_off_tuesday">{{ __('Tuesday') }}</label>
+                                                    </div>
+                                                </div>
+                                                <div class="col-3">
+                                                    <div class="form-check form-switch ">
+                                                        <input type="checkbox" class="form-check-input"
+                                                            id="company_office_week_off_wednesday"
+                                                            name="company_office_week_off_wednesday"
+                                                            @if ($settings['company_office_week_off_wednesday'] == 'on') checked @endif />
+
+                                                        <label class="form-check-label f-w-600 pl-1"
+                                                            for="company_office_week_off_wednesday">{{ __('Wednesday') }}</label>
+                                                    </div>
+                                                </div>
+                                                <div class="col-3">
+                                                    <div class="form-check form-switch ">
+                                                        <input type="checkbox" class="form-check-input"
+                                                            id="company_office_week_off_thusday"
+                                                            name="company_office_week_off_thusday"
+                                                            @if ($settings['company_office_week_off_thusday'] == 'on') checked @endif />
+
+                                                        <label class="form-check-label f-w-600 pl-1"
+                                                            for="company_office_week_off_thusday">{{ __('Thusday') }}</label>
+                                                    </div>
+                                                </div>
+                                                <div class="col-3">
+                                                    <div class="form-check form-switch ">
+                                                        <input type="checkbox" class="form-check-input"
+                                                            id="company_office_week_off_friday"
+                                                            name="company_office_week_off_friday"
+                                                            @if ($settings['company_office_week_off_friday'] == 'on') checked @endif />
+
+                                                        <label class="form-check-label f-w-600 pl-1"
+                                                            for="company_office_week_off_friday">{{ __('Friday') }}</label>
+                                                    </div>
+                                                </div>
+                                                <div class="col-3">
+                                                    <div class="form-check form-switch ">
+                                                        <input type="checkbox" class="form-check-input"
+                                                            id="company_office_week_off_saturday"
+                                                            name="company_office_week_off_saturday"
+                                                            @if ($settings['company_office_week_off_saturday'] == 'on') checked @endif />
+
+                                                        <label class="form-check-label f-w-600 pl-1"
+                                                            for="company_office_week_off_saturday">{{ __('Saturday') }}</label>
+                                                    </div>
+                                                </div>
+                                                <div class="col-3">
+                                                    <div class="form-check form-switch ">
+                                                        <input type="checkbox" class="form-check-input"
+                                                            id="company_office_week_off_sunday"
+                                                            name="company_office_week_off_sunday"
+                                                            @if ($settings['company_office_week_off_sunday'] == 'on') checked @endif />
+
+                                                        <label class="form-check-label f-w-600 pl-1"
+                                                            for="company_office_week_off_sunday">{{ __('Sunday') }}</label>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+
+                                </div>
+
+                                <hr class="my-2 " />
+                                <br>
+
+                                {{-- Working Days --}}
+                                <div class="col-12">
+                                    <h6 class=""><i data-feather="layout"
+                                            class="me-2"></i>{{ __('Salary Calculation Based on') }}</h6>
+                                    <hr class="my-2 " />
+                                    <div class="pct-body">
+                                        <div class="row">
+                                            <div class="col-12">
+                                                <input type="radio" class="form-check-input radio_working_days"
+                                                    id="actual_working_days" name="working_days_type" value="0"
+                                                    @if ($settings['working_days_type'] == 0) checked @endif />
+                                                <label class="form-check-label f-w-600 pl-1"
+                                                    for="actual_working_days">{{ __('Actual days in a month') }}</label>
+                                            </div>
+                                            <br>
+
+                                            <div class="col-12">
+                                                <input type="radio" class="form-check-input radio_working_days"
+                                                    id="organization_working_days" name="working_days_type"
+                                                    value="1" @if ($settings['working_days_type'] == 1) checked @endif />
+                                                <label class="form-check-label f-w-600 pl-1"
+                                                    for="organization_working_days">{{ __('Monthly working days of company') }}</label>
+
+                                                <input type="number" id="company_working_days"
+                                                    name="company_working_days" class="form-control"
+                                                    placeholder="{{ __('Enter Monthly working days of company') }}"
+                                                    value="{{ $settings['company_working_days'] ?? 0 }}" min="1"
+                                                    max="31"
+                                                    {{ $settings['working_days_type'] == 0 ? 'disabled' : '' }}>
+                                            </div>
+
+                                            @if (Gate::check('Custom Payslip Generation For Specific Day') || true)
+                                                <br>
+                                                <div class="col-12">
+                                                    <input type="radio" class="form-check-input radio_working_days"
+                                                        id="working_days_by_specific_date" name="working_days_type"
+                                                        value="2"
+                                                        @if ($settings['working_days_type'] == 2) checked @endif />
+                                                    <label class="form-check-label f-w-600 pl-1"
+                                                        for="working_days_by_specific_date">{{ __('Pay roll day of every month') }}
+                                                    </label>
+                                                    <br>
+
+
+                                                    <span>Let's select the 25th day for payroll. If
+                                                        the user generates
+                                                        payroll for the month of January, HrShastri will consider the
+                                                        period from December 26, 2024, to January 25, 2025.
+                                                    </span>
+
+                                                    <select id="working_days_date" name="working_days_date"
+                                                        class="form-control"
+                                                        {{ $settings['working_days_type'] == 0 || $settings['working_days_type'] == 1 ? 'disabled' : '' }}>
+                                                        @for ($i = 21; $i <= 28; $i++)
+                                                            <option value="{{ $i }}"
+                                                                {{ isset($settings['working_days_date']) && $settings['working_days_date'] == $i ? 'selected' : '' }}>
+                                                                {{ $i }}
+                                                            </option>
+                                                        @endfor
+                                                    </select>
+                                                </div>
+                                            @endif
+
+                                        </div>
+                                    </div>
+                                </div>
+                                {{-- Working Days --}}
+
+                                <hr class="my-2 " />
+                                <br>
+
+                                <div class="col-12">
+                                    <h6 class=""><i data-feather="layout"
+                                            class="me-2"></i>{{ __('Resignation Email Notification') }}</h6>
+                                    <div class="pct-body">
+                                        <div class="row">
+                                            <div class="col-12">
+                                                <input type="text" id="resignation_email_notification"
+                                                    name="resignation_email_notification" class="form-control"
+                                                    placeholder="{{ __('Please enter email comma separated') }}"
+                                                    value="{{ $settings['resignation_email_notification'] ?? '' }}">
+
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <hr class="my-2 " />
+                                <br>
+                                <div class="col-12">
+                                    <h6 class=""><i data-feather="layout"
+                                            class="me-2"></i>{{ __('Define Half Day Working Hours and Minutes') }}</h6>
+                                    <hr class="my-2 " />
+                                    <div class="pct-body">
+                                        <div class="row">
+                                            <div class="form-group col-md-3">
+                                                {{ Form::label('half_day_working_hours', __('Hour *'), ['class' => 'col-form-label']) }}
+                                                {{ Form::select('half_day_working_hours', [1 => '1 Hour', 2 => '2 Hours', 3 => '3 Hours', 4 => '4 Hours', 5 => '5 Hours', 6 => '6 Hours'], null, ['class' => 'form-control', 'placeholder' => 'Select Hour']) }}
+                                                @error('half_day_working_hours')
+                                                    <span class="invalid-half_day_working_hours" role="alert">
+                                                        <small class="text-danger">{{ $message }}</small>
+                                                    </span>
+                                                @enderror
+                                            </div>
+                                            <div class="form-group col-md-3">
+                                                {{ Form::label('half_day_working_minute', __('Minute'), ['class' => 'col-form-label']) }}
+                                                {{ Form::select('half_day_working_minute', [0 => 'Select Minute', 15 => '15 Minutes', 30 => '30 Minutes', 45 => '45 Minutes'], null, ['class' => 'form-control']) }}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="col-12">
+                                    <h6 class=""><i data-feather="layout"
+                                            class="me-2"></i>{{ __('Short Leave Configuration') }}</h6>
+                                    <hr class="my-2 " />
+                                    <div class="pct-body">
+                                        <span class="error-message">Note: Leave both Short Leave Working Hours and Short
+                                            Leave Number of Times (in a Month) fields blank if you do not need to apply
+                                            short leave</span>
+                                        <div class="row">
+                                            <div class="col-6">
+                                                <label>{{ __('Short Leave Number of time(In Month)') }}</label>
+                                                <input type="number" id="short_leave_limit" name="short_leave_limit"
+                                                    class="form-control" placeholder="{{ __('Please enter limit') }}"
+                                                    value="{{ $settings['short_leave_limit'] ?? 2 }}" min="0">
+                                                @error('short_leave_limit')
+                                                    <span class="invalid-short_leave_limit" role="alert">
+                                                        <small class="text-danger">{{ $message }}</small>
+                                                    </span>
+                                                @enderror
+                                            </div>
+                                            <div class="col-6">
+                                                <label>{{ __('Short Leave Working Hours') }}</label>
+                                                <input type="number" id="short_leave_hours" name="short_leave_hours"
+                                                    class="form-control" placeholder="{{ __('Please enter hours') }}"
+                                                    value="{{ $settings['short_leave_hours'] ?? 2 }}" min="0"
+                                                    step="0.5">
+                                                @error('short_leave_hours')
+                                                    <span class="invalid-short_leave_hours" role="alert">
+                                                        <small class="text-danger">{{ $message }}</small>
+                                                    </span>
+                                                @enderror
+                                            </div>
+                                            <!-- <div class="col-6">
+                                                            <label>{{ __('Short Leave Exceed than Limit Cut leave') }}</label>
+                                                            <select id="short_leave_exceed_cut_leave" name="short_leave_exceed_cut_leave" class="form-control" >
+                                                                <option value="">{{ __('CL') }}</option>
+                                                                <option value="">{{ __('SL') }}</option>
+                                                            </select>
+                                                        </div> -->
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="card-footer text-end">
+                                <button class="btn-submit btn btn-primary" id="addSig" type="submit">
+                                    {{ __('Save Changes') }}
+                                </button>
+                            </div>
+                            {{ Form::close() }}
+
+                            <hr class="my-2 " />
+
+
+
+                            @if (\Auth::user()->can('Manage Shift') || true)
+                                <div class="card-body">
+                                    {{-- Company Shifts --}}
+                                    <div class="col-12">
+                                        <!-- <h6 class=""><i data-feather="layout" class="me-2"></i>{{ __('Company Shifts') }}</h6> -->
+
+                                        <div class="pct-body">
+
+                                            <div class="row">
+                                                <div class="col-lg-8 col-md-8 col-sm-8">
+                                                    <h5 class="">
+                                                        {{ __('Manage Shifts') }}
+                                                    </h5>
+                                                </div>
+
+                                                <div class="col-lg-4 col-md-4 col-sm-4 text-end">
+                                                    <button href="#"
+                                                        data-url="{{ route('working-shifts.create') }}"
+                                                        data-ajax-popup="true" data-title="{{ __('Create New Shift') }}"
+                                                        data-bs-toggle="tooltip" title=""
+                                                        class="btn btn-sm btn-primary"
+                                                        data-bs-original-title="{{ __('Create') }}">
+                                                        <i class="ti ti-plus"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            <div class="row">
+                                                <div class="col-12">
+                                                    <div class="table-responsive">
+                                                        <table class="table" id="pc-dt-simple">
+                                                            <thead>
+                                                                <tr>
+                                                                    <th>{{ __('Name') }}</th>
+                                                                    <th>{{ __('Start Time') }}</th>
+                                                                    <th>{{ __('End Time') }}</th>
+                                                                    <th>{{ __('Flexi Hours') }}</th>
+                                                                    <th>{{ __('Flexi Days') }}</th>
+                                                                    <th width="200px">{{ __('Action') }}</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                @foreach (@$workingShifts ?? [] as $workingShiftsRow)
+                                                                    <tr>
+                                                                        <td>{{ $workingShiftsRow->name }}</td>
+                                                                        <td>{{ Auth::user()->timeFormat($workingShiftsRow->start_time) }}
+                                                                        </td>
+                                                                        <td>{{ Auth::user()->timeFormat($workingShiftsRow->end_time) }}
+                                                                        </td>
+                                                                        <td>{{ $workingShiftsRow->flexi_hours }}</td>
+                                                                        <td>{{ $workingShiftsRow->flexi_days }}</td>
+                                                                        <td class="Action">
+                                                                            <span>
+                                                                                <!-- @can('Edit Leave Type')
+        -->
+                                                                                    <div class="action-btn bg-info ms-2">
+                                                                                        <button href="#"
+                                                                                            class="mx-3 btn btn-sm  align-items-center"
+                                                                                            data-url="{{ URL::to('working-shifts/' . $workingShiftsRow->id . '/edit') }}"
+                                                                                            data-ajax-popup="true"
+                                                                                            data-size="md"
+                                                                                            data-bs-toggle="tooltip"
+                                                                                            title=""
+                                                                                            data-title="{{ __('Edit Shift') }}"
+                                                                                            data-bs-original-title="{{ __('Edit') }}">
+                                                                                            <i
+                                                                                                class="ti ti-pencil text-white"></i>
+                                                                                        </button>
+                                                                                    </div>
+                                                                                    <!--
+    @endcan -->
+
+                                                                                <!-- @can('Delete Leave Type')
+        -->
+                                                                                    <div class="action-btn bg-danger ms-2">
+                                                                                        {!! Form::open([
+                                                                                            'method' => 'DELETE',
+                                                                                            'route' => ['working-shifts.destroy', $workingShiftsRow->id],
+                                                                                            'id' => 'delete-form-' . $workingShiftsRow->id,
+                                                                                        ]) !!}
+                                                                                        <a href="#"
+                                                                                            class="mx-3 btn btn-sm  align-items-center bs-pass-para"
+                                                                                            data-bs-toggle="tooltip"
+                                                                                            title=""
+                                                                                            data-bs-original-title="Delete"
+                                                                                            aria-label="Delete"><i
+                                                                                                class="ti ti-trash text-white "></i></a>
+                                                                                        </form>
+                                                                                    </div>
+                                                                                    <!--
+    @endcan -->
+                                                                            </span>
+                                                                        </td>
+                                                                    </tr>
+                                                                @endforeach
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                </div>
+                                                <br>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {{-- Company Shifts --}}
+                                </div>
+                            @endif
+                        </div>
+                    </div>
+
+                    <div class="" id="email-notification-settings">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5>{{ __('Email Notification Settings') }}</h5>
+                            </div>
+                            <div class="card-body table-border-style ">
+                                <div class="table-responsive">
+                                    <table class="table" id="pc-dt-simple">
+                                        <thead>
+                                            <tr>
+                                                <th class="w-75"> {{ __('Name') }}</th>
+                                                <th class="text-center"> {{ __('On/Off') }}</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach ($EmailTemplates as $EmailTemplate)
+                                                <tr class="">
+                                                    <td>{{ $EmailTemplate->name }}</td>
+                                                    <td class="text-center">
+
+                                                        <div class="form-group col-md-12">
+                                                            <label class="form-check form-switch d-inline-block">
+                                                                <input type="checkbox"
+                                                                    class="email-template-checkbox form-check-input"
+                                                                    name="{{ $EmailTemplate->id }}"
+                                                                    @if ($EmailTemplate->template->is_active == 1) checked="checked" @endcan
+                                                                      value="{{ $EmailTemplate->template->is_active == 1 ? '1' : '0' }}"
+                                                                      data-url="{{ route('company.email.setting', $EmailTemplate->id) }}">
+                                                                      <span class="slider1 round"></span>
+                                                                 </label>
+                                                            </div>
+                                                       </td>
+                                                  </tr>
+                                                  @endforeach
+                                             </tbody>
+                                        </table>
+                                   </div>
+                              </div>
+                         </div>
+                    </div>
+                    {{-- Google calendar --}}
+                    <div class="card" id="google-calender">
+                         <div class="col-md-12">
+                              {{ Form::open(['url' => route('google.calender.settings'), 'enctype' => 'multipart/form-data']) }}
+                              <div class="card-header">
+                                   <div class="row">
+                                        <div class="col-lg-8 col-md-8 col-sm-8">
+                                             <h5 class="">
+                                                  {{ __('Google Calendar') }}
+                                             </h5>
+                                        </div>
+
+                                        <div class="col-lg-4 col-md-4 col-sm-4 text-end">
+                                             <div class="col switch-width">
+                                                  <div class="custom-control custom-switch">
+                                                       <input type="checkbox" class="form-check-input" name="is_enabled" data-toggle="switchbutton" data-onstyle="primary" id="is_enabled" {{ isset($settings['is_enabled']) && $settings['is_enabled'] == 'on' ? 'checked="checked"' : '' }}>
+                                                       <label class="custom-control-label form-label" for="is_enabled"></label>
+                                                  </div>
+                                             </div>
+                                        </div>
+                                   </div>
+                              </div>
+
+                              <div class="card-body">
+                                   <div class="row">
+                                        <div class="col-lg-6 col-md-6 col-sm-12 form-group">
+                                             {{ Form::label('Google calendar id', __('Google Calendar Id'), ['class' => 'col-form-label']) }}
+                                             {{ Form::text('google_clender_id', !empty($settings['google_clender_id']) ? $settings['google_clender_id'] : '', ['class' => 'form-control ', 'placeholder' => 'Google Calendar Id']) }}
+                                        </div>
+                                        <div class="col-lg-6 col-md-6 col-sm-12 form-group">
+                                             {{ Form::label('Google calendar json file', __('Google Calendar JSON File'), ['class' => 'col-form-label']) }}
+                                             <input type="file" class="form-control" name="google_calender_json_file" id="file">
+                                        </div>
+                                   </div>
+                              </div>
+                              <div class="card-footer text-end">
+                                   <button class="btn-submit btn btn-primary" type="submit">
+                                        {{ __('Save Changes') }}
+                                   </button>
+                              </div>
+                              {{ Form::close() }}
+                         </div>
+                    </div>
+
+                    {{-- //Leave setting --}}
+
+                    <div class="card" id="Leave-setting">
+                         <div class="card">
+                              {{ Form::open(['url' => route('leave_approval'), 'enctype' => 'multipart/form-data']) }}
+                              <div class="card-header">
+                                   <h5>{{ __('Leave Approval') }}</h5>
+                              </div>
+                              <div class="card-body table-border-style ">
+                                   <div class="table-responsive">
+                                        <table class="table" id="pc-dt-simple">
+                                             <thead>
+                                                  <tr>
+                                                       <th class="w-75"> {{ __('Name') }}</th>
+                                                       <th class="text-center"> {{ __('1 Approve  / 2 Approve') }}</th>
+                                                  </tr>
+                                             </thead>
+                                             <tbody>
+                                                  <tr class="">
+                                                       <td>Leave Approval</td>
+                                                       <td class="text-center">
+                                                            <div class="form-group col-md-12">
+                                                                 <label class="form-check form-switch d-inline-block">
+                                                                      <input type="checkbox" class="email-template-checkbox form-check-input" name="leave_approval_status" value="1" @if (!empty($leave_approval)) @if ($leave_approval->status) == 1
+                                                                      checked @endif
+                                                                    @endif
+                                                                ><span class="slider1 round"></span>
+                                                            </label>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                        </tbody>
+                                    </table>
+                                    <div class="card-footer text-end">
+                                        <button class="btn-submit btn btn-primary" type="submit">
+                                            {{ __('Save Changes') }}
+                                        </button>
+                                    </div>
+                                </div>
+                                {{ Form::close() }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    @endsection

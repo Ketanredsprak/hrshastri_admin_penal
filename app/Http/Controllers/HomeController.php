@@ -1,0 +1,584 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use Session;
+use Exception;
+use App\Models\Job;
+use App\Models\Plan;
+use App\Models\User;
+use App\Models\Event;
+use App\Models\Leave;
+use App\Models\Order;
+use App\Models\Payer;
+use App\Models\Payees;
+use App\Models\Ticket;
+use App\Models\Meeting;
+use App\Models\Utility;
+use App\Models\Employee;
+use App\Models\LeaveType;
+use App\Models\AccountList;
+use App\Models\Announcement;
+use App\Models\WorkingShifts;
+use App\Models\WorkingShiftEmployees;
+use Illuminate\Http\Request;
+use App\Models\NotificationModel;
+use App\Models\AttendanceEmployee;
+use App\Models\LandingPageSection;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Route;
+use Carbon\Carbon;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
+
+class HomeController extends Controller
+{
+     /**
+      * Create a new controller instance.
+      *
+      * @return void
+      */
+     public function __construct()
+     {
+     }
+
+     /**
+      * Show the application dashboard.
+      *
+      * @return \Illuminate\Contracts\Support\Renderable
+      */
+     public function index(request $request)
+     {
+          // Set the folder path and the time threshold (2 months ago)
+          // $folderPath = '/app/public/images/clock_in_out/';
+          // $timeThreshold = strtotime('-2 months');
+
+          // // Call the function to start deleting files in all subfolders
+          // $this->deleteOldFiles($folderPath, $timeThreshold);
+
+          // echo "File cleanup completed.\n";
+
+
+          // $user = User::where('email', "TRAN1275@mailinator.com")->first();
+          // $user->forceFill([
+          //      'password' => Hash::make("123456"),
+          // ])->save();
+
+          // Define the path to the Node.js script
+          // $nodeScriptPath = base_path('scripts/getLocalIp.js');
+
+          // Run the Node.js script and capture the output
+          // $ipAddress = shell_exec("node $nodeScriptPath");
+
+          // dd($ipAddress);
+
+          // Return the IP address to a view or JSON response
+          // return view('show-ip', compact('ipAddress'));
+
+
+          // dd(Route::current()->computedMiddleware);
+          // vikas commented this so on remove ask him
+          // $user = Auth::user();
+          // $user->roles()->detach();
+          // $user->assignRole('Company Sample');
+          // dd(Auth::user()->roles);
+          if (Auth::check())
+          {
+               if (!str_contains(request()->getRequestUri(), 'public')) {
+                    return redirect('public/dashboard');
+               }
+               
+               $user = Auth::user();
+               if ($user->type == 'employee')
+               {
+                    $emp = Employee::where('user_id', '=', $user->id)->first();
+
+                    // $announcements = Announcement::orderBy('announcements.id', 'desc')
+                    //      ->leftjoin('announcement_employees', 'announcements.id', '=', 'announcement_employees.announcement_id')
+                    //      ->where('announcement_employees.employee_id', '=', $emp->id)->orWhere(
+                    //           function ($q)
+                    //           {
+                    //                $q->where('announcements.department_id', 0)->where('announcements.employee_id', 0);
+                    //           }
+                    //      )->where('announcements.created_by', '=', \Auth::user()->creatorId())->get();
+
+                    $announcements = [];
+                    $currentMonth = Carbon::now()->format('m');
+
+                    $announcementsRaw = Announcement::
+                         // whereJsonContains('branch_id', $branchIds)
+                         // whereIn("branch_id", $branchIds)
+                         // ->where("employee_id", [0, $emp->id])
+                         // ->where("end_date", "<=", date("Y-m-d"))
+                         where("created_by", Auth::user()->creatorId())
+                         ->whereDate("end_date", ">=", date("Y-m-d"))
+
+                         // ->where(function ($query) use ($currentMonth)
+                         // {
+                         //      $query->whereRaw('MONTH(start_date) = ?', [$currentMonth])
+                         //           ->orWhereRaw('MONTH(end_date) = ?', [$currentMonth])
+                         //           ->orWhere(function ($query) use ($currentMonth)
+                         //           {
+                         //                $query->whereRaw('MONTH(start_date) <= ?', [$currentMonth])
+                         //                     ->whereRaw('MONTH(end_date) >= ?', [$currentMonth]);
+                         //           });
+                         // })
+                         ->orderBy('id', 'desc')
+                         ->get();
+
+                    foreach ($announcementsRaw as $row)
+                    {
+                         $branch_ids = json_decode($row->branch_id) ?? [];
+                         $department_ids = json_decode($row->department_id) ?? [];
+                         $employee_ids = json_decode($row->employee_id) ?? [];
+
+
+                         // scenarios
+                         // scenarios 1 : if all branched selected, all departments selected and all employees selected | then show announcement to employee
+                         // scenarios 2 : if not all branches selected, but for all departments are selected | then show announcement to employee
+                         // scenarios 2.1 : if all employees are selected or if specific employee then check logged in employee is added in list or not and its branch is equal to announcement branch
+
+
+                         // if all branchs, all departments and all employees
+                         if (in_array(0, $branch_ids) && in_array(0, $department_ids) && (in_array(0, $employee_ids) || in_array($emp->id, $employee_ids)))
+                         {
+                              $announcements[] = $row;
+                         }
+
+                         // if not all branches, but for all departments
+                         else if (!in_array(0, $branch_ids) && in_array(0, $department_ids))
+                         {
+                              // check if all employees are allowed or if specific employee then check logged in employee is added in list or not and its branch is equal to announcement branch
+                              if (
+                                   in_array(0, $employee_ids) ||
+                                   (
+                                        in_array($emp->id, $employee_ids) && in_array($emp->branch_id, $branch_ids)
+                                   )
+                              )
+                              {
+                                   $announcements[] = $row;
+                              }
+                         }
+
+                         // if not all branched and not all departments
+                         else if (!in_array(0, $branch_ids) && !in_array(0, $department_ids))
+                         {
+                              if (in_array(0, $employee_ids) || in_array($emp->id, $employee_ids))
+                              {
+                                   $announcements[] = $row;
+                              }
+                         }
+                         else if (in_array(0, $branch_ids) && !in_array(0, $department_ids))
+                         {
+                              if (in_array($emp->department_id, $department_ids))
+                              {
+                                   if (in_array(0, $employee_ids) || in_array($emp->id, $employee_ids))
+                                   {
+                                        $announcements[] = $row;
+                                   }
+                              }
+                         }
+                    }
+
+
+                    // 
+
+                    // $announcements    = Announcement::where('created_by', '=', \Auth::user()->creatorId())->get();
+                    $employees = Employee::get();
+                    $meetings  = Meeting::orderBy('meetings.id', 'desc')->take(5)->leftjoin('meeting_employees', 'meetings.id', '=', 'meeting_employees.meeting_id')->where('meeting_employees.employee_id', '=', $emp->id)->orWhere(
+                         function ($q)
+                         {
+                              $q->where('meetings.department_id', 0)->where('meetings.employee_id', 0);
+                         }
+                    )->get();
+                    $events    = Event::select('events.*', 'events.id as event_id', 'event_employees.*')->leftjoin('event_employees', 'events.id', '=', 'event_employees.event_id')->where('event_employees.employee_id', '=', $emp->id)->orWhere(
+                         function ($q)
+                         {
+                              $q->where('events.department_id', 0)->where('events.employee_id', 0);
+                         }
+                    )->get();
+                    //  dd($events);
+                    $arrEvents = [];
+
+                    foreach ($events as $event)
+                    {
+
+                         $arr['id']              = $event['event_id'];
+                         $arr['title']           = $event['title'];
+                         $arr['start']           = $event['start_date'];
+                         $arr['end']             = $event['end_date'];
+                         $arr['className']       = $event['color'];
+                         // $arr['borderColor']     = "#fff";
+                         $arr['url']             = (!empty($event['event_id'])) ? route('eventsshow', $event['event_id']) : '0';
+                         //  $arr['url']                = (!empty($event['event_id'])) ? route('eventsshow', $event['event_id']) : '0';
+
+                         // $arr['textColor']       = "white";
+                         $arrEvents[]            = $arr;
+                    }
+
+                    $date               = date("Y-m-d");
+                    $time               = date("H:i:s");
+                    $employeeAttendance = AttendanceEmployee::orderBy('id', 'desc')->where('employee_id', '=', !empty(\Auth::user()->employee) ? \Auth::user()->employee->id : 0)->where('date', '=', $date)->first();
+
+                    $usedFlexiHoursDaysCount = AttendanceEmployee::where('employee_id', '=', Auth::user()->employee->id)
+                         ->whereYear('date', date("Y"))
+                         ->whereMonth('date', date("M"))
+                         ->get()
+                         ->sum("is_flexi_hours_used");
+
+                    $officeTime['startTime'] = Utility::getValByName('company_start_time');
+                    $officeTime['endTime']   = Utility::getValByName('company_end_time');
+                    $officeTime['text']   = "Office";
+                    $officeTime['usedFlexiHoursDays']   = $usedFlexiHoursDaysCount;
+
+                    $officeTime['flexiHours'] = Utility::getValByName('company_flexi_hours');
+                    $officeTime['flexiDays'] = Utility::getValByName('company_flexi_days');
+
+                    // check if employee is assigned to any shift calculate according that shift
+                    $workingShiftEmployees = WorkingShiftEmployees::where("employee_id", !empty(\Auth::user()->employee) ? \Auth::user()->employee->id : 0)->first();
+                    $employeeShift = null;
+                    if ($workingShiftEmployees != null)
+                    {
+                         $employeeShift = WorkingShifts::where("id", $workingShiftEmployees->working_shifts_id)->first();
+                         if ($employeeShift != null)
+                         {
+                              $officeTime['startTime'] = date("H:i", strtotime($employeeShift->start_time));
+                              $officeTime['endTime'] = date("H:i", strtotime($employeeShift->end_time));
+
+                              $officeTime['flexiHours'] = $employeeShift->flexi_hours;
+                              $officeTime['flexiDays'] = $employeeShift->flexi_days;
+
+                              $officeTime['text']   = "Shift";
+                         }
+                    }
+                    // check if employee is assigned to any shift calculate according that shift
+
+                    $employeeId = !empty(Auth::user()->employee) ? Auth::user()->employee->id : 0;
+
+                    $employeeDetails = Employee::where("id", $employeeId)->first();
+
+                    $checkLastAttendance = AttendanceEmployee::where('employee_id', '=', $employeeId)
+                         //29-08 told to rmeove geofencing condition --Monali
+                         //->where('geofencing_status', '=', $employeeDetails->geofencing_status)
+                         // ->orderBy("date", "DESC")
+                         ->orderByRaw("date DESC, id DESC")
+                         ->first();
+
+                    $employeesBirthdayList = getEmployeesBirthdaysList([$employeeId]);
+                    $workAnniversaryList = getWorkAnniversaryList([$employeeId]);
+                    $marriageAnniversaryList = getMarriageAnniversaryList([$employeeId]);
+
+                    return view('dashboard.dashboard', compact('arrEvents', 'announcements', 'employees', 'meetings', 'employeeAttendance', 'officeTime', 'checkLastAttendance', 'employeeDetails', 'employeesBirthdayList', 'workAnniversaryList', 'marriageAnniversaryList'));
+               }
+               else if ($user->type == 'super admin')
+               {
+                    $user                       = \Auth::user();
+                    $user['total_user']         = $user->countCompany();
+                    $user['total_paid_user']    = $user->countPaidCompany();
+                    $user['total_orders']       = Order::total_orders();
+                    $user['total_orders_price'] = Order::total_orders_price();
+                    $user['total_plan']         = Plan::total_plan();
+                    $user['most_purchese_plan'] = (!empty(Plan::most_purchese_plan()) ? Plan::most_purchese_plan()->name : '');
+                    $chartData = $this->getOrderChart(['duration' => 'week']);
+                    return view('dashboard.super_admin', compact('user', 'chartData'));
+               }
+               else
+               {
+
+                    $events    = Event::where('created_by', '=', \Auth::user()->creatorId())->get();
+                    $employeees    = Employee::where('created_by', '=', \Auth::user()->creatorId())->count();
+                    $arrEvents = [];
+
+                    foreach ($events as $event)
+                    {
+                         $arr['id']    = $event['id'];
+                         $arr['title'] = $event['title'];
+                         $arr['start'] = $event['start_date'];
+                         $arr['end']   = $event['end_date'];
+
+                         $arr['className'] = $event['color'];
+
+                         // $arr['borderColor']     = "#fff";
+                         // $arr['textColor']       = "white";
+                         $arr['url']             = route('event.edit', $event['id']);
+
+                         $arrEvents[] = $arr;
+                    }
+
+                    $currentMonth = Carbon::now()->format('m');
+                    $announcements = Announcement::orderBy('announcements.id', 'desc')->take(5)->where('created_by', '=', \Auth::user()->creatorId())->where(function ($query) use ($currentMonth)
+                    {
+                         $query->whereRaw('MONTH(start_date) = ?', [$currentMonth])
+                              ->orWhereRaw('MONTH(end_date) = ?', [$currentMonth])
+                              ->orWhere(function ($query) use ($currentMonth)
+                              {
+                                   $query->whereRaw('MONTH(start_date) <= ?', [$currentMonth])
+                                        ->whereRaw('MONTH(end_date) >= ?', [$currentMonth]);
+                              });
+                    })->get();
+                    $emp           = User::where('type', '=', 'employee')->where('created_by', '=', \Auth::user()->creatorId())->get();
+                    $countEmployee = count($emp);
+
+                    $user      = User::where('type', '!=', 'employee')->where('created_by', '=', \Auth::user()->creatorId())->get();
+                    $countUser = count($user);
+                    // dd($countUser);
+                    $countTicket      = Ticket::where('created_by', '=', \Auth::user()->creatorId())->count();
+                    $countOpenTicket  = Ticket::where('status', '=', 'open')->where('created_by', '=', \Auth::user()->creatorId())->count();
+                    $countCloseTicket = Ticket::where('status', '=', 'close')->where('created_by', '=', \Auth::user()->creatorId())->count();
+                    //   dd($countCloseTicket);
+
+                    $currentDate = date('Y-m-d');
+
+                    $employees     = User::where('type', '=', 'employee')->where('created_by', '=', \Auth::user()->creatorId())->get();
+                    $countEmployee = count($employees);
+                    $notClockIn    = AttendanceEmployee::where('date', '=', $currentDate)->get()->pluck('employee_id');
+
+                    $notClockIns = Employee::where('created_by', '=', \Auth::user()->creatorId())->whereNotIn('id', $notClockIn)->whereIn('id', selectedEmployee() ?? [])->where("employee_exit", 0)->get();
+
+                    $accountBalance = AccountList::where('created_by', '=', \Auth::user()->creatorId())->sum('initial_balance');
+                    $activeJob   = Job::where('status', 'active')->where('created_by', '=', \Auth::user()->creatorId())->count();
+                    $inActiveJOb = Job::where('status', 'in_active')->where('created_by', '=', \Auth::user()->creatorId())->count();
+
+                    $totalPayee = Payees::where('created_by', '=', \Auth::user()->creatorId())->count();
+                    $totalPayer = Payer::where('created_by', '=', \Auth::user()->creatorId())->count();
+
+                    $meetings = Meeting::where('created_by', '=', \Auth::user()->creatorId())->limit(8)->get();
+
+                    //created By viral
+                    $employeesData = 0;
+                    if (!empty($request->branch))
+                    {
+                         $employeesData = Employee::where('branch_id', $request->branch)->where('created_by', \Auth::user()->creatorId())->get();
+                    }
+
+                    $usedFlexiHoursDaysCount = 0;
+                    if (Auth::user()->type != 'company')
+                    {
+                         $usedFlexiHoursDaysCount = AttendanceEmployee::where('employee_id', '=', (Auth::user()?->employee?->id ?? 1))
+                              ->whereYear('date', date("Y"))
+                              ->whereMonth('date', date("M"))
+                              ->get()
+                              ->sum("is_flexi_hours_used");
+                    }
+
+                    $officeTime['startTime'] = Utility::getValByName('company_start_time');
+                    $officeTime['endTime']   = Utility::getValByName('company_end_time');
+                    $officeTime['text']   = "Office";
+                    $officeTime['usedFlexiHoursDays']   = $usedFlexiHoursDaysCount;
+
+                    $officeTime['flexiHours'] = Utility::getValByName('company_flexi_hours');
+                    $officeTime['flexiDays'] = Utility::getValByName('company_flexi_days');
+
+                    if (Auth::user()->type != 'company')
+                    {
+                         // check if employee is assigned to any shift calculate according that shift
+                         $workingShiftEmployees = WorkingShiftEmployees::where("employee_id", (Auth::user()->employee->id ?? 0))->first();
+                         $employeeShift = null;
+                         if ($workingShiftEmployees != null)
+                         {
+                              $employeeShift = WorkingShifts::where("id", $workingShiftEmployees->working_shifts_id)->first();
+                              if ($employeeShift != null)
+                              {
+                                   $officeTime['startTime'] = date("H:i", strtotime($employeeShift->start_time));
+                                   $officeTime['endTime'] = date("H:i", strtotime($employeeShift->end_time));
+
+                                   $officeTime['flexiHours'] = $employeeShift->flexi_hours;
+                                   $officeTime['flexiDays'] = $employeeShift->flexi_days;
+
+                                   $officeTime['text']   = "Shift";
+                              }
+                         }
+                         // check if employee is assigned to any shift calculate according that shift
+                    }
+
+                    $employeeAttendance = 0;
+                    if (Auth::user()->type != 'company')
+                    {
+                         $date               = date("Y-m-d");
+                         $time               = date("H:i:s");
+                         $employeeAttendance = AttendanceEmployee::orderBy('id', 'desc')->where('employee_id', '=', (\Auth::user()->employee->id ?? 0))->where('date', '=', $date)->first();
+                    }
+
+                    $employeeId = !empty(Auth::user()->employee) ? Auth::user()->employee->id : 0;
+
+                    $employeeDetails = Employee::where("id", $employeeId)->first();
+                    $checkLastAttendance = AttendanceEmployee::where('employee_id', '=', $employeeId)
+                         ->when(Auth::user()->type != 'company', function ($query) use ($employeeDetails)
+                         {
+                              //29-08 told to rmeove geofencing condition --Monali
+                              //$query->where('geofencing_status', '=', ($employeeDetails->geofencing_status ?? 0));
+                         })
+                         // ->orderBy("date", "DESC")
+                         ->orderByRaw("date DESC, id DESC")
+                         ->first();
+
+                    $employeesBirthdayList = getEmployeesBirthdaysList([$employeeId]);
+                    $workAnniversaryList = getWorkAnniversaryList([$employeeId]);
+                    $marriageAnniversaryList = getMarriageAnniversaryList([$employeeId]);
+
+                    return view('dashboard.dashboard', compact('officeTime', 'employeees', 'employeesData', 'arrEvents', 'employeeAttendance', 'announcements', 'employees', 'activeJob', 'inActiveJOb', 'meetings', 'countEmployee', 'countUser', 'countTicket', 'countOpenTicket', 'countCloseTicket', 'notClockIns', 'countEmployee', 'accountBalance', 'totalPayee', 'totalPayer', 'employeesBirthdayList', 'workAnniversaryList', 'marriageAnniversaryList', 'employeeDetails', 'checkLastAttendance'));
+               }
+          }
+          else
+          {
+               if (!file_exists(storage_path() . "/installed"))
+               {
+                    header('location:install');
+                    die;
+               }
+               else
+               {
+                    $settings = Utility::settings();
+                    if ($settings['display_landing_page'] == 'on')
+                    {
+                         $plans = Plan::get();
+                         $get_section = LandingPageSection::orderBy('section_order', 'ASC')->get();
+
+                         // return view('layouts.landing', compact('plans','get_section'));
+                         if (str_contains(request()->getRequestUri(), '/public')) {
+                              return redirect('login');
+                         }
+                         return redirect('public/login');
+                    }
+                    else
+                    {
+                         if (str_contains(request()->getRequestUri(), '/public')) {
+                              return redirect('login');
+                         }
+                         return redirect('public/login');
+                    }
+               }
+          }
+     }
+
+
+
+     // Function to delete files based on the condition
+     public function deleteOldFiles($directory, $timeThreshold)
+     {
+          // Get all files in the provided folder recursively
+          $allFiles = Storage::allFiles($directory);
+          // dd($allFiles);
+
+          $deleteFilesList = [];
+          foreach ($allFiles as $filePath)
+          {
+               // Get the file extension and last modified time
+               $fileExtension = pathinfo($filePath, PATHINFO_EXTENSION);
+               $fileModificationTime = Storage::lastModified($filePath);
+
+               // Delete .tmp files regardless of their date
+               if ($fileExtension === 'tmp')
+               {
+                    // Storage::delete($filePath);
+                    // echo "Deleted: $filePath (TMP file)\n";
+               }
+               // Delete other files if they are older than 2 months
+               elseif ($fileModificationTime < $timeThreshold)
+               {
+                    // Storage::delete($filePath);
+                    // echo "Deleted: $filePath (Older than 2 months)\n";
+                    $deleteFilesList[] = $filePath;
+               }
+          }
+          // dd("deleteFilesList", $deleteFilesList);
+     }
+
+
+
+     public function getOrderChart($arrParam)
+     {
+          $arrDuration = [];
+          if ($arrParam['duration'])
+          {
+               if ($arrParam['duration'] == 'week')
+               {
+                    $previous_week = strtotime("-2 week +1 day");
+                    for ($i = 0; $i < 14; $i++)
+                    {
+                         $arrDuration[date('Y-m-d', $previous_week)] = date('d-M', $previous_week);
+                         $previous_week                              = strtotime(date('Y-m-d', $previous_week) . " +1 day");
+                    }
+               }
+          }
+
+          $arrTask          = [];
+          $arrTask['label'] = [];
+          $arrTask['data']  = [];
+          foreach ($arrDuration as $date => $label)
+          {
+
+               $data               = Order::select(\DB::raw('count(*) as total'))->whereDate('created_at', '=', $date)->first();
+               $arrTask['label'][] = $label;
+               $arrTask['data'][]  = $data->total;
+          }
+
+          return $arrTask;
+     }
+
+     function logout()
+     {
+          Session::flush();
+
+          Auth::logout();
+
+          return Redirect('login');
+     }
+
+     public function extra_leave()
+     {
+          $user_id = 96;
+          $employe_data = Employee::where('user_id', $user_id)->first();
+          $leave_type =  LeaveType::where('created_by', '=', \Auth::user()->creatorId())->get();
+
+          $info = [];
+          foreach ($leave_type as $lv)
+          {
+               $emp_leave = Leave::where('employee_id', $employe_data->id)->where('leave_type_id', $lv->id)->get();
+               foreach ($emp_leave as $p)
+               {
+                    $info[] = array(
+                         'employe_id' => $employe_data->id,
+                         'title' => $lv->title,
+                         'per_month_leave' => $lv->per_month_leave,
+                         'start_date' => $p->start_date,
+                         'total_leave_days' => $p->total_leave_days,
+                         'leave_reason' => $p->leave_reason,
+                    );
+               }
+          }
+          return $info;
+     }
+
+     public function notificationStatus(Request $request)
+     {
+          try
+          {
+               $noti = NotificationModel::find($request->id);
+               $noti->status = '1';
+               $noti->update();
+               return response()->json(['status' => 1, 'message' => 'gg']);
+          }
+          catch (Exception $e)
+          {
+               return response()->json(['status' => 1, 'message' => $e->getLine()]);
+          }
+     }
+
+     public function clear_notification()
+     {
+          if (Auth::check())
+          {
+               try
+               {
+                    $user = Auth::user();
+                    NotificationModel::where('user_id', Auth::id())->where('status', 0)->where('created_by', $user->creatorId())->update(['status' => 1]);
+                    return response()->json(['status' => 1, 'message' => 'Notifications cleared successfully']);
+               }
+               catch (Exception $e)
+               {
+                    return response()->json(['status' => 1, 'message' => $e->getLine()]);
+               }
+          }
+     }
+}

@@ -1,0 +1,250 @@
+{{-- @dd($data) --}}
+
+@php
+    $showDecimalPoints = $data['showDecimalPoints'] ?? getSalarySlipPreviewAmountFormatConfig()['showDecimalPoints'];
+    $decimalPoints = (int) ($data['decimalPoints'] ?? getSalarySlipPreviewAmountFormatConfig()['decimalPoints']);
+    $formatPayslipAmount = fn($amount) => formatSalarySlipPreviewAmount($amount, $showDecimalPoints, $decimalPoints);
+@endphp
+
+<table>
+    <tbody>
+        <tr>
+            <td style="text-align: left;">Name</td>
+            <td style="text-align: left;">Employee Id</td>
+            <td style="text-align: left;">Basic Salary</td>
+
+            <td style="text-align: center;" colspan="{{ $data['totalEarningsColumnsCount'] }}">Earnings</td>
+            <td style="text-align: center;" colspan="{{ $data['totalDeductionsColumnsCount'] }}">Deductions</td>
+
+        </tr>
+
+        <tr>
+            <td>#</td>
+            <td>#</td>
+            <td>#</td>
+
+            {{-- Earnings Columns --}}
+
+            @foreach ($data['earnings']['allowances'] as $earningsRow)
+                <td style="text-align: left;">{{ $earningsRow->name }}</td>
+            @endforeach
+
+            @foreach ($data['earnings']['commission'] as $earningsRow)
+                <td style="text-align: left;">{{ $earningsRow->name }}</td>
+            @endforeach
+
+            @foreach ($data['earnings']['otherPayments'] as $earningsRow)
+                <td style="text-align: left;">{{ $earningsRow->name }}</td>
+            @endforeach
+            <td style="text-align: left;">Gross Earning</td>
+            {{-- Earnings Columns --}}
+
+
+            {{-- Deductions Columns --}}
+            @foreach ($data['deductions'] as $deductionsData)
+                @foreach ($deductionsData as $deductionsRow)
+                    <td style="text-align: left;">{{ $deductionsRow->name }}</td>
+                @endforeach
+            @endforeach
+
+            <td style="text-align: left;">Loan</td>
+
+            <td style="text-align: left;">EPF | Employee Provident Fund</td>
+            <td style="text-align: left;">ESI | Employees State Insurance</td>
+            <td style="text-align: left;">EPT | Employees Professional Tax</td>
+            <td style="text-align: left;">Tax Deducted at Source</td>
+
+            <td style="text-align: left;">Gross Deduction</td>
+            {{-- Deductions Columns --}}
+
+
+            <td style="text-align: left;">Employer's Provident Fund</td>
+            <td style="text-align: left;">Statutory Bonus</td>
+            <td style="text-align: left;">Total CTC</td>
+            <td style="text-align: left;">Extra Leaves</td>
+
+
+
+            <td style="text-align: left;">Net Pay</td>
+
+
+            {{-- Testing Columns --}}
+
+            <td style="text-align: left;">Salary Calculation Start Date</td>
+            <td style="text-align: left;">Salary Calculation End Date</td>
+            <td style="text-align: right;">Company Working Days</td>
+            <td style="text-align: right;">Employee Extra Leave Days</td>
+            <td style="text-align: right;">Employee Working Days</td>
+
+            {{-- Testing Columns --}}
+        </tr>
+
+        {{-- render Data --}}
+
+        @foreach ($data['salarySlipData'] as $salarySlipRow)
+            <tr>
+                <td style="text-align: left;">{{ $salarySlipRow->employeeName }}</td>
+                <td style="text-align: left;">{{ $salarySlipRow->employeeId ?? '' }}</td>
+                <td>{{ $formatPayslipAmount($salarySlipRow->employeeBasicSalary) }}</td>
+
+                {{-- Earnings Columns Start --}}
+
+                {{-- allowances --}}
+                @foreach ($data['earnings']['allowances'] as $earningsRow)
+                    @php
+                        $earningAmount = 0;
+                        try {
+                            $earningAmount =
+                                collect($salarySlipRow->earnings->allowances->data)
+                                    ->where('id', $earningsRow->id)
+                                    ->first()->raw_amount ?? 0;
+                        } catch (\Throwable $th) {
+                        }
+                    @endphp
+                    <td style="text-align: right;">{{ $formatPayslipAmount($earningAmount) }}</td>
+                @endforeach
+                {{-- allowances --}}
+
+                {{-- commission --}}
+                @foreach ($data['earnings']['commission'] as $earningsRow)
+                    @php
+                        $commissionAmount = 0;
+                        try {
+                            $commissionAmount =
+                                collect($salarySlipRow->earnings->commission->data)
+                                    ->where('id', $earningsRow->id)
+                                    ->first()->raw_amount ?? 0;
+                        } catch (\Throwable $th) {
+                        }
+                    @endphp
+                    <td style="text-align: right;">{{ $formatPayslipAmount($commissionAmount) }}</td>
+                @endforeach
+                {{-- commission --}}
+
+                {{-- other payments --}}
+                @foreach ($data['earnings']['otherPayments'] as $earningsRow)
+                    @php
+                        $otherPaymentsAmount = 0;
+                        try {
+                            $otherPaymentsAmount =
+                                collect($salarySlipRow->earnings->otherPayments->data)
+                                    ->where('id', $earningsRow->id)
+                                    ->first()->raw_amount ?? 0;
+                        } catch (\Throwable $th) {
+                        }
+                    @endphp
+                    <td style="text-align: right;">{{ $formatPayslipAmount($otherPaymentsAmount) }}</td>
+                @endforeach
+                {{-- other payments --}}
+
+                {{-- Gross Earnings --}}
+                <td style="text-align: right;">
+                    {{ $formatPayslipAmount($salarySlipRow->employeeBasicSalary + $salarySlipRow->totalEarnings ?? 0) }}
+                </td>
+
+                {{-- Earnings Columns End --}}
+
+
+
+                {{-- Deductions Columns Start --}}
+
+                {{-- saturation --}}
+                @foreach ($data['deductions'] as $deductionsData)
+                    @foreach ($deductionsData as $deductionsRow)
+                        @php
+                            $statutoryDeductionAmountAmount = 0;
+                            try {
+                                $statutoryDeductionAmountAmount =
+                                    collect($salarySlipRow->deductions->saturation->data)
+                                        ->where('id', $deductionsRow->id)
+                                        ->first()->raw_amount ?? 0;
+                            } catch (\Throwable $th) {
+                            }
+                        @endphp
+                        <td style="text-align: right;">{{ $formatPayslipAmount($statutoryDeductionAmountAmount) }}</td>
+                    @endforeach
+                @endforeach
+                {{-- saturation --}}
+
+                {{-- loan --}}
+                <td style="text-align: right;">{{ $formatPayslipAmount($salarySlipRow->deductions->loan->total ?? 0) }}
+                </td>
+                {{-- loan --}}
+
+
+
+                <td style="text-align: right;">
+                    {{ $formatPayslipAmount($salarySlipRow->deductions->providentFundEmployeeDeduction->total ?? 0) }}
+                </td> {{-- EPF | Employee Provident Fund --}}
+
+                <td style="text-align: right;">
+                    {{ $formatPayslipAmount($salarySlipRow->deductions->employeesStateInsuranceEmployeeDeduction->total ?? 0) }}
+                </td> {{-- ESI | Employees State Insurance --}}
+
+                <td style="text-align: right;">
+                    {{ $formatPayslipAmount($salarySlipRow->deductions->employeeProfessionalTaxDeduction->total ?? 0) }}
+                </td> {{-- Employees Professional Tax --}}
+
+                <td style="text-align: right;">
+                    {{ $formatPayslipAmount($salarySlipRow->deductions->tdsDeductions->total ?? 0) }}
+                </td> {{-- Tax Deducted at Source --}}
+
+
+                <td style="text-align: right;">{{ $formatPayslipAmount($salarySlipRow->totalDeductions) }}</td>
+
+                {{-- Deductions Columns End --}}
+
+
+                {{-- Employer's Provident Fund --}}
+                <td style="text-align: left;">
+                    {{ $formatPayslipAmount($salarySlipRow->providentFundCompanyDeduction->total ?? 0) }}</td>
+                {{-- Employer's Provident Fund --}}
+
+                {{-- Statutory Bonus --}}
+                <td style="text-align: left;">{{ $formatPayslipAmount($salarySlipRow->statutoryBonus->total ?? 0) }}
+                </td>
+                {{-- Statutory Bonus --}}
+
+                {{-- Total CTC --}}
+
+                @php
+                    $providentFundCompanyDeductionTotal = $salarySlipRow->providentFundCompanyDeduction->total ?? 0;
+                    $employeesStateInsuranceCompanyDeductionTotal =
+                        $salarySlipRow->employeesStateInsuranceCompanyDeduction->total ?? 0;
+
+                    $statutoryBonusTotal = $salarySlipRow->statutoryBonus->total ?? 0;
+
+                    $ctc =
+                        $salarySlipRow->employeeBasicSalary +
+                            $salarySlipRow->totalEarnings +
+                            $providentFundCompanyDeductionTotal +
+                            $employeesStateInsuranceCompanyDeductionTotal +
+                            $statutoryBonusTotal ??
+                        0;
+                @endphp
+
+                <td style="text-align: left;">{{ $formatPayslipAmount($ctc ?? 0) }}</td>
+                {{-- Total CTC --}}
+
+                {{-- Extra Leaves Days Amount --}}
+                <td style="text-align: left;">{{ $formatPayslipAmount($salarySlipRow->leave->total) }}</td>
+
+                {{-- Net Pay Salary Amount --}}
+                <td style="text-align: left;">{{ $formatPayslipAmount($salarySlipRow->employeeNewPayableSalary) }}</td>
+
+                {{-- Testing Columns --}}
+
+                <td style="text-align: left;">{{ $salarySlipRow->salaryCalculationStartDate }}</td>
+                <td style="text-align: left;">{{ $salarySlipRow->salaryCalculationEndDate }}</td>
+                <td style="text-align: right;">{{ $salarySlipRow->companyWorkingDays }}</td>
+                <td style="text-align: right;">{{ $salarySlipRow->extraLeaveDays }}</td>
+                <td style="text-align: right;">{{ $salarySlipRow->employeeWorkingDays }}</td>
+
+                {{-- Testing Columns --}}
+            </tr>
+        @endforeach
+
+        {{-- render Data --}}
+
+    </tbody>
+</table>

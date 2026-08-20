@@ -1,0 +1,192 @@
+{{ Form::open(['url' => 'my_claim', 'method' => 'post' ,'id' => 'categoriesModel','enctype' => 'multipart/form-data']) }}
+<div class="modal-body">
+    <div class="row">
+        
+        <div class="form-group col-lg-6 col-md-6">
+            {{ Form::label('grade_type', __('My visit '), ['class' => 'col-form-label']) }}<span class="text-danger"> *</span>
+            <select id="my_visit_id" name="my_visit_id" class="form-control" required onchange="getVisitType(this.value)">
+                <option value="">Select visit type</option>
+                @foreach ($myvisit as $row)
+                    <option value="{{ $row->id }}">{{ $row->visit_name }}</option>
+                @endforeach
+             </select>
+        </div>
+
+        <div class="form-group col-lg-6 col-md-6 select_commuting_type"> 
+            {{ Form::label('select_commuting_type', __('Vehicle type'), ['class' => 'col-form-label']) }}<span class="text-danger"> *</span>
+                <select id="select_commuting_type" name="commuting_type" class="form-control" onchange="selectCommutingType(this.value)">
+                    <option value="">Select vehicle type</option>
+                    <option value="1">Two-wheeler</option>
+                    <option value="2">Four-wheeler </option>
+                </select>
+        </div>
+        
+        <div class="form-group col-lg-6 kilomiter">
+            {{ Form::label('amount', __('kilometre'), ['class' => 'col-form-label']) }} <span class="text-danger"> *</span>
+            <input type="number" name="kilomiter" id="amountinput" class="form-control" placeholder="Enter kilometre">
+        </div>
+
+        <div class="add_expense_dive"></div>
+        
+        <div class="form-group col-lg-6 col-md-6"> 
+            {{ Form::label('total_amount', __('Total amount'), ['class' => 'col-form-label']) }}
+            <input type="text" value="0" name="total_amount" id="total_amount" class="form-control" readonly>
+
+            <input type="hidden" value="0" name="fix_total_amount" id="fix_total_amount" class="form-control" readonly>
+            <input type="hidden" value="0" name="fix_not_Actual_total_amount" id="fix_not_Actual_total_amount" class="form-control" readonly>
+
+            
+        </div>
+
+        <input type="hidden" name="fix_amount" id="fix_amount" class="form-control" readonly>
+
+        <div class="form-group col-lg-6 col-md-6">
+            {{ Form::label('amount', __('Upload Image'), ['class' => 'col-form-label']) }}
+            <input type="file" name="uploadfile" id="uploadfile" class="form-control" accept=
+            "application/msword, application/vnd.ms-excel, application/vnd.ms-powerpoint,
+            text/plain, application/pdf, image/*">
+        </div>
+
+        <div class="form-group col-lg-12">
+            {{ Form::label('description', __('Description'), ['class' => 'col-form-label']) }} <span class="text-danger"> *</span>
+            {{ Form::textarea('description', null, ['class' => 'form-control','placeholder' => __('Enter Description'),'rows'=>'3', 'required' => 'required' ]) }}
+        </div>
+    
+    </div>
+</div>
+<div class="modal-footer">
+    <input type="button" value="Cancel" class="btn btn-light" data-bs-dismiss="modal">
+    <input type="submit" value="{{ __('Submit') }}" class="btn btn-primary">
+</div>
+
+{{ Form::close() }}
+<script>
+    $(document ).ready(function() {
+
+        $("#commonModal").on('keyup','#amountinput',function() {
+            commutingdata = $('#select_commuting_type').val();
+            if(commutingdata == ''){
+                alert('Please first select commuting type');
+                $('#amountinput').val('');
+            }else{
+                //ajax call to 
+                $.ajax({
+                    type: "GET",
+                    url: "{{ url('get_getAmount')}}",
+                    data: {commutingtype:commutingdata,kilometer:$(this).val()},
+                    cache: true,
+                    success: function(data){
+                        $('#total_amount').val(data);
+                        $('#fix_amount').val(data);
+                    } 
+                });
+
+            }
+        });
+
+        $("#commonModal").on('keyup','.amountinputCal',function() {
+                totalamount = $('#total_amount').val();
+                var fix_total_amount = $('#fix_total_amount').val();
+                var fix_not_Actual_total_amount = $('#fix_not_Actual_total_amount').val();
+            
+                $.ajax({
+                    type: "GET",
+                    url: "{{ url('get_getAmountinput')}}",
+                    data: {amountinput:$(this).val(),fix_not_Actual_total_amount:fix_not_Actual_total_amount},
+                    cache: false,
+                    success: function(data){
+                        $('#total_amount').val(data);
+                    } 
+                });
+        });
+        
+    });
+
+    //getVisitType
+    function getVisitType(getVisitType) {
+        $.ajax({
+            type: "GET",
+            url: "{{ url('get_getVisitTypeexpense')}}",
+            data: {getVisitType:getVisitType},
+            cache: true,
+            success: function(data){
+                
+                if(data != 0){
+                    $('.select_commuting_type').addClass('d-none');
+                    $('.kilomiter').addClass('d-none');
+                    
+                    var totalamount = 0;
+                    var isnot_actotalamount = 0;
+
+                    $.each(data, function(key, value){   
+                        
+                        var checkbox = 0;
+                        
+                        var disable = 0;
+                        var readonly = 'readonly';
+                        var readonlyname = 'readonly';
+                        disable  = 'disabled';
+                        var is_actual_value = 0;
+                        totalamount += parseInt(value.amount);
+                        
+                        $('#total_amount').val(totalamount)
+
+                        $('#fix_total_amount').val(totalamount)    
+                        
+                        if(value.is_actual == 1 )
+                        {
+                            checkbox = 'checked';
+                            is_actual_value = 1;
+                            readonly = 0;
+                        }else{
+                            
+                            isnot_actotalamount += parseInt(value.amount);
+
+                            $('#fix_not_Actual_total_amount').val(isnot_actotalamount)    
+                        }
+                        
+                        $('.add_expense_dive').append(
+                            
+                            `<div class="row">
+                                    <div class="form-group col-lg-4"> 
+                                        {{ Form::label('Expense', __('Expense Name'), ['class' => 'col-form-label']) }}
+                                        <input type="text" ` + readonlyname + ` name="expens_name[]" class="form-control" placeholder="Please expense name" value="`+ value.expense_data.name +`">
+                                    </div>
+                                    <div class="form-group col-lg-4"> 
+                                        {{ Form::label('Expense', __('Expense amount'), ['class' => 'col-form-label']) }}
+                                        <input type="number" ` + readonly + ` name="expens_amount[]" class="form-control amountinputCal" required placeholder="Please expense amount" value="`+ value.amount +`">
+                                    </div>
+                                    <div class="form-group col-lg-4"> 
+
+                                        <input type="hidden" name="hidden_expense_is_actual[]" class="form-check-input" required" value="`+ is_actual_value +`">
+
+                                        <input type="checkbox" ` + checkbox + ` onclick="return false"  name="expense_is_actual[]" class="form-check-input" required" value="`+ is_actual_value +`">
+                                        {{ Form::label('Expense', __('is actual'), ['class' => 'col-form-label']) }}
+                                    </div>
+                                </div>
+                            `
+                        );
+                    });
+
+                }else{
+                    $('.select_commuting_type').removeClass('d-none');
+                    $('.kilomiter').removeClass('d-none');
+                    $('.add_expense_dive').html('');
+                }
+
+            } 
+        });
+
+        $('#amountinput').val('');
+        $('#total_amount').val(0);
+        $("#select_commuting_type").prop("selectedIndex", 0);
+
+    
+    }
+    
+    function selectCommutingType(commutingtype){
+        $('#amountinput').val('');
+        $('#total_amount').val(0);
+    }    
+
+</script>

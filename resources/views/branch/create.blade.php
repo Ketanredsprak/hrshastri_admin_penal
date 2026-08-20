@@ -1,0 +1,244 @@
+{{ Form::open(['url' => 'branch', 'method' => 'post']) }}
+<div class="modal-body model-lg">
+
+    <div class="row">
+
+        <div class="col-lg-12 col-md-12 col-sm-12">
+            <div class="form-group">
+                {{ Form::label('name', __('Country'), ['class' => 'form-label']) }}
+                <div class="form-icon-user">
+                    <select name="country_name" id="country_name" class="form-control">
+                        <option value="India">India</option>
+                    </select>
+                </div>
+                @error('name')
+                    <span class="invalid-name" role="alert">
+                        <strong class="text-danger">{{ $message }}</strong>
+                    </span>
+                @enderror
+            </div>
+        </div>
+
+        <div class="col-lg-12 col-md-12 col-sm-12">
+            <div class="form-group">
+                {{ Form::label('name', __('State *'), ['class' => 'form-label']) }}
+                <div class="form-icon-user">
+                    <select name="state_name" id="state_name" required class="form-control">
+                        <option value="">Please select State</option>
+                        @foreach ($state as $st)
+                            <option value="{{ $st->state_title }}">{{ $st->state_title }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                @error('name')
+                    <span class="invalid-name" role="alert">
+                        <strong class="text-danger">{{ $message }}</strong>
+                    </span>
+                @enderror
+            </div>
+        </div>
+
+        <div class="col-lg-12 col-md-12 col-sm-12">
+            <div class="form-group">
+                {{ Form::label('name', __('District *'), ['class' => 'form-label']) }}
+                <div class="form-icon-user">
+                    <select name="district_name" id="district_name" required class="form-control">
+                        <option value="">Please select district</option>
+                    </select>
+                </div>
+                @error('name')
+                    <span class="invalid-name" role="alert">
+                        <strong class="text-danger">{{ $message }}</strong>
+                    </span>
+                @enderror
+            </div>
+        </div>
+        {{-- //district_name --}}
+        <div class="col-lg-12 col-md-12 col-sm-12">
+            <div class="form-group">
+                {{ Form::label('name', __('City *'), ['class' => 'form-label']) }}
+                <div class="form-icon-user">
+                    <select name="city_name" id="city_name" required class="form-control">
+                        <option value="">Please select city</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+
+        <div class="col-lg-12 col-md-12 col-sm-12">
+            <div class="form-group">
+                {{ Form::label('name', __('Zip Code *'), ['class' => 'form-label']) }}
+                <div class="form-icon-user">
+                    {{ Form::text('zip_code', null, ['class' => 'form-control', 'required' => 'required', 'placeholder' => __('Enter zip code')]) }}
+                </div>
+
+            </div>
+        </div>
+
+        <div class="col-lg-12 col-md-12 col-sm-12">
+            <div class="form-group">
+                {{ Form::label('name', __('Name *'), ['class' => 'form-label']) }}
+                <div class="form-icon-user">
+                    {{ Form::text('name', null, ['class' => 'form-control', 'required' => 'required', 'placeholder' => __('Enter Branch Name')]) }}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-12 col-md-12 col-sm-12">
+            <div class="form-group">
+                {{ Form::label('name', __('Address *'), ['class' => 'form-label']) }}
+                <div class="form-icon-user">
+                    {{ Form::text('address', null, ['class' => 'form-control', 'required' => 'required', 'placeholder' => __('Enter Branch Address')]) }}
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-12 col-md-12 col-sm-12">
+            <div class="form-group">
+                {{ Form::label('latitude', __('Latitude *'), ['class' => 'form-label']) }}
+                <div class="form-icon-user">
+                    {{ Form::text('latitude', null, ['class' => 'form-control', 'placeholder' => 'Latitude', 'required' => 'required']) }}
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-12 col-md-12 col-sm-12">
+            <div class="form-group">
+                {{ Form::label('longitude', __('Longitude *'), ['class' => 'form-label']) }}
+                <div class="form-icon-user">
+                    {{ Form::text('longitude', null, ['class' => 'form-control', 'placeholder' => 'Longitude', 'required' => 'required']) }}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-12 col-md-12 col-sm-12">
+            <div class="form-check form-switch">
+                <label for="geofencing_status">
+                    <input type="checkbox" class="form-check-input" id="geofencing_status" name="geofencing_status">
+
+                    <h5 class="">{{ __('Enable Geofencing') }}</h5>
+                </label>
+                <span>(Employees will be able to clock in and clock out within a specified radius.)</span>
+
+                <div class="col-sm-12 geofencing_inputs_div" style="display: none">
+                    <div class="form-group mt-4">
+                        {{ Form::label('geofencing_radius', __('Geofencing Radius (In Meter)'), ['class' => 'form-label']) }}
+                        <div class="form-icon-user w-50">
+                            {{ Form::text('geofencing_radius', null, ['class' => 'form-control salaryAmountValidation', 'placeholder' => __('Enter Geofencing Radius'), 'id' => 'geofencing_radius']) }}
+                        </div>
+                        <div id="geofencing_radius_warning" style="font-size: 14px; margin-top: 5px;">
+                            <span>To ensure reliability and reduce false triggers, a radius of 300 meters or more is
+                                recommended by Google.</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+
+        <div class="col-lg-12 col-md-12 col-sm-12 geofencing_inputs_div" style="display: none">
+            <div class="form-check form-switch">
+                <label for="remote_geofencing_status">
+                    <input type="checkbox" class="form-check-input" id="remote_geofencing_status"
+                        name="remote_geofencing_status" checked>
+                    <h5 class="">{{ __('Enable Remote Geofencing') }}</h5>
+                </label>
+
+                <span>(It will allow employees to clock in and clock out from any location.)</span>
+            </div>
+        </div>
+        {{-- <div class="col-lg-6 col-md-6 col-sm-6 geofencing_inputs_div" style="display: none">
+            <div class="form-group">
+                {{ Form::label('geofencing_end_range', __('Geofencing End Range * (In Meter)'), ['class' =>
+                'form-label']) }}
+                <div class="form-icon-user">
+                    {{ Form::text('geofencing_end_range', null, ['class' => 'form-control salaryAmountValidation',
+                    'placeholder' => __('Enter Geofencing End Range')]) }}
+                </div>
+            </div>
+        </div> --}}
+
+    </div>
+
+</div>
+<div class="modal-footer">
+    <input type="button" value="Cancel" class="btn btn-light" data-bs-dismiss="modal">
+    <input type="submit" value="{{ __('Create') }}" class="btn btn-primary">
+</div>
+
+
+{{ Form::close() }}
+
+<script>
+    $(document).ready(function() {
+
+        $('.salaryAmountValidation').on('input keypress keyup paste dragover', function(e) {
+            // Check if the entered value is a valid number
+            var inputValue = $(this).val() + String.fromCharCode(e.which);
+            if (!$.isNumeric(inputValue)) {
+                // Prevent the input if it's not a number
+                e.preventDefault();
+            }
+        });
+
+        $('#geofencing_status').change(function() {
+            if ($(this).prop('checked')) {
+                $(".geofencing_inputs_div").show();
+            } else {
+                $(".geofencing_inputs_div").hide();
+            }
+        });
+
+        $("#state_name").change(function() {
+            $.ajax({
+                type: "get",
+                url: "{{ url('get-district-by-state-name') }}" + '/' + this.value,
+                success: function(data) {
+                    var options = '<option value="">Please select District</option>';
+                    $.each(data, function(index, object) {
+                        options += '<option value="' + object.district_title +
+                            '">' +
+                            object.district_title + '</option>';
+                    });
+                    $('#district_name').html(options);
+                },
+                error: function(data) {
+                    console.log('Error:', data);
+                }
+            });
+        });
+        //get City
+        $("#district_name").change(function() {
+            $.ajax({
+                type: "get",
+                url: "{{ url('get-city-by-district-name') }}" + '/' + this.value,
+                success: function(data) {
+                    var options = '<option value="">Please select City</option>';
+                    $.each(data, function(index, object) {
+                        options += '<option value="' + object.name + '">' + object
+                            .name + '</option>';
+                    });
+                    $('#city_name').html(options);
+                },
+                error: function(data) {
+                    console.log('Error:', data);
+                }
+            });
+        });
+
+        $('#geofencing_radius').on('input', function() {
+            const value = parseFloat($(this).val());
+
+            // Show warning if value is 300 or less
+            if (!isNaN(value) && value < 300) {
+                $('#geofencing_radius_warning').css('color', 'red');
+                $('input[type="submit"]').prop('disabled', true);
+            } else {
+                $('#geofencing_radius_warning').css('color', 'black');
+                $('input[type="submit"]').prop('disabled', false);
+            }
+        });
+
+    });
+</script>

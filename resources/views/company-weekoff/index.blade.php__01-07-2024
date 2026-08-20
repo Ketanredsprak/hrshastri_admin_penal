@@ -1,0 +1,260 @@
+<label for=""></label>@extends('layouts.admin')
+
+@section('page-title')
+    {{ __('Company Week Off') }}
+@endsection
+
+@section('breadcrumb')
+    <li class="breadcrumb-item"><a href="{{ route('home') }}">{{ __('Home') }}</a></li>
+    <li class="breadcrumb-item">{{ __('Company Week Off') }}</li>
+@endsection
+
+@section('header-section')
+    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+    <style>
+        #calendar {
+            margin-bottom: 100px;
+        }
+
+        #calendar .fc-view {
+            margin-top: 0;
+        }
+
+        .fc .fc-daygrid-day.fc-day-today {
+            background-color: rgba(255, 220, 40, 0.15);
+            background-color: rgba(81, 69, 157, 0.1);
+        }
+
+        .selected-event {
+            position: relative;
+            background-color: #4caf50;
+            /* Green fill for selected dates */
+            /* color: #fff; */
+            height: 100%;
+            width: 100%
+        }
+
+        .delete-button {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            background: #fff;
+            border: none;
+            cursor: pointer;
+            z-index: 10;
+            padding: 5px;
+            border-radius: 50%;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .delete-button .material-icons {
+            color: #f44336;
+            /* Red color for the delete icon */
+            font-size: 18px;
+        }
+    </style>
+@endsection
+
+@section('content')
+    <div class="row">
+        <div class="col-sm-12">
+            {{-- {{ Form::open(['url' => route('company-weekoff.store'), 'method' => 'post', 'id' => 'company-weekoff_form', 'enctype' => 'multipart/form-data']) }} --}}
+            <div class="card">
+                <div class="card-body">
+
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="row">
+                                <div class="col-2"><span class="text-dark"><i
+                                            class="badge bg-dark p-2  rounded">{{ __('WO') }}</i>&nbsp;
+                                        {{ __('Week Off') }}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+
+                    <div class="form-group">
+                        <div class="form-check form-switch">
+                            <label for="is_custom_weekoffs">
+                                <h5 class="">{{ __('Enable Custom Weekoff') }}
+                                </h5>
+                            </label>
+                            <input type="checkbox" class="form-check-input" id="is_custom_weekoffs"
+                                name="is_custom_weekoffs" {{ $is_custom_weekoffs == 1 ? 'checked' : '' }}>
+                        </div>
+                    </div>
+
+
+
+                    <div class="row" id="employees_ids_div">
+
+                        <div class="form-group col-md-12">
+                            {{ Form::label('employees_ids', __('Select Employees'), ['class' => 'form-label']) }}
+
+                            {{ Form::select('employees_ids[]', $employeesList, $selectedEmployeesIds, ['class' => 'form-control select2', 'id' => 'employees_ids', 'multiple' => true]) }}
+                        </div>
+
+                    </div>
+
+                    {{-- calender --}}
+                    <div class="row">
+                        <div class="col-md-8 m-auto">
+
+                            <input type="hidden" name="weekoffs_data" id="weekoffs_data" class="weekoffs_data"
+                                value="{{ $weekoffs_data ?? '' }}">
+                            <div id='calendar'></div>
+
+                        </div>
+                    </div>
+                    {{-- calender --}}
+
+                    <div class="float-end">
+                        <button type="submit" class="btn btn-primary">Update</button>
+                    </div>
+
+                </div>
+            </div>
+
+        </div>
+    </div>
+@endsection
+
+<link href="https://stackpath.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet" />
+
+@push('script-page')
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.14/index.global.min.js"></script>
+
+
+
+    <script>
+        var isCalenderInitialize = false;
+
+        var selectedDates = {};
+
+        @if ($is_custom_weekoffs == 1)
+
+            $('#employees_ids').attr('required', 'required');
+            $("#employees_ids_div").show();
+
+            $("#calendar").show();
+            showCalender();
+        @else
+            $("#employees_ids_div").hide();
+        @endif
+
+        $('#is_custom_weekoffs').change(function() {
+            if ($(this).prop('checked')) {
+
+                $('#employees_ids').attr('required', 'required');
+                $("#employees_ids_div").show();
+
+                $("#calendar").show();
+                showCalender();
+            } else {
+
+                $('#employees_ids').removeAttr('required');
+                $("#employees_ids_div").hide();
+                $("#calendar").hide()
+            }
+        });
+
+
+        function showCalender() {
+
+            if (isCalenderInitialize) {
+                return;
+            }
+
+            var calendarEl = document.getElementById('calendar');
+
+            var calendar = new FullCalendar.Calendar(calendarEl, {
+                initialView: 'dayGridMonth',
+                selectable: true,
+                buttonText: {
+                    today: 'Today'
+                },
+                dateClick: function(info) {
+                    var dateStr = info.dateStr;
+
+                    // Check if the date is already selected
+                    if (selectedDates[dateStr]) {
+                        // Date is already selected, remove it
+                        //     selectedDates[dateStr].remove();
+                        //     delete selectedDates[dateStr];
+                    } else {
+                        // Select new date and add event
+                        var event = calendar.addEvent({
+                            title: 'Week Off',
+                            start: dateStr,
+                            allDay: true,
+                            className: 'selected-event',
+                            color: '#1C232F'
+                        });
+
+                        selectedDates[dateStr] = event;
+                    }
+
+                    // saveToLocalStorage(Object.keys(selectedDates));
+
+                    $("#weekoffs_data").val(JSON.stringify(Object.keys(selectedDates)));
+                    // sendSelectedDates();
+                },
+                eventContent: function(info) {
+                    var deleteButton = document.createElement('button');
+                    deleteButton.className = 'delete-button';
+                    deleteButton.innerHTML = '<span class="material-icons">delete</span>';
+                    deleteButton.onclick = function() {
+                        info.event.remove();
+                        delete selectedDates[info.event.startStr];
+                        //     saveToLocalStorage(Object.keys(selectedDates));
+                        //     sendSelectedDates();
+                        $("#weekoffs_data").val(JSON.stringify(Object.keys(selectedDates)));
+                    };
+
+                    var arrayOfDomNodes = [deleteButton]
+                    return {
+                        domNodes: arrayOfDomNodes
+                    }
+                }
+            });
+            calendar.render();
+
+
+            // add data
+
+            console.log("weekoffs_data")
+            console.log('{!! $weekoffs_data ?? '' !!}');
+
+            @if (!empty($weekoffs_data) && $weekoffs_data != '[]' && $weekoffs_data != null)
+
+                var storedDates = JSON.parse('{!! $weekoffs_data ?? '' !!}');
+
+                //  console.log('selectedDates ============>>>>>>>>>>>>> ', selectedDates);
+                //  console.log('Week Off Json Data', storedDates);
+
+                for (var dateStr of storedDates) {
+                    console.log("Event Date = ", dateStr);
+                    var event = calendar.addEvent({
+                        title: 'Week Off',
+                        start: dateStr,
+                        allDay: true,
+                        className: 'selected-event',
+                        color: '#1C232F'
+                    });
+
+                    selectedDates[dateStr] = event;
+                }
+            @endif
+            // add data
+
+            isCalenderInitialize = true;
+            console.log("Calendar initialize.");
+        }
+
+
+        function saveCalenderData() {
+
+        }
+    </script>
+@endpush

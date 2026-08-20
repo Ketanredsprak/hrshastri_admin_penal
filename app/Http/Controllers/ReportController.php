@@ -1,0 +1,4583 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use Exception;
+use Throwable;
+use Carbon\Carbon;
+use App\Models\User;
+use App\Models\Leave;
+use App\Models\Branch;
+use App\Models\Deposit;
+use App\Models\Expense;
+use App\Models\Holiday;
+use App\Models\PaySlip;
+use App\Models\Utility;
+use App\Models\CityTier;
+use App\Models\Employee;
+use App\Models\CityModel;
+use App\Models\LeaveType;
+use App\Models\TimeSheet;
+use App\Models\Department;
+use App\Models\AccountList;
+use App\Exports\LeaveExport;
+use App\Models\MyClaimModel;
+use App\Models\Designation;
+use App\Models\Resignation;
+use Illuminate\Http\Request;
+use App\Exports\PayrollExport;
+use App\Exports\TimesheetExport;
+use App\Exports\LeaveReportExport;
+use App\Models\AttendanceEmployee;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Auth;
+use App\Exports\TimesheetReportExport;
+use App\Exports\NewJoineeReportExport;
+use App\Exports\ResignedEmployeeReport;
+use App\Exports\BirthdayListReportExport;
+use App\Exports\WorkAnniversaryListReportExport;
+use App\Exports\MarriageAnniversaryListReportExport;
+use App\Exports\accountstatementExport;
+use App\Exports\EmployeeAttendanceGeofencingExcelExport;
+use App\Exports\LateComingExport;
+use App\Exports\MergedColumnsExport;
+use App\Exports\MonthelyAttendanceReportExport;
+use App\Models\UserLeaveBalanceYear;
+use DateTime;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Maatwebsite\Excel\Facades\Excel;
+use Symfony\Component\HttpFoundation\StreamedResponse;
+
+class ReportController extends Controller
+{
+     public function incomeVsExpense(Request $request)
+     {
+          if (Auth::user()->can('Manage Report'))
+          {
+               $deposit = Deposit::where('created_by', Auth::user()->creatorId());
+
+               $labels       = $data = [];
+               $expenseCount = $incomeCount = 0;
+
+               // dd($request->start_month, $request->end_month);
+
+               if (!empty($request->start_month) && !empty($request->end_month))
+               {
+                    $start = strtotime(date("Y-m", strtotime($request->start_month)));
+                    $end   = strtotime($request->end_month);
+
+                    $currentdate = $start;
+                    $month       = [];
+
+                    // dd(strtotime($request->start_month), $start, $end, $currentdate);
+                    while ($currentdate <= $end)
+                    {
+                         $month = date('m', $currentdate);
+                         $year  = date('Y', $currentdate);
+
+                         $depositFilter = Deposit::where('created_by', Auth::user()->creatorId())->whereMonth('date', $month)->whereYear('date', $year)->get();
+
+                         $depositsTotal = 0;
+                         foreach ($depositFilter as $deposit)
+                         {
+                              $depositsTotal += $deposit->amount;
+                         }
+
+                         $incomeData[] = $depositsTotal;
+                         $incomeCount  += $depositsTotal;
+
+                         $expenseFilter = Expense::where('created_by', Auth::user()->creatorId())->whereMonth('date', $month)->whereYear('date', $year)->get();
+                         $expenseTotal  = 0;
+                         foreach ($expenseFilter as $expense)
+                         {
+                              $expenseTotal += $expense->amount;
+                         }
+                         $expenseData[] = $expenseTotal;
+                         $expenseCount  += $expenseTotal;
+
+                         $labels[]    = date('M Y', $currentdate);
+                         $currentdate = strtotime('+1 month', $currentdate);
+                    }
+
+                    $filter['startDateRange'] = date('M-Y', strtotime($request->start_month));
+                    $filter['endDateRange']   = date('M-Y', strtotime($request->end_month));
+               }
+               else
+               {
+                    for ($i = 0; $i < 6; $i++)
+                    {
+
+                         $month = date('m', strtotime("-$i month"));
+                         $year  = date('Y', strtotime("-$i month"));
+
+                         $depositFilter = Deposit::where('created_by', Auth::user()->creatorId())->whereMonth('date', $month)->whereYear('date', $year)->get();
+
+                         $depositTotal = 0;
+                         foreach ($depositFilter as $deposit)
+                         {
+                              $depositTotal += $deposit->amount;
+                         }
+
+                         $incomeData[] = $depositTotal;
+                         $incomeCount  += $depositTotal;
+
+                         $expenseFilter = Expense::where('created_by', Auth::user()->creatorId())->whereMonth('date', $month)->whereYear('date', $year)->get();
+                         $expenseTotal  = 0;
+                         foreach ($expenseFilter as $expense)
+                         {
+                              $expenseTotal += $expense->amount;
+                         }
+                         $expenseData[] = $expenseTotal;
+                         $expenseCount  += $expenseTotal;
+
+                         $labels[] = date('M Y', strtotime("-$i month"));
+                    }
+                    $filter['startDateRange'] = date('M-Y');
+                    $filter['endDateRange']   = date('M-Y', strtotime("-5 month"));
+               }
+
+               $incomeArr['name'] = __('Income');
+               $incomeArr['data'] = $incomeData ?? [];
+
+               $expenseArr['name'] = __('Expense');
+               $expenseArr['data'] = $expenseData;
+
+               $data[] = $incomeArr;
+               $data[] = $expenseArr;
+
+               return view('report.income_expense', compact('labels', 'data', 'incomeCount', 'expenseCount', 'filter'));
+          }
+          else
+          {
+               return redirect()->back()->with('error', __('Permission denied.'));
+          }
+     }
+
+     public function leave(Request $request)
+     {
+          if (Auth::user()->can('Manage Report'))
+          {
+
+               $branch = Branch::where('created_by', Auth::user()->creatorId())->get()->pluck('name', 'id');
+               $branch->prepend('All', '');
+
+               $department = Department::where('created_by', Auth::user()->creatorId())->get()->pluck('name', 'id');
+               $department->prepend('All', '');
+
+               $filterYear['branch']        = __('All');
+               $filterYear['department']    = __('All');
+               $filterYear['type']          = __('Monthly');
+
+               $start_date = Carbon::now()->startOfMonth();
+               $end_date = Carbon::now()->startOfMonth()->endOfMonth();
+
+               // If custom dates are provided in the request
+               if (!empty($request->start_date) && !empty($request->end_date))
+               {
+                    $start_date = Carbon::parse($request->start_date);
+                    $end_date = Carbon::parse($request->end_date);
+               }
+
+               $year = date('Y');
+
+               if (Auth::user()->type == 'company')
+               {
+                    $employees = Employee::where('created_by', Auth::user()->creatorId())->where("employee_exit", 0);
+               }
+               else
+               {
+                    $assign_employees = json_decode(Auth::user()->assign_employees) ?? [];
+                    $employees = Employee::whereIn('id', $assign_employees)->where('created_by', Auth::user()->creatorId())->where("employee_exit", 0);
+               }
+
+               if (!empty($request->branch))
+               {
+                    $employees->where('branch_id', $request->branch);
+                    $filterYear['branch'] = !empty(Branch::find($request->branch)) ? Branch::find($request->branch)->name : '';
+               }
+
+               if (!empty($request->department))
+               {
+                    $employees->where('department_id', $request->department);
+                    $filterYear['department'] = !empty(Department::find($request->department)) ? Department::find($request->department)->name : '';
+               }
+
+               $leaveTypes = LeaveType::where('created_by', Auth::user()->creatorId())->get();
+
+               $employees = $employees->get();
+
+               $leaves = [];
+               $totalApproved = $totalReject = $totalPending = 0;
+               $totalLeaveBalance = 0;
+
+               $yearsCount = 4;
+
+               foreach ($employees as $employee)
+               {
+                    $employeeLeave['id']          = $employee->id;
+                    $employeeLeave['employee_id'] = $employee->employee_id;
+                    $employeeLeave['employee']    = $employee->name;
+                    $employeeLeave['employee_id_cus']    = $employee->id;
+
+                    $approved = Leave::where('employee_id', $employee->id)->where('status', 'Approved')->whereDate("start_date", '>=', $start_date)->whereDate("start_date", '<=', $end_date)->sum('total_leave_days');
+                    $reject   = Leave::where('employee_id', $employee->id)->where('status', 'Reject')->whereDate("start_date", '>=', $start_date)->whereDate("start_date", '<=', $end_date)->sum('total_leave_days');
+                    $pending  = Leave::where('employee_id', $employee->id)->where('status', 'Pending')->whereDate("start_date", '>=', $start_date)->whereDate("start_date", '<=', $end_date)->sum('total_leave_days');
+
+                    $leaveBalance = UserLeaveBalanceYear::where("leaves_year", $year)->where("user_id", $employee->id)->sum("pending_leaves");
+
+                    $totalApproved += $approved;
+                    $totalReject   += $reject;
+                    $totalPending  += $pending;
+                    $totalLeaveBalance  += $leaveBalance;
+
+                    $employeeLeave['approved'] = $approved;
+                    $employeeLeave['reject']   = $reject;
+                    $employeeLeave['pending']  = $pending;
+                    $employeeLeave['leaveBalance']  = $leaveBalance;
+
+                    foreach ($leaveTypes as $leaveType)
+                    {
+                         // $leaveBalanceOfLeaveType = UserLeaveBalanceYear::where("leave_type_id", $leaveType->id)->where("leaves_year", $year)->where("user_id", $employee->id)->sum("pending_leaves") ?? 0;
+                         $leaveBalanceOfLeaveType = Leave::where('employee_id', $employee->id)->where("leave_type_id", $leaveType->id)->where('status', 'Approved')->whereDate("start_date", '>=', $start_date)->whereDate("start_date", '<=', $end_date)->sum('total_leave_days');
+
+                         $employeeLeave[$leaveType->title . "_" . $leaveType->id] = $leaveBalanceOfLeaveType;
+                    }
+
+                    $leaves[] = $employeeLeave;
+               }
+
+               $filter['totalApproved'] = $totalApproved;
+               $filter['totalReject']   = $totalReject;
+               $filter['totalPending']  = $totalPending;
+               $filter['totalLeaveBalance']  = $totalLeaveBalance;
+               $requestStartDate = $request->start_date ?? Carbon::now()->startOfMonth()->format('Y-m-d');
+               $requestEndDate = $request->end_date ?? Carbon::now()->startOfMonth()->endOfMonth()->format('Y-m-d');
+               return view('report.leave', compact('department', 'branch', 'leaves', 'filterYear', 'filter', 'yearsCount', 'requestStartDate', 'requestEndDate', 'leaveTypes'));
+          }
+          else
+          {
+               return redirect()->back()->with('error', __('Permission denied.'));
+          }
+     }
+
+     public function employeeLeave(Request $request, $employee_id, $status, $type, $start_date, $end_date)
+     {
+          if (Auth::user()->can('Manage Report'))
+          {
+               $employee = Employee::find($employee_id);
+               $leaveTypes = LeaveType::where('created_by', Auth::user()->creatorId())->where('play_slab_id', $employee->play_slab_id)->get();
+               $leaves     = [];
+               foreach ($leaveTypes as $leaveType)
+               {
+                    $leave        = new Leave();
+                    $leave->title = $leaveType->title;
+                    $totalLeave   = Leave::where('employee_id', $employee_id)->where('status', $status)->where('leave_type_id', $leaveType->id);
+                    $totalLeave1  = Leave::where('employee_id', $employee_id)->get();
+                    if ($type == 'yearly')
+                    {
+                         // $totalLeave->whereYear('applied_on', $year);
+                         $totalLeave->whereYear('end_date', $end_date);
+                    }
+                    else
+                    {
+                         // $totalLeave->whereMonth('applied_on', $m)->whereYear('applied_on', $y);
+                         $totalLeave->whereDate("start_date", '>=', $start_date)->whereDate("start_date", '<=', $end_date);
+                    }
+                    // $totalLeave = $totalLeave->count();
+                    $totalLeave = $totalLeave->get();
+
+                    $totalLeaveCount = [];
+                    $daystotalLeaveCount = [];
+                    foreach ($totalLeave as $leaveCount)
+                    {
+                         array_push($totalLeaveCount, $leaveCount->leave_day);
+                         array_push($daystotalLeaveCount, $leaveCount->total_leave_days);
+                    }
+
+                    $leave->total = array_sum($totalLeaveCount);
+                    $leave->Daystotal = array_sum($daystotalLeaveCount);
+                    $leaves[]     = $leave;
+               }
+
+               $leaveData = Leave::where('employee_id', $employee_id)->where('status', $status);
+               if ($type == 'yearly')
+               {
+                    // $leaveData->whereYear('applied_on', $year);
+                    $leaveData->whereYear('end_date', $end_date);
+               }
+               else
+               {
+                    // $leaveData->whereMonth('applied_on', $m)->whereYear('applied_on', $y);
+                    $leaveData->whereDate("start_date", '>=', $start_date)->whereDate("start_date", '<=', $end_date);
+               }
+               $leaveData = $leaveData->get();
+               $leaveDataCount = $leaveData->sum('total_leave_days');
+               return view('report.leaveShow', compact('leaves', 'leaveData', 'leaveDataCount'));
+          }
+          else
+          {
+               return redirect()->back()->with('error', __('Permission denied.'));
+          }
+     }
+
+     public function accountStatement(Request $request)
+     {
+          if (Auth::user()->can('Manage Report'))
+          {
+               $accountList = AccountList::where('created_by', Auth::user()->creatorId())->get()->pluck('account_name', 'id');
+               $accountList->prepend('All', '');
+
+               $filterYear['account'] = __('All');
+               $filterYear['type']    = __('Income');
+
+
+               if ($request->type == 'expense')
+               {
+                    $accountData = Expense::orderBy('id');
+                    $accounts    = Expense::select('account_lists.id', 'account_lists.account_name')->leftjoin('account_lists', 'expenses.account_id', '=', 'account_lists.id')->groupBy('expenses.account_id')->selectRaw('sum(amount) as total');
+
+                    if (!empty($request->start_month) && !empty($request->end_month))
+                    {
+                         $start = strtotime($request->start_month);
+                         $end   = strtotime($request->end_month);
+                    }
+                    else
+                    {
+                         $start = strtotime(date('Y-m'));
+                         $end   = strtotime(date('Y-m', strtotime("-5 month")));
+                    }
+
+                    $currentdate = $start;
+
+                    while ($currentdate <= $end)
+                    {
+                         $data['month'] = date('m', $currentdate);
+                         $data['year']  = date('Y', $currentdate);
+
+                         $accountData->Orwhere(
+                              function ($query) use ($data)
+                              {
+                                   $query->whereMonth('date', $data['month'])->whereYear('date', $data['year']);
+                              }
+                         );
+
+                         $accounts->Orwhere(
+                              function ($query) use ($data)
+                              {
+                                   $query->whereMonth('date', $data['month'])->whereYear('date', $data['year']);
+                              }
+                         );
+
+                         $currentdate = strtotime('+1 month', $currentdate);
+                    }
+
+                    $filterYear['startDateRange'] = date('M-Y', $start);
+                    $filterYear['endDateRange']   = date('M-Y', $end);
+
+                    if (!empty($request->account))
+                    {
+                         $accountData->where('account_id', $request->account);
+                         $accounts->where('account_lists.id', $request->account);
+
+                         $filterYear['account'] = !empty(AccountList::find($request->account)) ? Department::find($request->account)->account_name : '';
+                    }
+
+                    $accounts->where('expenses.created_by', Auth::user()->creatorId());
+
+                    $filterYear['type'] = __('Expense');
+               }
+               else
+               {
+                    $accountData = Deposit::orderBy('id');
+                    $accounts    = Deposit::select('account_lists.id', 'account_lists.account_name')->leftjoin('account_lists', 'deposits.account_id', '=', 'account_lists.id')->groupBy('deposits.account_id')->selectRaw('sum(amount) as total');
+
+                    if (!empty($request->start_month) && !empty($request->end_month))
+                    {
+
+                         $start = strtotime($request->start_month);
+                         $end   = strtotime($request->end_month);
+                    }
+                    else
+                    {
+                         $start = strtotime(date('Y-m'));
+                         $end   = strtotime(date('Y-m', strtotime("-5 month")));
+                    }
+
+
+                    $currentdate = $start;
+
+                    while ($currentdate <= $end)
+                    {
+                         $data['month'] = date('m', $currentdate);
+                         $data['year']  = date('Y', $currentdate);
+
+                         $accountData->Orwhere(
+                              function ($query) use ($data)
+                              {
+                                   $query->whereMonth('date', $data['month'])->whereYear('date', $data['year']);
+                              }
+                         );
+                         $currentdate = strtotime('+1 month', $currentdate);
+
+                         $accounts->Orwhere(
+                              function ($query) use ($data)
+                              {
+                                   $query->whereMonth('date', $data['month'])->whereYear('date', $data['year']);
+                              }
+                         );
+                         $currentdate = strtotime('+1 month', $currentdate);
+                    }
+
+                    $filterYear['startDateRange'] = date('M-Y', $start);
+                    $filterYear['endDateRange']   = date('M-Y', $end);
+
+                    if (!empty($request->account))
+                    {
+                         $accountData->where('account_id', $request->account);
+                         $accounts->where('account_lists.id', $request->account);
+
+                         $filterYear['account'] = !empty(AccountList::find($request->account)) ? Department::find($request->account)->account_name : '';
+                    }
+                    $accounts->where('deposits.created_by', Auth::user()->creatorId());
+               }
+
+               $accountData->where('created_by', Auth::user()->creatorId());
+               $accountData = $accountData->get();
+
+               $accounts = $accounts->get();
+
+
+               return view('report.account_statement', compact('accountData', 'accountList', 'accounts', 'filterYear'));
+          }
+          else
+          {
+               return redirect()->back()->with('error', __('Permission denied.'));
+          }
+     }
+
+     public function payroll(Request $request)
+     {
+
+          if (Auth::user()->can('Manage Report'))
+          {
+               $branch = Branch::where('created_by', Auth::user()->creatorId())->get()->pluck('name', 'id');
+               $branch->prepend('All', '');
+
+               $department = Department::where('created_by', Auth::user()->creatorId())->get()->pluck('name', 'id');
+               $department->prepend('All', '');
+
+               $filterYear['branch']     = __('All');
+               $filterYear['department'] = __('All');
+               $filterYear['type']       = __('Monthly');
+
+               $payslips = PaySlip::select('pay_slips.*', 'employees.name')->leftjoin('employees', 'pay_slips.employee_id', '=', 'employees.id')->where('pay_slips.created_by', Auth::user()->creatorId());
+
+
+               if ($request->type == 'monthly' && !empty($request->month))
+               {
+
+                    $payslips->where('salary_month', $request->month);
+
+                    $filterYear['dateYearRange'] = date('M-Y', strtotime($request->month));
+                    $filterYear['type']          = __('Monthly');
+               }
+               elseif (!isset($request->type))
+               {
+                    $month = date('Y-m');
+
+                    $payslips->where('salary_month', $month);
+
+                    $filterYear['dateYearRange'] = date('M-Y', strtotime($month));
+                    $filterYear['type']          = __('Monthly');
+               }
+
+
+               if ($request->type == 'yearly' && !empty($request->year))
+               {
+                    $startMonth = $request->year . '-01';
+                    $endMonth   = $request->year . '-12';
+                    $payslips->where('salary_month', '>=', $startMonth)->where('salary_month', '<=', $endMonth);
+
+                    $filterYear['dateYearRange'] = $request->year;
+                    $filterYear['type']          = __('Yearly');
+               }
+
+
+               if (!empty($request->branch))
+               {
+                    $payslips->where('employees.branch_id', $request->branch);
+
+                    $filterYear['branch'] = !empty(Branch::find($request->branch)) ? Branch::find($request->branch)->name : '';
+               }
+
+               if (!empty($request->department))
+               {
+                    $payslips->where('employees.department_id', $request->department);
+
+                    $filterYear['department'] = !empty(Department::find($request->department)) ? Department::find($request->department)->name : '';
+               }
+
+               $payslips = $payslips->get();
+
+               $totalBasicSalary = $totalNetSalary = $totalAllowance = $totalCommision = $totalLoan = $totalSaturationDeduction = $totalOtherPayment = $totalOverTime = 0;
+
+               foreach ($payslips as $payslip)
+               {
+                    $totalBasicSalary += $payslip->basic_salary;
+                    $totalNetSalary   += $payslip->net_payble;
+
+                    $allowances = json_decode($payslip->allowance);
+                    foreach ($allowances as $allowance)
+                    {
+                         $totalAllowance += $allowance->amount;
+                    }
+
+                    $commisions = json_decode($payslip->commission);
+                    foreach ($commisions as $commision)
+                    {
+                         $totalCommision += $commision->amount;
+                    }
+
+                    $loans = json_decode($payslip->loan);
+                    foreach ($loans as $loan)
+                    {
+                         $totalLoan += $loan->amount;
+                    }
+
+                    $saturationDeductions = json_decode($payslip->saturation_deduction);
+                    foreach ($saturationDeductions as $saturationDeduction)
+                    {
+                         $totalSaturationDeduction += $saturationDeduction->amount;
+                    }
+
+                    $otherPayments = json_decode($payslip->other_payment);
+                    foreach ($otherPayments as $otherPayment)
+                    {
+                         $totalOtherPayment += $otherPayment->amount;
+                    }
+
+                    $overtimes = json_decode($payslip->overtime);
+                    foreach ($overtimes as $overtime)
+                    {
+                         $days  = $overtime->number_of_days;
+                         $hours = $overtime->hours;
+                         $rate  = $overtime->rate;
+
+                         $totalOverTime += ($rate * $hours) * $days;
+                    }
+               }
+
+               $filterData['totalBasicSalary']         = $totalBasicSalary;
+               $filterData['totalNetSalary']           = $totalNetSalary;
+               $filterData['totalAllowance']           = $totalAllowance;
+               $filterData['totalCommision']           = $totalCommision;
+               $filterData['totalLoan']                = $totalLoan;
+               $filterData['totalSaturationDeduction'] = $totalSaturationDeduction;
+               $filterData['totalOtherPayment']        = $totalOtherPayment;
+               $filterData['totalOverTime']            = $totalOverTime;
+
+
+               $starting_year = date('Y', strtotime('-5 year'));
+               $ending_year   = date('Y', strtotime('+5 year'));
+
+               $filterYear['starting_year'] = $starting_year;
+               $filterYear['ending_year']   = $ending_year;
+
+               return view('report.payroll', compact('payslips', 'filterData', 'branch', 'department', 'filterYear'));
+          }
+          else
+          {
+               return redirect()->back()->with('error', __('Permission denied.'));
+          }
+     }
+
+
+     private function streamDownload(callable $callback, $fileName)
+     {
+          $response = new StreamedResponse($callback, 200, [
+               'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+               'Content-Disposition' => 'attachment; filename="' . $fileName . '"',
+          ]);
+
+          return $response->send();
+     }
+
+     public function calculateTime($hours, $minutes)
+     {
+          $totalMinutes = ($hours * 60) + $minutes;
+          $calculatedHours = floor($totalMinutes / 60);
+          $calculatedMinutes = $totalMinutes % 60;
+          return sprintf("%02d:%02d:00", $calculatedHours, $calculatedMinutes);
+     }
+
+     public function monthlyAttendance(Request $request)
+     {
+          if (Auth::user()->can('Manage Report'))
+          {
+               $setting = Utility::settings();
+
+               $weekOffArray = collect([
+                    'company_office_week_off_monday' => 'Monday',
+                    'company_office_week_off_tuesday' => 'Tuesday',
+                    'company_office_week_off_wednesday' => 'Wednesday',
+                    'company_office_week_off_thusday' => 'Thursday',
+                    'company_office_week_off_friday' => 'Friday',
+                    'company_office_week_off_saturday' => 'Saturday',
+                    'company_office_week_off_sunday' => 'Sunday',
+               ])->filter(fn($day, $key) => $setting[$key] === 'on')->values()->toArray();
+
+               $branch = Branch::select("id", "name", "created_by")->where('created_by', Auth::user()->creatorId())->get()->pluck('name', 'id');
+               $branch->prepend('All', '');
+
+               $department = Department::select("id", "name", "created_by")->where('created_by', Auth::user()->creatorId())->get()->pluck('name', 'id');
+               $department->prepend('All', '');
+
+               $data['branch']     = __('All');
+               $data['department'] = __('All');
+
+               $employees = Employee::with(['designation:id,department_id,name', 'branch:id,name'])->select('id', 'name', 'designation_id', 'branch_id', 'department_id', 'is_custom_weekoffs', 'weekoffs_data', 'employee_id');
+
+               if (!empty($request->employee_id) && ($request->employee_id[0] != 0 || !in_array(0, $request->employee_id)))
+               {
+                    $employees->whereIn('id', $request->employee_id);
+               }
+
+               if (Auth::user()->type == 'company')
+               {
+                    $employees = $employees->where('created_by', Auth::user()->creatorId());
+               }
+               else
+               {
+                    $assign_employees = json_decode(Auth::user()->assign_employees) ?? [];
+                    $employees = $employees->whereIn('id', $assign_employees)->where('created_by', Auth::user()->creatorId());
+               }
+
+               if (!empty($request->branch_id) && $request->branch_id != 0)
+               {
+                    $employees->where('branch_id', $request->branch_id);
+                    $data['branch'] = $branch[$request->branch_id] ?? '';
+               }
+               if (!empty($request->department) && $request->department != 0)
+               {
+                    $employees->where('department_id', $request->department);
+                    $data['department'] = $department[$request->department] ?? '';
+               }
+
+
+               $employees = $employees->where("employee_exit", 0)->paginate(25);
+
+               $start_date = Carbon::now()->startOfMonth();
+               $end_date = Carbon::now()->startOfMonth()->endOfMonth();
+               // If custom dates are provided in the request
+               if (!empty($request->start_date) && !empty($request->end_date))
+               {
+                    $start_date = Carbon::parse($request->start_date);
+                    $end_date = Carbon::parse($request->end_date);
+               }
+
+               // Generate dates for the entire month
+               $monthDates = [];
+               while ($start_date <= $end_date)
+               {
+                    $monthDates[] = $start_date->format('Y-m-d'); // Store the date in 'Y-m-d' format
+                    $start_date->addDay(); // Move to the next day
+               }
+
+               $employeesAttendance = [];
+               $totalPresent = $totalLeave = $totalEarlyLeave =  $overtimeHours = $overtimeMins = $earlyleaveHours = $earlyleaveMins = $lateHours = $lateMins = 0;
+               $holidayData = Holiday::select("id", "status", "start_date", "end_date", "created_by", "branch_id", "department_id", "occasion")
+                    ->where('created_by', Auth::user()->creatorId())
+                    ->where(function ($query) use ($monthDates)
+                    {
+                         $query->whereIn('start_date', $monthDates)
+                              ->orWhereIn('end_date', $monthDates);
+                    })
+                    ->get();
+
+               $uniqueEmployeeIds = $employees->pluck('id')->unique()->toArray();
+
+               $leaveData = Leave::select("id", "employee_id", "status", "start_date", "end_date", "created_by", "total_leave_days")
+                    ->where('status', 'Approved')
+                    ->where('created_by', Auth::user()->creatorId())
+                    ->whereIn('employee_id', $uniqueEmployeeIds)
+                    ->where(function ($query) use ($monthDates)
+                    {
+                         foreach ($monthDates as $date)
+                         {
+                              $query->orWhere(function ($subQuery) use ($date)
+                              {
+                                   $subQuery->where('start_date', '<=', $date)->where('end_date', '>=', $date);
+                              });
+                         }
+                    })
+                    ->get();
+
+               $leaveDataArray = [];
+               foreach ($leaveData as $item)
+               {
+                    foreach ($monthDates as $date)
+                    {
+                         if ($item->start_date <= $date && $item->end_date >= $date)
+                         {
+                              $leaveDataArray[$item->employee_id][$date] = $item;
+                         }
+                    }
+               }
+
+               $employeeAttendanceData = AttendanceEmployee::whereIn('employee_id', $uniqueEmployeeIds)->whereIn('date', $monthDates)->get();
+
+               $totalPresent = $employeeAttendanceData->where("status", "Present")->count("*") ?? 0;
+
+               $employeeAttendance = AttendanceEmployee::whereIn('employee_id', $uniqueEmployeeIds)->select('employee_id', 'overtime', 'status', 'late', 'early_leaving', 'date')
+                    ->whereIn('date', $monthDates)->get();
+
+               $dateWiseAttendance = [];
+               foreach ($employeeAttendance as $attendance)
+               {
+                    $attendance_date = Carbon::parse($attendance->getRawOriginal("date"))->format('Y-m-d');
+                    if (!isset($dateWiseAttendance[$attendance->employee_id]))
+                    {
+                         $dateWiseAttendance[$attendance->employee_id] = []; // Initialize the employee's entry
+                    }
+                    // Assign attendance data to the corresponding date for the employee
+                    $dateWiseAttendance[$attendance->employee_id][$attendance_date] = [
+                         'status' => $attendance->status,
+                         'overtime' => $attendance->overtime,
+                         'late' => $attendance->late,
+                         'early_leaving' => $attendance->early_leaving,
+                    ];
+               }
+
+               foreach ($dateWiseAttendance as $employeeId => $attendanceData)
+               {
+                    foreach ($monthDates as $date)
+                    {
+                         if (!empty($attendanceData[$date]))
+                         {
+                              $attendanceStatus = $attendanceData[$date]['status'];
+
+                              if ($attendanceStatus == 'Present')
+                              {
+                                   if ($attendanceData[$date]['overtime'] > 0 && $attendanceData[$date]['overtime'] != "00:00:00")
+                                   {
+                                        $overtimeHours += date('H', strtotime($attendanceData[$date]['overtime']));
+                                        $overtimeMins += date('i', strtotime($attendanceData[$date]['overtime']));
+                                   }
+
+                                   if ($attendanceData[$date]['early_leaving'] > 0 && $attendanceData[$date]['early_leaving'] != "00:00:00")
+                                   {
+                                        $earlyleaveHours += date('H', strtotime($attendanceData[$date]['early_leaving']));
+                                        $earlyleaveMins += date('i', strtotime($attendanceData[$date]['early_leaving']));
+                                   }
+
+                                   if ($attendanceData[$date]['late'] > 0 && $attendanceData[$date]['late'] != "00:00:00")
+                                   {
+                                        $lateHours += date('H', strtotime($attendanceData[$date]['late']));
+                                        $lateMins += date('i', strtotime($attendanceData[$date]['late']));
+                                   }
+                              }
+                         }
+                    }
+               }
+               $data['totalOvertime']   = $this->calculateTime($overtimeHours, $overtimeMins);
+               $data['totalEarlyLeave'] = $this->calculateTime($earlyleaveHours, $earlyleaveMins);
+               $data['totalLate']       = $this->calculateTime($lateHours, $lateMins);
+
+               foreach ($employees as $key => $employee)
+               {
+                    $attendances = [
+                         'employee_id' => $employee->employee_id,
+                         'name' => $employee->name,
+                         'designation' => optional($employee->designation)->name,
+                         'branch' => optional($employee->branch)->name,
+                    ];
+
+                    $is_custom_weekoffs = $employee->is_custom_weekoffs ?? 0;
+                    $employee_weekoffs_data = json_decode($employee->weekoffs_data) ?? [];
+
+
+
+                    $attendanceStatus = collect($monthDates)->mapWithKeys(function ($date) use ($employee, $leaveDataArray, $holidayData, $weekOffArray, $is_custom_weekoffs, $employee_weekoffs_data, &$totalLeave, &$overtimeHours, &$overtimeMins, &$earlyLeaveHours, &$earlyLeaveMins, &$lateHours, &$lateMins, $setting, $dateWiseAttendance)
+                    {
+                         // Check for custom week offs or default week offs
+                         $isWeekOff = $is_custom_weekoffs
+                              ? in_array($date, $employee_weekoffs_data)
+                              : in_array(date('l', strtotime($date)), $weekOffArray);
+
+                         $holidays_branch_ids = [];
+                         foreach ($holidayData as $holiday)
+                         {
+                              $start_date = Carbon::parse($holiday->start_date)->format('Y-m-d');
+                              $end_date = Carbon::parse($holiday->end_date)->format('Y-m-d');
+                              if ($start_date == $date || $end_date == $date)
+                              {
+                                   $holidays_branch_ids = json_decode($holiday->branch_id) ?? [];
+                              }
+                         }
+
+                         // Determine leave status and update total leave
+                         if (!empty($leaveDataArray) && !empty($leaveDataArray[$employee->id]) && !empty($leaveDataArray[$employee->id][$date]))
+                         {
+                              if ($leaveDataArray[$employee->id][$date]['total_leave_days'] == 0.5)
+                              {
+                                   $totalLeave += 0.5; // Increment total leave by 0.5 for half-day leave
+                                   return [$date => 'HD']; // Half-day leave
+                              }
+                              else
+                              {
+                                   $totalLeave += 1; // Increment total leave by 1 for full-day leave
+                                   return [$date => 'L']; // Full-day leave
+                              }
+                         }
+                         else
+                         {
+                              if ($date <= date('Y-m-d'))
+                              {
+                                   if (empty($dateWiseAttendance) || !isset($dateWiseAttendance[$employee->id]) || !isset($dateWiseAttendance[$employee->id][$date]))
+                                   {
+                                        if ($isWeekOff)
+                                        {
+                                             return [$date => 'WO']; // Week off
+                                        }
+                                        else
+                                        {
+                                             if (array_intersect([0, $employee->branch_id], $holidays_branch_ids))
+                                             {
+                                                  return [$date => 'H']; // Holiday
+                                             }
+                                             else
+                                             {
+                                                  if ($date == date('Y-m-d') && $setting['company_start_time'] >= date('H:i'))
+                                                  {
+                                                       return [$date => '']; // No status, it's before the start time
+                                                  }
+                                                  else
+                                                  {
+                                                       $totalLeave += 1;
+                                                       return [$date => 'A']; // Absent
+                                                  }
+                                             }
+                                        }
+                                   }
+                                   else
+                                   {
+                                        $attendanceStatus = $dateWiseAttendance[$employee->id][$date]['status'];
+
+                                        if ($attendanceStatus == 'Present')
+                                        {
+                                             $attendanceStatus = 'P';
+                                        }
+                                        else
+                                        {
+                                             $attendanceStatus = '';
+                                        }
+                                        return [$date => $attendanceStatus]; // Return attendance status for present days
+                                   }
+                              }
+                              else
+                              {
+                                   if ($isWeekOff)
+                                   {
+                                        return [$date => 'WO']; // Week off
+                                   }
+                                   else
+                                   {
+                                        if (array_intersect([0, $employee->branch_id], $holidays_branch_ids))
+                                        {
+                                             return [$date => 'H']; // Holiday
+                                        }
+                                        else
+                                        {
+                                             return [$date => ''];
+                                        }
+                                   }
+                              }
+                         }
+                         return [$date => '']; // Future date, no status
+                    })->toArray();
+
+                    $attendances['status'] = $attendanceStatus;
+                    $employeesAttendance[] = $attendances;
+               }
+
+               // calculate total Early Leaving Time
+
+
+               $data['totalPresent']    = $totalPresent;
+               $data['totalLeave']      = $totalLeave;
+
+               $requestStartDate = $request->start_date ?? Carbon::now()->startOfMonth()->format('Y-m-d');
+               $requestEndDate = $request->end_date ?? Carbon::now()->startOfMonth()->endOfMonth()->format('Y-m-d');
+               $requestBranchId = $request->branch_id ?? "";
+               $requestDepartmentId = $request->department ?? "";
+               $requestEmployeeId = $request->employee_id ?? [0];
+
+               if ($request->ajax())
+               {
+                    // If it's an AJAX request, return only the rows to be appended
+                    return view('report.attendance_rows', compact('employeesAttendance'))->render();
+               }
+
+               return view(
+                    'report.monthlyAttendance',
+                    compact(
+                         'employeesAttendance',
+                         'requestStartDate',
+                         'requestEndDate',
+                         'requestBranchId',
+                         'requestDepartmentId',
+                         'requestEmployeeId',
+                         'branch',
+                         'department',
+                         'monthDates',
+                         'data'
+                    )
+               );
+          }
+          else
+          {
+               return redirect()->back()->with('error', __('Permission denied.'));
+          }
+     }
+     public function monthlyAttendance_old25_10(Request $request)
+     {
+          // if ($request->ip() == "49.36.89.12");
+          // {
+          //      return $this->monthlyAttendance_Working($request);
+          // }
+
+          if (Auth::user()->can('Manage Report'))
+          {
+               $setting = Utility::settings();
+
+               $weefOffArray = [];
+               if ($setting['company_office_week_off_monday'] == 'on')
+               {
+                    $weefOffArray[] = "Monday";
+               }
+               if ($setting['company_office_week_off_tuesday'] == 'on')
+               {
+                    $weefOffArray[] = "Tuesday";
+               }
+               if ($setting['company_office_week_off_wednesday'] == 'on')
+               {
+                    $weefOffArray[] = "Wednesday";
+               }
+               if ($setting['company_office_week_off_thusday'] == 'on')
+               {
+                    $weefOffArray[] = "Thursday";
+               }
+               if ($setting['company_office_week_off_friday'] == 'on')
+               {
+                    $weefOffArray[] = "Friday";
+               }
+               if ($setting['company_office_week_off_saturday'] == 'on')
+               {
+                    $weefOffArray[] = "Saturday";
+               }
+               if ($setting['company_office_week_off_sunday'] == 'on')
+               {
+                    $weefOffArray[] = "Sunday";
+               }
+
+               $branch = Branch::select("id", "name", "created_by")->where('created_by', Auth::user()->creatorId())->get()->pluck('name', 'id');
+               $branch->prepend('All', '');
+
+               $department = Department::select("id", "name", "created_by")->where('created_by', Auth::user()->creatorId())->get()->pluck('name', 'id');
+               $department->prepend('All', '');
+
+               $data['branch']     = __('All');
+               $data['department'] = __('All');
+
+               $employees = Employee::with('designation:id,department_id,name')->select('id', 'name', 'designation_id', 'branch_id', 'department_id', 'is_custom_weekoffs', 'weekoffs_data', 'employee_id');
+
+               if (!empty($request->employee_id) && $request->employee_id[0] != 0)
+               {
+                    $employees->whereIn('id', $request->employee_id);
+               }
+
+               if (Auth::user()->type == 'company')
+               {
+                    $employees = $employees->where('created_by', Auth::user()->creatorId());
+               }
+               else
+               {
+                    $assign_employees = json_decode(Auth::user()->assign_employees) ?? [];
+                    $employees = $employees->whereIn('id', $assign_employees)->where('created_by', Auth::user()->creatorId());
+               }
+
+               // new
+
+               if (!empty($request->branch_id))
+               {
+                    if ($request->branch_id != 0)
+                    {
+                         $employees->where('branch_id', $request->branch_id);
+                         $data['branch'] = !empty(Branch::find($request->branch_id)) ? Branch::find($request->branch_id)->name : '';
+                    }
+               }
+
+               if (!empty($request->department))
+               {
+                    if ($request->department != 0)
+                    {
+                         $employees->where('department_id', $request->department);
+                         $data['department'] = !empty(Department::find($request->department)) ? Department::find($request->department)->name : '';
+                    }
+               }
+
+               if (!empty($request->employee_id))
+               {
+                    if (!in_array(0, $request->employee_id))
+                    {
+                         $employees->whereIn('id', $request->employee_id);
+                         // dd($request->employee_id, Employee::where("id", $request->employee_id)->first());
+                         // $data['employees'] = !empty(Employee::find($request->employee_id)) ? Employee::find($request->employee_id)->name ?? "" : '';
+                    }
+               }
+
+               // new
+
+               $employees = $employees->get();
+
+               $month    = date('m');
+               $year     = date('Y');
+               $currentdate = Carbon::now()->startOfMonth()->format('Y-m-d');
+               if (!empty($request->month))
+               {
+                    $currentdate = strtotime($request->month);
+                    $month       = date('m', $currentdate);
+                    $year        = date('Y', $currentdate);
+                    $curMonth    = date('M-Y', strtotime($request->month));
+                    $currentMonth = $month . '-' . $year;
+               }
+               else
+               {
+                    $month    = date('m');
+                    $year     = date('Y');
+                    $curMonth = date('M-Y', strtotime($year . '-' . $month));
+                    $currentMonth = $month . '-' . $year;
+               }
+
+               // $num_of_days = date('t', mktime(0, 0, 0, $month, 1, $year));
+               // for ($i = 1; $i <= $num_of_days; $i++)
+               // {
+               //      $dates[] = str_pad($i, 2, '0', STR_PAD_LEFT);
+               // }
+
+
+               // get month dates
+               $monthDates = [];
+               $getDate = DateTime::createFromFormat('Y-m-d', "$year-$month-01");
+               $daysInMonth = $getDate->format('t');
+
+               for ($day = 1; $day <= $daysInMonth; $day++)
+               {
+                    $formattedDate = $getDate->format('Y-m-d');
+                    $monthDates[] = $formattedDate;
+                    $getDate->modify('+1 day');
+               }
+
+               // get month dates
+
+               $employeesAttendance = [];
+               $totalPresent        = $totalLeave = $totalEarlyLeave = 0;
+               $ovetimeHours        = $overtimeMins = $earlyleaveHours = $earlyleaveMins = $lateHours = $lateMins = 0;
+
+               foreach ($employees as $key => $employee)
+               {
+                    $attendances['employee_id'] = $employee->employee_id;
+                    $attendances['name'] = $employee->name;
+                    $attendances['designation'] = (!empty($employee->designation)) ? $employee->designation->name : '';
+                    $attendances['branch'] = (!empty($employee->branch)) ? $employee->branch->name : '';
+
+                    $is_custom_weekoffs = $employee->is_custom_weekoffs ?? 0;
+                    $employee_weekoffs_data = json_decode($employee->weekoffs_data) ?? [];
+
+                    $test = [];
+                    $attendanceStatus = [];
+                    foreach ($monthDates as $date)
+                    {
+                         // $dateFormat = $year . '-' . $month . '-' . $date;
+                         $dateFormat = $date;
+
+                         $localLeave = Leave::select("id", "employee_id", "status", "start_date", "end_date", "created_by", "total_leave_days")->where('employee_id', $employee->id)->where('status', 'Approved')
+                              ->where('start_date', '<=', $dateFormat)->where('end_date', '>=', $dateFormat)
+                              ->where('created_by', Auth::user()->creatorId())
+                              ->first();
+
+                         $holiday = Holiday::select("id", "status", "start_date", "end_date", "created_by", "branch_id", "department_id", "occasion")->where('status', 1)
+                              ->where('start_date', '=', $dateFormat)->orWhere('end_date', '=', $dateFormat)
+                              ->where('created_by', Auth::user()->creatorId())
+                              ->first();
+
+
+                         // check is week off
+                         $isWeekOff = false;
+                         if ($is_custom_weekoffs == 1) // if 1 then check custom week off of employee
+                         {
+                              if (in_array($dateFormat, $employee_weekoffs_data))
+                              {
+                                   $isWeekOff = true;
+                              }
+                         }
+                         else // if 0 then check company week off
+                         {
+                              $days = date('l', strtotime($dateFormat));
+                              if (in_array($days, $weefOffArray))
+                              {
+                                   $isWeekOff = true;
+                              }
+                         }
+                         // check is week off
+
+                         if ($localLeave != null) // check if leave on loop date 
+                         {
+                              if ($localLeave->total_leave_days == "0.5")
+                              {
+                                   $attendanceStatus[$date] = "HD";
+                                   $totalLeave              += 0.5;
+                              }
+                              else
+                              {
+                                   $attendanceStatus[$date] = "L";
+                                   $totalLeave              += 1;
+                              }
+                         }
+                         else // else these is no leave applied for leave day
+                         {
+                              if ($dateFormat <= date('Y-m-d')) // check if loop date is grater than todays date or not, if yes then check data according
+                              {
+                                   $employeeAttendance = AttendanceEmployee::where('employee_id', $employee->id)->where('date', $dateFormat)->first();
+
+                                   if (empty($employeeAttendance)) // checkl if attendance is empty
+                                   {
+                                        if ($isWeekOff)
+                                        {
+                                             $attendanceStatus[$date] = 'WO';
+                                        }
+                                        else
+                                        {
+                                             $holidays_branch_ids = json_decode($holiday->branch_id ?? "") ?? [];
+                                             if (array_intersect([0, $employee->branch_id], $holidays_branch_ids))
+                                             {
+                                                  $attendanceStatus[$date] = 'H';
+                                             }
+                                             else
+                                             {
+                                                  if ($dateFormat == date('Y-m-d') && $setting['company_start_time'] >= date('H:i'))
+                                                  {
+                                                       $attendanceStatus[$date] = '';
+                                                  }
+                                                  else
+                                                  {
+                                                       $attendanceStatus[$date] = 'A';
+                                                       $totalLeave              += 1;
+                                                  }
+                                             }
+                                        }
+                                   }
+                                   elseif (!empty($employeeAttendance) && $employeeAttendance->status == 'Present')
+                                   {
+                                        $attendanceStatus[$date] = 'P';
+                                        $totalPresent            += 1;
+
+                                        if ($employeeAttendance->overtime > 0 && $employeeAttendance->overtime != "00:00:00")
+                                        {
+                                             $ovetimeHours += date('H', strtotime($employeeAttendance->overtime));
+                                             $overtimeMins += date('i', strtotime($employeeAttendance->overtime));
+                                        }
+
+                                        if ($employeeAttendance->early_leaving > 0  && $employeeAttendance->early_leaving != "00:00:00")
+                                        {
+                                             $earlyleaveHours += date('H', strtotime($employeeAttendance->early_leaving));
+                                             $earlyleaveMins  += date('i', strtotime($employeeAttendance->early_leaving));
+                                        }
+
+                                        if ($employeeAttendance->late > 0  && $employeeAttendance->late != "00:00:00")
+                                        {
+                                             $lateHours += date('H', strtotime($employeeAttendance->late));
+                                             $lateMins  += date('i', strtotime($employeeAttendance->late));
+                                        }
+                                   }
+                                   else
+                                   {
+                                        $attendanceStatus[$date] = '';
+                                   }
+                              }
+                              else // else means its future date, then there should be week off or holiday, else show blank
+                              {
+                                   if ($isWeekOff)
+                                   {
+                                        $attendanceStatus[$date] = 'WO';
+                                   }
+                                   else
+                                   {
+                                        $holidays_branch_ids = json_decode($holiday->branch_id ?? "") ?? [];
+                                        if (array_intersect([0, $employee->branch_id], $holidays_branch_ids))
+                                        // if (!empty($holiday) && $holiday->branch_id == $employee->branch_id)
+                                        {
+                                             $attendanceStatus[$date] = 'H';
+                                        }
+                                        else
+                                        {
+                                             $attendanceStatus[$date] = '';
+                                        }
+                                   }
+                              }
+                         }
+                    }
+                    $attendances['status'] = $attendanceStatus;
+                    $employeesAttendance[] = $attendances;
+               }
+
+               // return $employeesAttendance;
+
+               // $totalOverTime   = $ovetimeHours + ($overtimeMins / 60);
+               // $totalEarlyleave = $earlyleaveHours + ($earlyleaveMins / 60);
+               // $totalLate       = $lateHours + ($lateMins / 60);
+
+
+               // calculate total Early Leaving Time
+
+               $totalOvertimeMinutes = $ovetimeHours * 60 + $overtimeMins;
+               $calculatedOvertimeHours = floor($totalOvertimeMinutes / 60);
+               $calculatedOvertimeMinutes = $totalOvertimeMinutes % 60;
+               $totalOverTime = sprintf("%02d:%02d:00", $calculatedOvertimeHours, $calculatedOvertimeMinutes);
+               // calculate total Early Leaving Time
+
+
+               // calculate total Early Leaving Time
+               $totalEarlyLeaveMinutes = $earlyleaveHours * 60 + $earlyleaveMins;
+               $calculatedEarlyLeaveHours = floor($totalEarlyLeaveMinutes / 60);
+               $calculatedEarlyLeaveMinutes = $totalEarlyLeaveMinutes % 60;
+               $totalEarlyleave = sprintf("%02d:%02d:00", $calculatedEarlyLeaveHours, $calculatedEarlyLeaveMinutes);
+               // calculate total Early Leaving Time
+
+               // calculate total Late time
+               $totalLateMinutes = $lateHours * 60 + $lateMins;
+               $calculatedLateHours = floor($totalLateMinutes / 60);
+               $calculatedLateMinutes = $totalLateMinutes % 60;
+               $totalLate = sprintf("%02d:%02d:00", $calculatedLateHours, $calculatedLateMinutes);
+               // calculate total Late time
+
+               $data['totalOvertime']   = $totalOverTime;
+               $data['totalEarlyLeave'] = $totalEarlyleave;
+               $data['totalLate']       = $totalLate;
+               $data['totalPresent']    = $totalPresent;
+               $data['totalLeave']      = $totalLeave;
+               $data['curMonth']        = $curMonth;
+
+
+               $requestMonth = $request->month ?? date('Y-m');
+               $requestBranchId = $request->branch_id ?? "";
+               $requestDepartmentId = $request->department ?? "";
+               $requestEmployeeId = $request->employee_id ?? [0];
+
+
+               return view(
+                    'report.monthlyAttendance',
+                    compact(
+                         'employeesAttendance',
+                         'requestMonth',
+                         'requestBranchId',
+                         'requestDepartmentId',
+                         'requestEmployeeId',
+                         'branch',
+                         'department',
+                         'monthDates',
+                         'data'
+                    )
+               );
+          }
+          else
+          {
+               return redirect()->back()->with('error', __('Permission denied.'));
+          }
+     }
+
+     public function monthlyAttendance_Working(Request $request)
+     {
+          if (Auth::user()->can('Manage Report'))
+          {
+               $setting = Utility::settings();
+
+               $weefOffArray = [];
+               if ($setting['company_office_week_off_monday'] == 'on')
+               {
+                    $weefOffArray[] = "Monday";
+               }
+               if ($setting['company_office_week_off_tuesday'] == 'on')
+               {
+                    $weefOffArray[] = "Tuesday";
+               }
+               if ($setting['company_office_week_off_wednesday'] == 'on')
+               {
+                    $weefOffArray[] = "Wednesday";
+               }
+               if ($setting['company_office_week_off_thusday'] == 'on')
+               {
+                    $weefOffArray[] = "Thursday";
+               }
+               if ($setting['company_office_week_off_friday'] == 'on')
+               {
+                    $weefOffArray[] = "Friday";
+               }
+               if ($setting['company_office_week_off_saturday'] == 'on')
+               {
+                    $weefOffArray[] = "Saturday";
+               }
+               if ($setting['company_office_week_off_sunday'] == 'on')
+               {
+                    $weefOffArray[] = "Sunday";
+               }
+
+               $branch = Branch::select("id", "name", "created_by")->where('created_by', Auth::user()->creatorId())->get()->pluck('name', 'id');
+               $branch->prepend('All', '');
+
+               $department = Department::select("id", "name", "created_by")->where('created_by', Auth::user()->creatorId())->get()->pluck('name', 'id');
+               $department->prepend('All', '');
+
+               $data['branch']     = __('All');
+               $data['department'] = __('All');
+
+               $employees = Employee::with('designation:id,department_id,name')->select('id', 'name', 'designation_id', 'branch_id', 'department_id', 'is_custom_weekoffs', 'weekoffs_data');
+
+               if (!empty($request->employee_id) && $request->employee_id[0] != 0)
+               {
+                    $employees->whereIn('id', $request->employee_id);
+               }
+
+               if (Auth::user()->type == 'company')
+               {
+                    $employees = $employees->where('created_by', Auth::user()->creatorId());
+               }
+               else
+               {
+                    $assign_employees = json_decode(Auth::user()->assign_employees) ?? [];
+                    $employees = $employees->whereIn('id', $assign_employees)->where('created_by', Auth::user()->creatorId());
+               }
+
+               if (!empty($request->branch))
+               {
+                    $employees->where('branch_id', $request->branch);
+                    $data['branch'] = !empty(Branch::find($request->branch)) ? Branch::find($request->branch)->name : '';
+               }
+
+               if (!empty($request->department))
+               {
+                    $employees->where('department_id', $request->department);
+                    $data['department'] = !empty(Department::find($request->department)) ? Department::find($request->department)->name : '';
+               }
+
+               if (!empty($request->employees))
+               {
+                    $employees->where('employee_id', $request->employees);
+                    $data['employees'] = !empty(Employee::find($request->employees)) ? Employee::find($request->employees)->name : '';
+               }
+
+               $employees = $employees->get();
+
+               $month    = date('m');
+               $year     = date('Y');
+               $currentdate = Carbon::now()->startOfMonth()->format('Y-m-d');
+               if (!empty($request->month))
+               {
+                    $currentdate = strtotime($request->month);
+                    $month       = date('m', $currentdate);
+                    $year        = date('Y', $currentdate);
+                    $curMonth    = date('M-Y', strtotime($request->month));
+                    $currentMonth = $month . '-' . $year;
+               }
+               else
+               {
+                    $month    = date('m');
+                    $year     = date('Y');
+                    $curMonth = date('M-Y', strtotime($year . '-' . $month));
+                    $currentMonth = $month . '-' . $year;
+               }
+
+               // get month dates
+               $monthDates = [];
+               $getDate = DateTime::createFromFormat('Y-m-d', "$year-$month-01");
+               $daysInMonth = $getDate->format('t');
+
+               for ($day = 1; $day <= $daysInMonth; $day++)
+               {
+                    $formattedDate = $getDate->format('Y-m-d');
+                    $monthDates[] = $formattedDate;
+                    $getDate->modify('+1 day');
+               }
+               // get month dates
+
+               $employeesAttendance = [];
+               $totalPresent        = $totalLeave = $totalEarlyLeave = 0;
+               $ovetimeHours        = $overtimeMins = $earlyleaveHours = $earlyleaveMins = $lateHours = $lateMins = 0;
+
+               $dataRenderHtml = "";
+
+               foreach ($employees as $key => $employee)
+               {
+                    $attendances['name'] = $employee->name;
+                    $attendances['designation'] = (!empty($employee->designation)) ? $employee->designation->name : '';
+                    $attendances['branch'] = (!empty($employee->branch)) ? $employee->branch->name : '';
+
+                    $is_custom_weekoffs = $employee->is_custom_weekoffs ?? 0;
+                    $employee_weekoffs_data = json_decode($employee->weekoffs_data) ?? [];
+
+                    $dataRenderHtml .= "<tr>
+                                            <td>" . $employee->name . "</td>
+                                            <td>" . ((!empty($employee->designation)) ? $employee->designation->name : '') . "</td>
+                                            <td>" . ((!empty($employee->branch)) ? $employee->branch->name : '') . "</td>";
+
+                    $test = [];
+                    foreach ($monthDates as $date)
+                    {
+                         $rowAttendanceStatus = "";
+                         // $dateFormat = $year . '-' . $month . '-' . $date;
+                         $dateFormat = $date;
+
+                         $localLeave = Leave::select("id", "employee_id", "status", "start_date", "end_date", "created_by", "total_leave_days")->where('employee_id', $employee->id)->where('status', 'Approved')
+                              ->where('start_date', '<=', $dateFormat)->where('end_date', '>=', $dateFormat)
+                              ->where('created_by', Auth::user()->creatorId())
+                              ->first();
+
+                         $holiday = Holiday::select("id", "status", "start_date", "end_date", "created_by", "branch_name", "occasion")->where('status', 1)
+                              ->where('start_date', '=', $dateFormat)->orWhere('end_date', '=', $dateFormat)
+                              ->where('created_by', Auth::user()->creatorId())
+                              ->first();
+
+                         // check is week off
+                         $isWeekOff = false;
+                         if ($is_custom_weekoffs == 1) // if 1 then check custom week off of employee
+                         {
+                              if (in_array($dateFormat, $employee_weekoffs_data))
+                              {
+                                   $isWeekOff = true;
+                              }
+                         }
+                         else // if 0 then check company week off
+                         {
+                              $days = date('l', strtotime($dateFormat));
+                              if (in_array($days, $weefOffArray))
+                              {
+                                   $isWeekOff = true;
+                              }
+                         }
+                         // check is week off
+
+                         if ($localLeave != null) // check if leave on loop date 
+                         {
+                              if ($localLeave->total_leave_days == "0.5")
+                              {
+                                   $attendanceStatus[$date] = "HD";
+                                   $totalLeave              += 0.5;
+                              }
+                              else
+                              {
+                                   $attendanceStatus[$date] = "L";
+                                   $totalLeave              += 1;
+                              }
+                         }
+                         else // else these is no leave applied for leave day
+                         {
+                              if ($dateFormat <= date('Y-m-d')) // check if loop date is grater than todays date or not, if yes then check data according
+                              {
+                                   $employeeAttendance = AttendanceEmployee::where('employee_id', $employee->id)->where('date', $dateFormat)->first();
+
+                                   if (empty($employeeAttendance)) // checkl if attendance is empty
+                                   {
+                                        if ($isWeekOff)
+                                        {
+                                             $attendanceStatus[$date] = 'WO';
+                                        }
+                                        else
+                                        {
+                                             $holidays_branch_ids = json_decode($holiday->branch_id ?? "") ?? [];
+                                             if (array_intersect([0, $employee->branch_id], $holidays_branch_ids))
+                                             {
+                                                  $attendanceStatus[$date] = 'H';
+                                             }
+                                             else
+                                             {
+                                                  if ($dateFormat == date('Y-m-d') && $setting['company_start_time'] >= date('H:i'))
+                                                  {
+                                                       $attendanceStatus[$date] = '';
+                                                  }
+                                                  else
+                                                  {
+                                                       $attendanceStatus[$date] = 'A';
+                                                       $totalLeave              += 1;
+                                                  }
+                                             }
+                                        }
+                                   }
+                                   elseif (!empty($employeeAttendance) && $employeeAttendance->status == 'Present')
+                                   {
+                                        $attendanceStatus[$date] = 'P';
+                                        $totalPresent            += 1;
+
+                                        if ($employeeAttendance->overtime > 0 && $employeeAttendance->overtime != "00:00:00")
+                                        {
+                                             $ovetimeHours += date('H', strtotime($employeeAttendance->overtime));
+                                             $overtimeMins += date('i', strtotime($employeeAttendance->overtime));
+                                        }
+
+                                        if ($employeeAttendance->early_leaving > 0  && $employeeAttendance->early_leaving != "00:00:00")
+                                        {
+                                             $earlyleaveHours += date('H', strtotime($employeeAttendance->early_leaving));
+                                             $earlyleaveMins  += date('i', strtotime($employeeAttendance->early_leaving));
+                                        }
+
+                                        if ($employeeAttendance->late > 0  && $employeeAttendance->late != "00:00:00")
+                                        {
+                                             $lateHours += date('H', strtotime($employeeAttendance->late));
+                                             $lateMins  += date('i', strtotime($employeeAttendance->late));
+                                        }
+                                   }
+                                   else
+                                   {
+                                        $attendanceStatus[$date] = '';
+                                   }
+                              }
+                              else // else means its future date, then there should be week off or holiday, else show blank
+                              {
+                                   if ($isWeekOff)
+                                   {
+                                        $attendanceStatus[$date] = 'WO';
+                                   }
+                                   else
+                                   {
+                                        $holidays_branch_ids = json_decode($holiday->branch_id ?? "") ?? [];
+                                        if (array_intersect([0, $employee->branch_id], $holidays_branch_ids))
+                                        {
+                                             $attendanceStatus[$date] = 'H';
+                                        }
+                                        else
+                                        {
+                                             $attendanceStatus[$date] = '';
+                                        }
+                                   }
+                              }
+                         }
+
+                         if ($attendanceStatus[$date] == 'P')
+                         {
+                              $rowAttendanceStatus = '<i class="badge bg-success p-2 rounded">P</i>';
+                         }
+                         elseif ($attendanceStatus[$date] == 'A')
+                         {
+                              $rowAttendanceStatus = '<i class="badge bg-danger p-2 rounded">A</i>';
+                         }
+                         elseif ($attendanceStatus[$date] == 'L')
+                         {
+                              $rowAttendanceStatus = '<i class="badge bg-info p-2 rounded">L</i>';
+                         }
+                         elseif ($attendanceStatus[$date] == 'HD')
+                         {
+                              $rowAttendanceStatus = '<i class="badge bg-secondary p-2 rounded">HD</i>';
+                         }
+                         elseif ($attendanceStatus[$date] == 'H')
+                         {
+                              $rowAttendanceStatus = '<i class="badge bg-warning p-2 rounded">H</i>';
+                         }
+                         elseif ($attendanceStatus[$date] == 'WO')
+                         {
+                              $rowAttendanceStatus = '<i class="badge bg-dark p-2 rounded">WO</i>';
+                         }
+                         else
+                         {
+                              $rowAttendanceStatus = '';
+                         }
+
+                         $dataRenderHtml .= '<td>' . $rowAttendanceStatus . '</td>';
+                    }
+
+                    $dataRenderHtml .= '</tr>';
+
+                    $attendances['status'] = $attendanceStatus;
+                    $employeesAttendance[] = $attendances;
+               }
+
+               // return $employeesAttendance;
+
+               // $totalOverTime   = $ovetimeHours + ($overtimeMins / 60);
+               // $totalEarlyleave = $earlyleaveHours + ($earlyleaveMins / 60);
+               // $totalLate       = $lateHours + ($lateMins / 60);
+
+
+               // calculate total Early Leaving Time
+
+               $totalOvertimeMinutes = $ovetimeHours * 60 + $overtimeMins;
+               $calculatedOvertimeHours = floor($totalOvertimeMinutes / 60);
+               $calculatedOvertimeMinutes = $totalOvertimeMinutes % 60;
+               $totalOverTime = sprintf("%02d:%02d:00", $calculatedOvertimeHours, $calculatedOvertimeMinutes);
+               // calculate total Early Leaving Time
+
+
+               // calculate total Early Leaving Time
+               $totalEarlyLeaveMinutes = $earlyleaveHours * 60 + $earlyleaveMins;
+               $calculatedEarlyLeaveHours = floor($totalEarlyLeaveMinutes / 60);
+               $calculatedEarlyLeaveMinutes = $totalEarlyLeaveMinutes % 60;
+               $totalEarlyleave = sprintf("%02d:%02d:00", $calculatedEarlyLeaveHours, $calculatedEarlyLeaveMinutes);
+               // calculate total Early Leaving Time
+
+               // calculate total Late time
+               $totalLateMinutes = $lateHours * 60 + $lateMins;
+               $calculatedLateHours = floor($totalLateMinutes / 60);
+               $calculatedLateMinutes = $totalLateMinutes % 60;
+               $totalLate = sprintf("%02d:%02d:00", $calculatedLateHours, $calculatedLateMinutes);
+               // calculate total Late time
+
+               $data['totalOvertime']   = $totalOverTime;
+               $data['totalEarlyLeave'] = $totalEarlyleave;
+               $data['totalLate']       = $totalLate;
+               $data['totalPresent']    = $totalPresent;
+               $data['totalLeave']      = $totalLeave;
+               $data['curMonth']        = $curMonth;
+
+               $requestMonth = $request->month ?? date('Y-m');
+               $requestBranchId = $request->branch_id ?? "";
+               $requestDepartmentId = $request->department ?? "";
+               $requestEmployeeId = $request->employee_id ?? [0];
+
+
+               return view(
+                    'report.monthlyAttendance',
+                    compact(
+                         'employeesAttendance',
+                         'requestMonth',
+                         'requestBranchId',
+                         'requestDepartmentId',
+                         'requestEmployeeId',
+                         'branch',
+                         'department',
+                         'monthDates',
+                         'data',
+                         'dataRenderHtml',
+                    )
+               );
+          }
+          else
+          {
+               return redirect()->back()->with('error', __('Permission denied.'));
+          }
+     }
+
+     public function calculateAttendance($employeeAttendance, $date, $attendanceData)
+     {
+          $formattedDate = Carbon::parse($date)->format('Y-m-d');
+          $attendanceForDate = $employeeAttendance->filter(function ($attendance) use ($formattedDate)
+          {
+               // Convert both the attendance date and the formatted date to 'Y-m-d'
+               return Carbon::parse($attendance->date)->format('Y-m-d') === $formattedDate;
+          });
+          // $attendanceForDate = $employeeAttendance->where('date', $formattedDate);
+          if (!empty($attendanceData) && isset($attendanceData[$date]))
+          {
+               $attendanceForDate = $attendanceForDate->merge($attendanceData[$date]['attendanceForDate']);
+          }
+          return [
+               'attendanceForDate' => $attendanceForDate,
+          ];
+     }
+
+     public function employeeAttendanceGeofencingReport(Request $request)
+     {
+          if (Auth::user()->can('Manage Report'))
+          {
+               $setting = Utility::settings();
+
+               $weefOffArray = [];
+
+               $branch = Branch::where('created_by', Auth::user()->creatorId())->get()->pluck('name', 'id');
+               $branch->prepend('All', '');
+
+               $department = Department::where('created_by', Auth::user()->creatorId())->get()->pluck('name', 'id');
+               $department->prepend('All', '');
+
+               $data = [
+                    'branch' => __('All'),
+                    'department' => __('All'),
+               ];
+
+               $start_date = Carbon::now()->startOfMonth();
+               $end_date = Carbon::now()->startOfMonth()->endOfMonth();
+               if (!empty($request->start_date) && !empty($request->end_date))
+               {
+                    $start_date = Carbon::parse($request->start_date);
+                    $end_date = Carbon::parse($request->end_date);
+               }
+               $monthDates = [];
+               while ($start_date <= $end_date)
+               {
+                    $monthDates[] = $start_date->format('Y-m-d'); // Store the date in 'Y-m-d' format
+                    $start_date->addDay(); // Move to the next day
+               }
+               if ($request->has("export"))
+               {
+                    $employees = Employee::with('designation')->select('id', 'name', 'designation_id', 'branch_id');
+                    if (!empty($request->employee_id) && $request->employee_id[0] != 0)
+                    {
+                         $employees->whereIn('id', $request->employee_id);
+                    }
+
+                    if (Auth::user()->type == 'company')
+                    {
+                         $employees = $employees->where('created_by', Auth::user()->creatorId());
+                    }
+                    else
+                    {
+                         $assign_employees = json_decode(Auth::user()->assign_employees) ?? [];
+                         $employees = $employees->whereIn('id', $assign_employees)->where('created_by', Auth::user()->creatorId());
+                    }
+
+                    if (!empty($request->branch_id))
+                    {
+                         if ($request->branch_id != 0)
+                         {
+                              $employees->where('branch_id', $request->branch_id);
+                              $data['branch'] = !empty(Branch::find($request->branch_id)) ? Branch::find($request->branch_id)->name : '';
+                         }
+                    }
+
+                    if (!empty($request->department))
+                    {
+                         if ($request->department != 0)
+                         {
+                              $employees->where('department_id', $request->department);
+                              $data['department'] = !empty(Department::find($request->department)) ? Department::find($request->department)->name : '';
+                         }
+                    }
+
+                    if (!empty($request->employee_id))
+                    {
+                         if (!in_array(0, $request->employee_id))
+                         {
+                              $employees->where('id', $request->employee_id);
+
+                              $searchEmployeeDetails = Employee::select("id", "name")->where("id", $request->employee_id)->first();
+                              if ($searchEmployeeDetails != null)
+                              {
+                                   $data['employees'] = $searchEmployeeDetails->name;
+                              }
+                              // $data['employees'] = !empty(Employee::find($request->employee_id)) ? Employee::find($request->employee_id)->name ?? "" : '';
+                         }
+                    }
+
+                    $employees = $employees->where("employee_exit", 0)->get();
+                    $employeeIds = $employees->pluck("id")->toArray();
+
+                    $employeesAttendance = AttendanceEmployee::select("*", "date as attendance_date")->whereIn('employee_id', $employeeIds)->whereIn('date', $monthDates)->get();
+
+                    $pasasData = [
+                         "start_date" => $start_date,
+                         "end_date" => $end_date,
+                         "data" => $employeesAttendance,
+                         "monthDates" => $monthDates,
+                    ];
+
+                    return Excel::download(new EmployeeAttendanceGeofencingExcelExport($pasasData), "employee-attendance-geofencing-excel-export(" . $start_date . " " . $end_date . ").xlsx");
+               }
+               else
+               {
+                    $employees = Employee::select('id', 'employee_id', 'name', 'designation_id', 'branch_id')->with(['branch', 'designation', 'attendances' => function ($query) use ($monthDates)
+                    {
+                         $query->select("*", "date as attendance_date")->whereIn('date', $monthDates);
+                    }]);
+                    $employees->whereHas('attendances', function ($query) use ($monthDates)
+                    {
+                         // Ensure only employees with attendances for the specified month/year are selected
+                         $query->whereIn('date', $monthDates);
+                    });
+                    if (!empty($request->employee_id) && $request->employee_id[0] != 0)
+                    {
+                         $employees->whereIn('id', $request->employee_id);
+                    }
+
+                    if (Auth::user()->type == 'company')
+                    {
+                         $employees->where('created_by', Auth::user()->creatorId());
+                    }
+                    else
+                    {
+                         $assign_employees = json_decode(Auth::user()->assign_employees, true) ?? [];
+                         $employees->whereIn('id', $assign_employees)
+                              ->where('created_by', Auth::user()->creatorId());
+                    }
+
+                    if (!empty($request->branch_id) && $request->branch_id != 0)
+                    {
+                         $employees->where('branch_id', $request->branch_id);
+                         $data['branch'] = Branch::find($request->branch_id)->name ?? '';
+                    }
+
+                    if (!empty($request->department) && $request->department != 0)
+                    {
+                         $employees->where('department_id', $request->department);
+                         $data['department'] = Department::find($request->department)->name ?? '';
+                    }
+
+                    $employeeIds = $employees->pluck("id")->toArray();
+
+                    $employees = $employees->paginate(20);
+                    $employeeIdsWithPage = $employees->pluck("id")->toArray();
+
+                    $employeesAttendanceData = AttendanceEmployee::select(
+                         'date',
+                         DB::raw('COUNT(employee_id) as attendance_count')
+                    )
+                         ->whereIn('date', $monthDates)
+                         ->whereIn('employee_id', $employeeIds)
+                         ->groupBy('date', 'employee_id')
+                         ->get()
+                         ->groupBy('date');
+
+                    $employeesWithMaxAttendance = [];
+
+                    foreach ($monthDates as $monthDate)
+                    {
+                         $formattedDate = Auth::user()->dateFormat($monthDate);
+
+                         if ($employeesAttendanceData->has($formattedDate))
+                         {
+                              $employeesWithMaxAttendance[$monthDate] = $employeesAttendanceData[$formattedDate]->max('attendance_count');
+                         }
+                         else
+                         {
+                              $employeesWithMaxAttendance[$monthDate] = 0;
+                         }
+                    }
+                    $employeeAttendance = AttendanceEmployee::select("*", "date as attendance_date")->whereIn('employee_id', $employeeIdsWithPage)->whereIn('date', $monthDates)->get();
+                    $attendanceData = [];
+                    // dd($employeeAttendance);
+                    foreach ($monthDates as $monthDate)
+                    {
+                         $attendanceData[$monthDate] = $this->calculateAttendance($employeeAttendance, $monthDate, $attendanceData);
+                    }
+                    // dd($attendanceData);
+                    $user = User::find(Auth::user()->creatorId());
+
+                    $requestStartDate = $request->start_date ?? Carbon::now()->startOfMonth()->format('Y-m-d');
+                    $requestEndDate = $request->end_date ?? Carbon::now()->startOfMonth()->endOfMonth()->format('Y-m-d');
+                    $requestBranchId = $request->branch_id ?? "";
+                    $requestDepartmentId = $request->department ?? "";
+                    $requestEmployeeId = $request->employee_id ?? [0];
+
+                    if ($request->ajax())
+                    {
+                         // If it's an AJAX request, return only the rows to be appended
+                         return view('report.advance_attendance_rows', compact('monthDates', 'attendanceData', 'employees', 'employeesWithMaxAttendance'))->render();
+                    }
+
+                    return view('report.employee-attendance-geofencing_new', compact('requestStartDate', 'requestEndDate', 'requestBranchId', 'requestDepartmentId', 'requestEmployeeId', 'branch', 'department', 'employees', 'data', "monthDates", 'attendanceData', 'employeesWithMaxAttendance'));
+               }
+          }
+          else
+          {
+               return redirect()->back()->with('error', __('Permission denied.'));
+          }
+     }
+
+     public function employeeAttendanceGeofencingReportExport($start_date, $end_date, $branch, $department, $employee)
+     {
+          if (Auth::user()->can('Manage Report'))
+          {
+               $setting = Utility::settings();
+
+               $start_date = $start_date ?? Carbon::now()->startOfMonth()->format('Y-m-d');
+               $start_date = Carbon::parse($start_date);
+               $end_date = Carbon::parse($end_date);
+               $monthDates = [];
+               while ($start_date <= $end_date)
+               {
+                    $monthDates[] = $start_date->format('Y-m-d');
+                    $start_date->addDay();
+               }
+
+               $employees = Employee::select('id', 'employee_id', 'name', 'designation_id', 'branch_id')->with(['branch', 'designation', 'attendances' => function ($query) use ($monthDates)
+               {
+                    $query->select("*", "date as attendance_date")->whereIn('date', $monthDates);
+               }]);
+               $employees->whereHas('attendances', function ($query) use ($monthDates)
+               {
+                    // Ensure only employees with attendances for the specified month/year are selected
+                    $query->whereIn('date', $monthDates);
+               });
+
+               if (Auth::user()->type == 'company')
+               {
+                    $employees->where('created_by', Auth::user()->creatorId());
+               }
+               else
+               {
+                    $assign_employees = json_decode(Auth::user()->assign_employees, true) ?? [];
+                    $employees->whereIn('id', $assign_employees)
+                         ->where('created_by', Auth::user()->creatorId());
+               }
+
+               if ($branch != 0)
+               {
+                    $employees->where('branch_id', $branch);
+                    $data['branch'] = Branch::find($branch)->name ?? '';
+               }
+
+               if ($department != 0)
+               {
+                    $employees->where('department_id', $department);
+                    $data['department'] = Department::find($department)->name ?? '';
+               }
+               if ($employee != 0)
+               {
+                    $employeeIds = explode(',', $employee);
+                    $employees->whereIn('id', $employeeIds);
+               }
+
+               $employees = $employees->get();
+
+               $employeeIds = $employees->pluck("id")->toArray();
+
+               $employeesAttendanceData = AttendanceEmployee::select(
+                    'date',
+                    DB::raw('COUNT(employee_id) as attendance_count')
+               )
+                    ->whereIn('date', $monthDates)
+                    ->whereIn('employee_id', $employeeIds)
+                    ->groupBy('date', 'employee_id')
+                    ->get()
+                    ->groupBy('date');
+
+               $employeesWithMaxAttendance = [];
+               $changedColumns = [];
+               $secondColumn = ['', '', '', ''];
+
+               foreach ($monthDates as $monthDate)
+               {
+                    $formattedDate = Auth::user()->dateFormat($monthDate);
+
+                    if ($employeesAttendanceData->has($formattedDate))
+                    {
+                         $employeesWithMaxAttendance[$monthDate] = $employeesAttendanceData[$formattedDate]->max('attendance_count');
+                    }
+                    else
+                    {
+                         $employeesWithMaxAttendance[$monthDate] = 0;
+                    }
+                    $changedColumns[] = Auth::user()->dateFormat($monthDate);
+                    if (!empty($employeesWithMaxAttendance[$monthDate]) && $employeesWithMaxAttendance[$monthDate] > 0)
+                    {
+                         for ($j = 1; $j <= ($employeesWithMaxAttendance[$monthDate] * 2) + 2; $j++)
+                         {
+                              $changedColumns[] = '';
+                         }
+                         for ($j = 1; $j <= $employeesWithMaxAttendance[$monthDate]; $j++)
+                         {
+                              $secondColumn[] = 'In';
+                              $secondColumn[] = 'Out';
+                         }
+                    }
+                    else
+                    {
+                         for ($j = 1; $j <= 4; $j++)
+                         {
+                              $changedColumns[] = '';
+                         }
+                         $secondColumn[] = 'In';
+                         $secondColumn[] = 'Out';
+                    }
+                    $secondColumn[] = 'WH';
+                    $secondColumn[] = 'LC';
+                    $secondColumn[] = 'EL';
+               }
+               $fileName = 'employee-attendance-geofencing-excel-export(' . $start_date . ' to ' . ($end_date ?? date('Y-m-d', strtotime('last day of this month', strtotime($start_date)))) . ')' . '.csv';
+               $headers = [
+                    "Content-type" => "text/csv",
+                    "Content-Disposition" => "attachment; filename=$fileName",
+                    "Pragma" => "no-cache",
+                    "Cache-Control" => "must-revalidate, post-check=0, pre-check=0",
+                    "Expires" => "0",
+               ];
+
+               $emp = array(
+                    'Employee Id',
+                    'Name',
+                    'Branch',
+                    'Designation',
+               );
+
+               $columns = array_merge($emp, $changedColumns);
+
+               $employeesAttendance = [];
+               $employees->chunk(100)->each(function ($chunk) use ($month, $year, $dates, $setting, $monthDates, $secondColumn, $columns, &$employeesAttendance, $employeesWithMaxAttendance)
+               {
+                    foreach ($chunk as $employee)
+                    {
+                         $attendanceData = [];
+                         $attendanceData[] = $employee->employee_id ?? '';
+                         $attendanceData[] = $employee->name ?? '';
+                         $attendanceData[] = $employee->branch->name ?? '';
+                         $attendanceData[] = $employee->designation->name ?? '';
+                         foreach ($monthDates as $monthDate)
+                         {
+                              $employeeAttendance = $employee->attendances;
+                              $attendanceDetail[$monthDate] = $this->calculateAttendance($employeeAttendance, $monthDate, $attendanceData);
+                              $attendance = $attendanceDetail[$monthDate] ?? null;
+                              $workingHours = 0;
+                              $late = '00:00';
+                              $earlyLeaving = '00:00';
+                              if (!empty($employeesWithMaxAttendance[$monthDate]) && $employeesWithMaxAttendance[$monthDate] > 0)
+                              {
+                                   $checkData = $attendance['attendanceForDate']->where('employee_id', $employee->id);
+                                   foreach ($checkData as $childRow)
+                                   {
+                                        $clockInDateTime = '';
+                                        $clockOutDateTime = '';
+
+                                        if (empty($childRow->clock_in_date_time) || $childRow->clock_in_date_time == '0000-00-00 00:00:00')
+                                        {
+                                             $clockInDateTime = $childRow->getRawOriginal('date') . ' ' . $childRow->clock_in;
+                                        }
+                                        else
+                                        {
+                                             $clockInDateTime = $childRow->clock_in_date_time;
+                                        }
+
+                                        if (empty($childRow->clock_out_date_time) || $childRow->clock_out_date_time == '0000-00-00 00:00:00')
+                                        {
+                                             $clockOutDateTime = $childRow->getRawOriginal('date') . ' ' . $childRow->clock_out;
+                                        }
+                                        else
+                                        {
+                                             $clockOutDateTime = $childRow->clock_out_date_time;
+                                        }
+
+                                        if ($childRow->clock_in != '00:00:00' && $childRow->clock_out != '00:00:00')
+                                        {
+                                             if ($late == '00:00' && $childRow->late != '00:00:00')
+                                             {
+                                                  $late = date('H:i', strtotime($childRow->late));
+                                             }
+                                             $earlyLeaving = date('H:i', strtotime($childRow->early_leaving));
+                                             $from = new DateTime($clockInDateTime);
+                                             $to = new DateTime($clockOutDateTime);
+                                             $diff = $from->diff($to);
+                                             $totalMinutes =
+                                                  $diff->i +
+                                                  $diff->h * 60 +
+                                                  $diff->days * 24 * 60;
+
+
+                                             $workingHours += $totalMinutes;
+                                        }
+                                        if ($childRow->clock_in != '' && $childRow->clock_in != '00:00:00')
+                                        {
+                                             $attendanceData[] = Auth::user()->dateFormat($clockInDateTime) . ' ' . Auth::user()->timeFormat($clockInDateTime);
+                                        }
+                                        else
+                                        {
+                                             $attendanceData[] = '';
+                                        }
+                                        if ($childRow->clock_out != '' && $childRow->clock_out != '00:00:00')
+                                        {
+                                             $attendanceData[] = Auth::user()->dateFormat($clockOutDateTime) . ' ' . Auth::user()->timeFormat($clockOutDateTime);
+                                        }
+                                        else
+                                        {
+                                             $attendanceData[] = '';
+                                        }
+                                   }
+                                   for ($i = 1; $i <= $employeesWithMaxAttendance[$monthDate] - $checkData->count(); $i++)
+                                   {
+                                        $attendanceData[] = '';
+                                        $attendanceData[] = '';
+                                   }
+                              }
+                              else
+                              {
+                                   $attendanceData[] = '';
+                                   $attendanceData[] = '';
+                              }
+                              $working_hours = floor($workingHours / 60);
+                              $working_minutes = $workingHours % 60;
+                              $workingHours = $working_hours . ':' . $working_minutes;
+                              $attendanceData[] = $workingHours;
+                              $attendanceData[] = $late;
+                              $attendanceData[] = $earlyLeaving;
+                         }
+                         $employeesAttendance[] = $attendanceData;
+                    }
+               });
+
+               $callback = function () use ($employeesAttendance, $columns, $secondColumn)
+               {
+                    $file = fopen('php://output', 'w');
+                    fputcsv($file, $columns);
+                    fputcsv($file, $secondColumn);
+
+                    foreach ($employeesAttendance as $attendance)
+                    {
+                         fputcsv($file, str_replace('"', '', array_values($attendance)));
+                    }
+
+                    fclose($file);
+               };
+
+               return response()->stream($callback, 200, $headers);
+          }
+          else
+          {
+               return redirect()->back()->with('error', __('Permission denied.'));
+          }
+     }
+
+     public function employeeAttendanceGeofencingReport_old(Request $request)
+     {
+          // dd($request->all());
+
+          if (Auth::user()->can('Manage Report'))
+          {
+               $setting = Utility::settings();
+
+               $weefOffArray = [];
+
+               $branch = Branch::where('created_by', Auth::user()->creatorId())->get()->pluck('name', 'id');
+               $branch->prepend('All', '');
+
+               $department = Department::where('created_by', Auth::user()->creatorId())->get()->pluck('name', 'id');
+               $department->prepend('All', '');
+
+               $data['branch']     = __('All');
+               $data['department'] = __('All');
+
+               $employees = Employee::with('designation')->select('id', 'name', 'designation_id', 'branch_id');
+               if (!empty($request->employee_id) && $request->employee_id[0] != 0)
+               {
+                    $employees->whereIn('id', $request->employee_id);
+               }
+
+               if (Auth::user()->type == 'company')
+               {
+                    $employees = $employees->where('created_by', Auth::user()->creatorId());
+               }
+               else
+               {
+                    $assign_employees = json_decode(Auth::user()->assign_employees) ?? [];
+                    $employees = $employees->whereIn('id', $assign_employees)->where('created_by', Auth::user()->creatorId());
+               }
+
+               if (!empty($request->branch_id))
+               {
+                    if ($request->branch_id != 0)
+                    {
+                         $employees->where('branch_id', $request->branch_id);
+                         $data['branch'] = !empty(Branch::find($request->branch_id)) ? Branch::find($request->branch_id)->name : '';
+                    }
+               }
+
+               if (!empty($request->department))
+               {
+                    if ($request->department != 0)
+                    {
+                         $employees->where('department_id', $request->department);
+                         $data['department'] = !empty(Department::find($request->department)) ? Department::find($request->department)->name : '';
+                    }
+               }
+
+               if (!empty($request->employee_id))
+               {
+                    if (!in_array(0, $request->employee_id))
+                    {
+                         $employees->where('employee_id', $request->employee_id);
+
+                         $searchEmployeeDetails = Employee::select("id", "name")->where("id", $request->employee_id)->first();
+                         if ($searchEmployeeDetails != null)
+                         {
+                              $data['employees'] = $searchEmployeeDetails->name;
+                         }
+                         // $data['employees'] = !empty(Employee::find($request->employee_id)) ? Employee::find($request->employee_id)->name ?? "" : '';
+                    }
+               }
+
+               $employees = $employees->get();
+
+               $month = "";
+               if (!empty($request->month))
+               {
+                    $currentdate = strtotime($request->month);
+                    $month       = date('m', $currentdate);
+                    $year        = date('Y', $currentdate);
+                    $curMonth    = date('M-Y', strtotime($request->month));
+                    $currentMonth = $month . '-' . $year;
+               }
+               else
+               {
+                    $month    = date('m');
+                    $year     = date('Y');
+                    $curMonth = date('M-Y', strtotime($year . '-' . $month));
+                    $currentMonth = $month . '-' . $year;
+               }
+               $data['curMonth']        = $curMonth;
+
+               $employeeIds = $employees->pluck("id")->toArray();
+
+               $employeesAttendance = AttendanceEmployee::select("*", "date as attendance_date")->whereIn('employee_id', $employeeIds)->whereMonth('date', $month)->whereYear('date', $year)->get();
+
+               $monthDates = [];
+               $date = DateTime::createFromFormat('Y-m-d', "$year-$month-01");
+               $daysInMonth = $date->format('t');
+
+               for ($day = 1; $day <= $daysInMonth; $day++)
+               {
+                    $formattedDate = $date->format('Y-m-d');
+                    $monthDates[] = $formattedDate;
+                    $date->modify('+1 day');
+               }
+
+               if ($request->has("export"))
+               {
+                    $pasasData = [
+                         "month" => $month,
+                         "year" => $year,
+                         "data" => $employeesAttendance,
+                         "monthDates" => $monthDates,
+                    ];
+
+                    return Excel::download(new EmployeeAttendanceGeofencingExcelExport($pasasData), "employee-attendance-geofencing-excel-export($month-$year).xlsx");
+               }
+
+               $user = User::find(Auth::user()->creatorId());
+
+               $num_of_days = date('t', mktime(0, 0, 0, $month, 1, $year));
+               for ($i = 1; $i <= $num_of_days; $i++)
+               {
+                    $dates[] = str_pad($i, 2, '0', STR_PAD_LEFT);
+               }
+
+               $requestMonth = $request->month ?? date('Y-m');
+               $requestBranchId = $request->branch_id ?? "";
+               $requestDepartmentId = $request->department ?? "";
+               $requestEmployeeId = $request->employee_id ?? [0];
+
+               return view('report.employee-attendance-geofencing', compact('employeesAttendance', 'requestMonth', 'requestBranchId', 'requestDepartmentId', 'requestEmployeeId', 'branch', 'department', 'employees', 'dates', 'data', "monthDates"));
+          }
+          else
+          {
+               return redirect()->back()->with('error', __('Permission denied.'));
+          }
+     }
+
+     public function timesheet(Request $request)
+     {
+          try
+          {
+               if (Auth::user()->can('Manage Report'))
+               {
+                    $btn_trigger = $request->btn_trigger ?? "";
+
+                    $branch = Branch::where('created_by', Auth::user()->creatorId())->get()->pluck('name', 'id');
+                    $branch->prepend('All', '');
+
+                    $department = Department::where('created_by', Auth::user()->creatorId())->get()->pluck('name', 'id');
+                    $department->prepend('All', '');
+
+                    $filterYear['branch']     = __('All');
+                    $filterYear['department'] = __('All');
+
+                    if (Auth::user()->type == 'company')
+                    {
+                         $timesheets = TimeSheet::select('time_sheets.*', 'employees.name')->leftjoin('employees', 'time_sheets.employee_id', '=', 'employees.id')->where('time_sheets.created_by', Auth::user()->creatorId());
+                         $timesheetFilters = TimeSheet::select('time_sheets.*', 'employees.name')->groupBy('employee_id')->selectRaw('sum(hours) as total')->leftjoin('employees', 'time_sheets.employee_id', '=', 'employees.id')->where('time_sheets.created_by', Auth::user()->creatorId());
+                    }
+                    else
+                    {
+                         $assign_employees = json_decode(Auth::user()->assign_employees) ?? [];
+                         $assign_employees[] = Auth::user()->getUSerEmployee(Auth::id())->id;
+                         $timesheets       = TimeSheet::select('time_sheets.*', 'employees.name')->leftjoin('employees', 'time_sheets.employee_id', '=', 'employees.id')->whereIn('time_sheets.employee_id', $assign_employees)->where('time_sheets.created_by', Auth::user()->creatorId());
+                         $timesheetFilters = TimeSheet::select('time_sheets.*', 'employees.name')->groupBy('employee_id')->selectRaw('sum(hours) as total')->leftjoin('employees', 'time_sheets.employee_id', '=', 'employees.id')->whereIn('time_sheets.employee_id', $assign_employees)->where('time_sheets.created_by', Auth::user()->creatorId());
+                    }
+
+                    $filterYear['start_date'] = (!empty($request->start_date)) ? $request->start_date : date('Y-m-d');
+                    $filterYear['end_date']   = (!empty($request->end_date)) ? $request->end_date : date('Y-m-d');
+
+                    if ($btn_trigger == "reset")
+                    {
+                         $filterYear['start_date'] = date('Y-m-d');
+                         $filterYear['end_date']   = date('Y-m-d');
+                    }
+
+                    if (!empty($request->start_date) && !empty($request->end_date) && $btn_trigger != "reset")
+                    {
+                         $timesheets->where('date', '>=', $filterYear['start_date']);
+                         $timesheets->where('date', '<=',  $filterYear['end_date']);
+
+                         $timesheetFilters->where('date', '>=', $filterYear['start_date']);
+                         $timesheetFilters->where('date', '<=',  $filterYear['end_date']);
+                    }
+                    else
+                    {
+
+                         $timesheets->where('date', '>=', $filterYear['start_date']);
+                         $timesheets->where('date', '<=', $filterYear['end_date']);
+
+                         $timesheetFilters->where('date', '>=', $filterYear['start_date']);
+                         $timesheetFilters->where('date', '<=', $filterYear['end_date']);
+                    }
+
+                    if (!empty($request->branch)  && $btn_trigger != "reset")
+                    {
+                         $timesheets->where('branch_id', $request->branch);
+                         $timesheetFilters->where('branch_id', $request->branch);
+                         $filterYear['branch'] = !empty(Branch::find($request->branch)) ? Branch::find($request->branch)->name : '';
+                    }
+
+                    if (!empty($request->department)  && $btn_trigger != "reset")
+                    {
+                         $timesheets->where('department_id', $request->department);
+                         $timesheetFilters->where('department_id', $request->department);
+
+                         $filterYear['department'] = !empty(Department::find($request->department)) ? Department::find($request->department)->name : '';
+                    }
+
+                    $timesheets = $timesheets->orderBy('time_sheets.id', 'desc')->get();
+
+                    $timesheetFilters = $timesheetFilters->get();
+
+                    $totalHours = 0;
+
+                    foreach ($timesheetFilters as $timesheetFilter)
+                    {
+                         $totalHours += $timesheetFilter->hours;
+                    }
+
+                    $filterYear['totalHours']    = $totalHours;
+                    $filterYear['totalEmployee'] = count($timesheetFilters);
+
+                    if ($btn_trigger == "export")
+                    {
+                         if ($timesheets->isEmpty())
+                         {
+                              return redirect()->back()->with('error', __('No data to export.'));
+                         }
+
+                         $name = 'Timesheet_' . date('Y-m-d i:h:s');
+                         return Excel::download(new TimesheetReportExport($timesheets), $name . '.xlsx');
+                    }
+                    else if ($btn_trigger == "reset")
+                    {
+                         return redirect()->route("report.timesheet");
+                    }
+                    else
+                    {
+                         return view('report.timesheet', compact('timesheets', 'branch', 'department', 'filterYear', 'timesheetFilters'));
+                    }
+               }
+               else
+               {
+                    return redirect()->back()->with('error', __('Permission denied.'));
+               }
+          }
+          catch (Exception $ex)
+          {
+               return redirect()->back()->with('error', showExceptionMessage($ex));
+          }
+          catch (Throwable $ex)
+          {
+               return redirect()->back()->with('error', showExceptionMessage($ex));
+          }
+     }
+
+     public function LeaveReportExport(Request $request)
+     {
+          $start_date = Carbon::now()->startOfMonth();
+          $end_date = Carbon::now()->startOfMonth()->endOfMonth();
+
+          // If custom dates are provided in the request
+          if (!empty($request->start_date) && !empty($request->end_date))
+          {
+               $start_date = Carbon::parse($request->start_date);
+               $end_date = Carbon::parse($request->end_date);
+          }
+          $year = date('Y');
+          $branch = $request->branch ?? "";
+          $department = $request->department ?? "";
+
+          $requestData = [
+               "year" => $year,
+               "start_date" => $start_date,
+               "end_date" => $end_date,
+               "branch" => $branch,
+               "department" => $department,
+          ];
+
+          $name = 'leave_from_' . date('Y-m-d', strtotime($start_date)) . "_to_" . date('Y-m-d', strtotime($end_date));
+
+          try
+          {
+               $data = Excel::download(new LeaveReportExport($requestData), $name . '.xlsx');
+               return $data;
+          }
+          catch (ModelNotFoundException $exception)
+          {
+               // Handle the exception, for example, redirect back with an error message
+               return redirect()->back()->with('error', $exception->getMessage());
+               return redirect()->route("report.leave")->with('error', $exception->getMessage());
+          }
+     }
+
+     public function AccountStatementReportExport(Request $request)
+     {
+          $name = 'Account Statement_' . date('Y-m-d i:h:s');
+          $data = Excel::download(new accountstatementExport(), $name . '.xlsx');
+
+          return $data;
+     }
+
+     public function PayrollReportExport(Request $request)
+     {
+          $name = 'Payroll_' . date('Y-m-d i:h:s');
+          $data = Excel::download(new PayrollExport(), $name . '.xlsx');
+
+          return $data;
+     }
+
+     public function exportTimeshhetReport(Request $request)
+     {
+          $name = 'Timesheet_' . date('Y-m-d i:h:s');
+          $data = Excel::download(new TimesheetReportExport(), $name . '.xlsx');
+
+          return $data;
+     }
+
+     public function monthelyAttendanceReport($start_date, $end_date, $branch, $department, $employee)
+     {
+          $setting = Utility::settings();
+
+          $weekOffArray = collect([
+               'company_office_week_off_monday' => 'Monday',
+               'company_office_week_off_tuesday' => 'Tuesday',
+               'company_office_week_off_wednesday' => 'Wednesday',
+               'company_office_week_off_thusday' => 'Thursday',
+               'company_office_week_off_friday' => 'Friday',
+               'company_office_week_off_saturday' => 'Saturday',
+               'company_office_week_off_sunday' => 'Sunday',
+          ])->filter(fn($day, $key) => $setting[$key] === 'on')->values()->toArray();
+
+          $data['branch'] = __('All');
+          $data['department'] = __('All');
+
+          $employees = Employee::with('designation')
+               // ->select('id', 'name', 'designation_id', 'branch_id', 'department_id', 'employee_id')
+               ->where('created_by', Auth::user()->creatorId());
+
+          if (Auth::user()->type != 'company')
+          {
+               $assign_employees = json_decode(Auth::user()->assign_employees) ?? [];
+               $employees->whereIn('id', $assign_employees);
+          }
+
+          if ($branch != 0)
+          {
+               $employees->where('branch_id', $branch);
+               $data['branch'] = !empty(Branch::find($branch)) ? Branch::find($branch)->name : '';
+          }
+
+          if ($department != 0)
+          {
+               $employees->where('department_id', $department);
+               $data['department'] = !empty(Department::find($department)) ? Department::find($department)->name : '';
+          }
+          if ($employee != 0)
+          {
+               $employeeIds = explode(',', $employee);
+               $employees->whereIn('id', $employeeIds);
+          }
+
+          $employees = $employees->where("employee_exit", 0)->get();
+
+          $start_date = $start_date ?? Carbon::now()->startOfMonth()->format('Y-m-d');
+
+          $fileName = $data['branch'] . ' ' . __('Branch') . ' ' . $start_date . ' ' . ($end_date ?? date('Y-m-d', strtotime('last day of this month', strtotime($start_date)))) . ' ' . __('Attendance Report of') . ' ' . $data['department'] . ' ' . __('Department') . ' ' . '.csv';
+
+          $start_date = Carbon::parse($start_date);
+          $end_date = Carbon::parse($end_date);
+          $monthDates = [];
+          while ($start_date <= $end_date)
+          {
+               $monthDates[] = $start_date->format('Y-m-d');
+               $start_date->addDay();
+          }
+
+          // $holidayData = Holiday::select("id", "status", "start_date", "end_date", "created_by", "branch_id", "department_id", "occasion")
+          //      ->where('created_by', Auth::user()->creatorId())
+          //      ->whereIn('start_date', $monthDates)
+          //      ->orWhereIn('end_date', $monthDates)
+          //      ->get();
+
+          $holidayData = Holiday::select("id", "status", "start_date", "end_date", "created_by", "branch_id", "department_id", "occasion")
+               ->where('created_by', Auth::user()->creatorId())
+               ->where(function ($query) use ($monthDates)
+               {
+                    $query->whereIn('start_date', $monthDates)
+                         ->orWhereIn('end_date', $monthDates);
+               })
+               ->get();
+
+          $uniqueEmployeeIds = $employees->pluck('id')->unique()->toArray();
+
+          $leaveData = Leave::select("id", "employee_id", "status", "start_date", "end_date", "created_by", "total_leave_days")
+               ->where('status', 'Approved')
+               ->where('created_by', Auth::user()->creatorId())
+               ->whereIn('employee_id', $uniqueEmployeeIds)
+               ->where(function ($query) use ($monthDates)
+               {
+                    foreach ($monthDates as $date)
+                    {
+                         $query->orWhere(function ($subQuery) use ($date)
+                         {
+                              $subQuery->where('start_date', '<=', $date)->where('end_date', '>=', $date);
+                         });
+                    }
+               })
+               ->get();
+
+          $leaveDataArray = [];
+          foreach ($leaveData as $item)
+          {
+               foreach ($monthDates as $date)
+               {
+                    if ($item->start_date <= $date && $item->end_date >= $date)
+                    {
+                         $leaveDataArray[$item->employee_id][$date] = $item;
+                    }
+               }
+          }
+
+          $employeeAttendance = AttendanceEmployee::whereIn('employee_id', $uniqueEmployeeIds)->select('employee_id', 'status', 'date', 'clock_in', 'clock_out', 'clock_in_latitude', 'clock_in_longitude', 'clock_out_latitude', 'clock_out_longitude')->whereIn('date', $monthDates)->get();
+
+          $dateWiseAttendance = [];
+          foreach ($employeeAttendance as $attendanceData)
+          {
+               $attendance_date = Carbon::parse($attendanceData->date)->format('Y-m-d');
+               if (!isset($dateWiseAttendance[$attendanceData->employee_id]))
+               {
+                    $dateWiseAttendance[$attendanceData->employee_id] = []; // Initialize the employee's entry
+               }
+
+               // Assign attendance data to the corresponding date for the employee
+               $dateWiseAttendance[$attendanceData->employee_id][$attendance_date] = [
+                    'status' => $attendanceData->status,
+                    'clock_in_latitude' => $attendanceData->clock_in_latitude,
+                    'clock_in_longitude' => $attendanceData->clock_in_longitude,
+                    'clock_out_latitude' => $attendanceData->clock_out_latitude,
+                    'clock_out_longitude' => $attendanceData->clock_out_longitude,
+                    'clock_in' => $attendanceData->clock_in,
+                    'clock_out' => $attendanceData->clock_out,
+               ];
+          }
+          $employeesAttendance = [];
+          $employees->chunk(100)->each(function ($chunk) use ($weekOffArray, $leaveDataArray, $holidayData, $setting, $monthDates, &$employeesAttendance, $dateWiseAttendance)
+          {
+               foreach ($chunk as $employee)
+               {
+                    $attendances = [
+                         'employee_id' => $employee->employee_id,
+                         'name' => $employee->name,
+                         'branch' => optional($employee->branch)->name,
+                         'designation' => optional($employee->designation)->name,
+                    ];
+                    $present_days = 0;
+                    $absend_days = 0;
+                    $attendances['present_days'] = $present_days;
+                    $attendances['absend_days'] = $absend_days;
+                    // $employeeAttendanceData = AttendanceEmployee::where('employee_id', $employee->id)->whereYear("date", $year)->whereMonth("date", $month)->get();
+
+                    // $attendances['present_days'] = $employeeAttendanceData->where("status", "Present")->count("*") ?? 0;
+                    // $attendances['absend_days'] = $employeeAttendanceData->where("status", "Leave")->count("*") ?? 0;
+
+                    $is_custom_weekoffs = $employee->is_custom_weekoffs ?? 0;
+                    $employee_weekoffs_data = json_decode($employee->weekoffs_data) ?? [];
+
+                    foreach ($monthDates as $date)
+                    {
+                         $days = date('l', strtotime($date));
+
+                         $holidays_branch_ids = [];
+                         foreach ($holidayData as $holiday)
+                         {
+                              $start_date = Carbon::parse($holiday->start_date)->format('Y-m-d');
+                              $end_date = Carbon::parse($holiday->end_date)->format('Y-m-d');
+                              if ($start_date == $date || $end_date == $date)
+                              {
+                                   $holidays_branch_ids = json_decode($holiday->branch_id) ?? [];
+                              }
+                         }
+
+                         // check is week off
+                         $isWeekOff = false;
+                         if ($is_custom_weekoffs == 1)
+                         { // if 1 then check custom week off of employee
+                              if (in_array($date, $employee_weekoffs_data))
+                              {
+                                   $isWeekOff = true;
+                              }
+                         }
+                         else
+                         { // if 0 then check company week off
+                              if (in_array($days, $weekOffArray))
+                              {
+                                   $isWeekOff = true;
+                              }
+                         }
+                         // check is week off
+                         if (!empty($leaveDataArray) && !empty($leaveDataArray[$employee->id]) && !empty($leaveDataArray[$employee->id][$date]))
+                         {
+                              if ($leaveDataArray[$employee->id][$date]['total_leave_days'] == 0.5)
+                              {
+                                   $attendanceStatus[$date] = "HD";
+                                   $absend_days += 0.5;
+                              }
+                              else
+                              {
+                                   $attendanceStatus[$date] = "L";
+                                   $absend_days += 1;
+                              }
+                         }
+                         else
+                         {
+                              if ($date <= date('Y-m-d'))
+                              {
+                                   if (empty($dateWiseAttendance) || !isset($dateWiseAttendance[$employee->id]) || !isset($dateWiseAttendance[$employee->id][$date]))
+                                   {
+                                        if ($isWeekOff)
+                                        {
+                                             // if (in_array($days, $weekOffArray)) {
+                                             $attendanceStatus[$date] = 'WO';
+                                        }
+                                        else
+                                        {
+                                             if (array_intersect([0, $employee->branch_id], $holidays_branch_ids))
+                                             {
+                                                  $attendanceStatus[$date] = 'H';
+                                             }
+                                             else
+                                             {
+                                                  if ($date == date('Y-m-d') && $setting['company_start_time'] >= date('H:i'))
+                                                  {
+                                                       $attendanceStatus[$date] = '-';
+                                                  }
+                                                  else
+                                                  {
+                                                       $attendanceStatus[$date] = 'A';
+                                                       $absend_days++;
+                                                  }
+                                             }
+                                        }
+                                   }
+                                   elseif (!empty($dateWiseAttendance) && !empty($dateWiseAttendance[$employee->id]) && !empty($dateWiseAttendance[$employee->id][$date]) && $dateWiseAttendance[$employee->id][$date]['status'] == 'Present')
+                                   {
+                                        $clockIn = "";
+                                        $clockOut = "";
+
+                                        if (!empty($dateWiseAttendance[$employee->id][$date]['clock_in']) && $dateWiseAttendance[$employee->id][$date]['clock_in'] != "00:00:00")
+                                        {
+                                             $clockIn = Auth::user()->timeFormat($dateWiseAttendance[$employee->id][$date]['clock_in']);
+                                        }
+
+                                        if (!empty($dateWiseAttendance[$employee->id][$date]['clock_out']) && $dateWiseAttendance[$employee->id][$date]['clock_out'] != "00:00:00")
+                                        {
+                                             $clockOut = Auth::user()->timeFormat($dateWiseAttendance[$employee->id][$date]['clock_out']);
+                                        }
+
+                                        // $clockOut = Auth::user()->timeFormat($dateWiseAttendance[$employee->id][$date]['clock_out']);
+
+                                        $clockInLatitude = $dateWiseAttendance[$employee->id][$date]['clock_in_latitude'];
+                                        $clockInLongitude = $dateWiseAttendance[$employee->id][$date]['clock_in_longitude'];
+
+                                        $clockOutLatitude = $dateWiseAttendance[$employee->id][$date]['clock_out_latitude'];
+                                        $clockOutLongitude = $dateWiseAttendance[$employee->id][$date]['clock_out_longitude'];
+
+                                        $clockInLink = "";
+                                        if (!empty($clockInLatitude) && !empty($clockInLongitude))
+                                        {
+                                             $clockInLink = "(https://www.google.com/maps/search/?api=1&query={$clockInLatitude},{$clockInLongitude})";
+                                        }
+
+
+                                        $clockOutLink = "";
+                                        if (!empty($clockOutLatitude) && !empty($clockOutLongitude))
+                                        {
+                                             $clockOutLink = "(https://www.google.com/maps/search/?api=1&query={$clockOutLatitude},{$clockOutLongitude})";
+                                        }
+
+                                        // $clockInLinkShow = '=HYPERLINK("' . $clockInLink . '", "Click Here")';
+                                        // $clockOurLinkShow = '=HYPERLINK("' . $clockOutLink . '", "Click Here")';
+
+
+                                        // $attendanceStatus[$date] = $clockIn . " $clockInLink , " . $clockOut . " $clockOutLink";
+                                        // $attendanceStatus[$date] = $clockIn . " , " . $clockOut;
+                                        $attendanceStatus[$date] = "P (" . $clockIn . " , " . $clockOut . ")";
+                                        // $attendanceStatus[$date] = "<a href='https://www.google.com'>Click Here</a>";
+                                        $present_days++;
+                                   }
+                                   else
+                                   {
+                                        $attendanceStatus[$date] = '-';
+                                   }
+                              }
+                              else
+                              {
+                                   if ($isWeekOff)
+                                   {
+                                        // if (in_array($days, $weekOffArray)) {
+                                        $attendanceStatus[$date] = 'WO';
+                                   }
+                                   else
+                                   {
+                                        if (array_intersect([0, $employee->branch_id], $holidays_branch_ids))
+                                        {
+                                             $attendanceStatus[$date] = 'H';
+                                        }
+                                        else
+                                        {
+                                             $attendanceStatus[$date] = '-';
+                                        }
+                                   }
+                              }
+                         }
+                         $attendances[$date] = $attendanceStatus[$date];
+                    }
+
+                    $attendances['present_days'] = $present_days;
+                    $attendances['absend_days'] = $absend_days;
+
+                    $employeesAttendance[] = $attendances;
+               }
+          });
+          $headers = [
+               "Content-type" => "text/csv",
+               "Content-Disposition" => "attachment; filename=$fileName",
+               "Pragma" => "no-cache",
+               "Cache-Control" => "must-revalidate, post-check=0, pre-check=0",
+               "Expires" => "0",
+          ];
+
+          $emp = array(
+               'Employee Id',
+               'Employee',
+               'Branch',
+               'Designation',
+               'Present (In Days)',
+               'Absent (In Days)',
+          );
+
+          $changedColumns = [];
+
+          foreach ($monthDates as $columnsRow)
+          {
+               // $changedColumns[] = $columnsRow . "-" . $month . "-" . $year;
+               $changedColumns[] = Auth::user()->dateFormat($columnsRow);
+          }
+
+          $columns = array_merge($emp, $changedColumns);
+
+          $callback = function () use ($employeesAttendance, $columns)
+          {
+               $file = fopen('php://output', 'w');
+               fputcsv($file, $columns);
+
+               foreach ($employeesAttendance as $attendance)
+               {
+                    fputcsv($file, str_replace('"', '', array_values($attendance)));
+               }
+
+               fclose($file);
+          };
+
+          return response()->stream($callback, 200, $headers);
+     }
+
+     public function monthelyAttendanceReport_old25_10($filter_month, $branch, $department, $employee)
+     {
+          $setting = Utility::settings();
+
+          $weefOffArray = [];
+          if ($setting['company_office_week_off_monday'] == 'on')
+          {
+               $weefOffArray[] = "Monday";
+          }
+          if ($setting['company_office_week_off_tuesday'] == 'on')
+          {
+               $weefOffArray[] = "Tuesday";
+          }
+          if ($setting['company_office_week_off_wednesday'] == 'on')
+          {
+               $weefOffArray[] = "Wednesday";
+          }
+          if ($setting['company_office_week_off_thusday'] == 'on')
+          {
+               $weefOffArray[] = "Thursday";
+          }
+          if ($setting['company_office_week_off_friday'] == 'on')
+          {
+               $weefOffArray[] = "Friday";
+          }
+          if ($setting['company_office_week_off_saturday'] == 'on')
+          {
+               $weefOffArray[] = "Saturday";
+          }
+          if ($setting['company_office_week_off_sunday'] == 'on')
+          {
+               $weefOffArray[] = "Sunday";
+          }
+          // clock_in
+
+          $data['branch'] = __('All');
+          $data['department'] = __('All');
+
+          $employees = Employee::with('designation')
+               // ->select('id', 'name', 'designation_id', 'branch_id', 'department_id', 'employee_id')
+               ->where('created_by', Auth::user()->creatorId());
+
+          if (Auth::user()->type != 'company')
+          {
+               $assign_employees = json_decode(Auth::user()->assign_employees) ?? [];
+               $employees = $employees->whereIn('id', $assign_employees);
+          }
+
+          if ($branch != 0)
+          {
+               $employees->where('branch_id', $branch);
+               $data['branch'] = !empty(Branch::find($branch)) ? Branch::find($branch)->name : '';
+          }
+
+          if ($department != 0)
+          {
+               $employees->where('department_id', $department);
+               $data['department'] = !empty(Department::find($department)) ? Department::find($department)->name : '';
+          }
+          if ($employee != 0)
+          {
+               $employeeIds = explode(',', $employee);
+               $employees->whereIn('id', $employeeIds);
+          }
+
+          $employees = $employees->get();
+
+          $currentdate = strtotime($filter_month);
+          $month       = date('m', $currentdate);
+          $year        = date('Y', $currentdate);
+          $data['curMonth']    = date('M-Y', strtotime($filter_month));
+
+
+          $fileName = $data['branch'] . ' ' . __('Branch') . ' ' . $data['curMonth'] . ' ' . __('Attendance Report of') . ' ' . $data['department'] . ' ' . __('Department') . ' ' . '.csv';
+
+
+          $num_of_days = date('t', mktime(0, 0, 0, $month, 1, $year));
+          for ($i = 1; $i <= $num_of_days; $i++)
+          {
+               $dates[] = str_pad($i, 2, '0', STR_PAD_LEFT);
+          }
+
+          $employeesAttendance = [];
+          foreach ($employees as $key => $employee)
+          {
+               $attendances['employee_id'] = $employee->employee_id;
+               $attendances['name'] = $employee->name;
+               $attendances['branch'] = (!empty($employee->branch)) ? $employee->branch->name : '';
+               $attendances['designation'] = (!empty($employee->designation)) ? $employee->designation->name : '';
+               // $attendances['department'] = (!empty($employee->department)) ? $employee->department->name : '';
+
+               // Present
+               // Leave
+
+               $employeeAttendanceData = AttendanceEmployee::where('employee_id', $employee->id)->whereYear("date", $year)->whereMonth("date", $month)->get();
+
+               $attendances['present_days'] = $employeeAttendanceData->where("status", "Present")->count("*") ?? 0;
+               $attendances['absend_days'] = $employeeAttendanceData->where("status", "Leave")->count("*") ?? 0;
+
+               $present_days = 0;
+               $absend_days = 0;
+
+               $is_custom_weekoffs = $employee->is_custom_weekoffs ?? 0;
+               $employee_weekoffs_data = json_decode($employee->weekoffs_data) ?? [];
+
+               foreach ($dates as $date)
+               {
+                    $dateFormat = $year . '-' . $month . '-' . $date;
+                    $days = date('l', strtotime($dateFormat));
+
+                    $localLeave = Leave::where('employee_id', $employee->id)->where('status', 'Approved')
+                         ->where('start_date', '<=', $dateFormat)->where('end_date', '>=', $dateFormat)
+                         ->where('created_by', Auth::user()->creatorId())
+                         ->first();
+
+                    $holiday = Holiday::where('status', 1)
+                         ->where('start_date', '<=', $dateFormat)->where('end_date', '>=', $dateFormat)
+                         ->where('created_by', Auth::user()->creatorId())
+                         ->first();
+
+                    // check is week off
+                    $isWeekOff = false;
+                    if ($is_custom_weekoffs == 1) // if 1 then check custom week off of employee
+                    {
+                         if (in_array($dateFormat, $employee_weekoffs_data))
+                         {
+                              $isWeekOff = true;
+                         }
+                    }
+                    else // if 0 then check company week off
+                    {
+                         if (in_array($days, $weefOffArray))
+                         {
+                              $isWeekOff = true;
+                         }
+                    }
+                    // check is week off
+
+                    if (!empty($localLeave))
+                    {
+                         if ($localLeave->total_leave_days == "0.5")
+                         {
+                              $attendanceStatus[$date] = "HD";
+                         }
+                         else
+                         {
+                              $attendanceStatus[$date] = "L";
+                         }
+                    }
+                    else
+                    {
+                         if ($dateFormat <= date('Y-m-d'))
+                         {
+                              $employeeAttendance = AttendanceEmployee::where('employee_id', $employee->id)->where('date', $dateFormat)->first();
+
+                              if (empty($employeeAttendance))
+                              {
+                                   if ($isWeekOff)
+                                   // if (in_array($days, $weefOffArray))
+                                   {
+                                        $attendanceStatus[$date] = 'WO';
+                                   }
+                                   else
+                                   {
+                                        $holidays_branch_ids = json_decode($holiday->branch_id ?? "") ?? [];
+                                        if (array_intersect([0, $employee->branch_id], $holidays_branch_ids))
+                                        {
+                                             $attendanceStatus[$date] = 'H';
+                                        }
+                                        else
+                                        {
+                                             if ($dateFormat == date('Y-m-d') && $setting['company_start_time'] >= date('H:i'))
+                                             {
+                                                  $attendanceStatus[$date] = '-';
+                                             }
+                                             else
+                                             {
+                                                  $attendanceStatus[$date] = 'A';
+                                                  $absend_days++;
+                                             }
+                                        }
+                                   }
+                              }
+                              elseif (!empty($employeeAttendance) && $employeeAttendance->status == 'Present')
+                              {
+                                   // dd("employeeAttendance", $employeeAttendance);
+
+                                   $clockIn = "";
+                                   $clockOut = "";
+
+                                   if (!empty($employeeAttendance->clock_in) && $employeeAttendance->clock_in != "00:00:00")
+                                   {
+                                        $clockIn = Auth::user()->timeFormat($employeeAttendance->clock_in);
+                                   }
+
+                                   if (!empty($employeeAttendance->clock_out) && $employeeAttendance->clock_out != "00:00:00")
+                                   {
+                                        $clockOut = Auth::user()->timeFormat($employeeAttendance->clock_out);
+                                   }
+
+                                   // $clockOut = Auth::user()->timeFormat($employeeAttendance->clock_out);
+
+                                   $clockInLatitude = $employeeAttendance->clock_in_latitude;
+                                   $clockInLongitude = $employeeAttendance->clock_in_longitude;
+
+                                   $clockOutLatitude = $employeeAttendance->clock_out_latitude;
+                                   $clockOutLongitude = $employeeAttendance->clock_out_longitude;
+
+                                   $clockInLink = "";
+                                   if (!empty($clockInLatitude) && !empty($clockInLongitude))
+                                   {
+                                        $clockInLink = "(https://www.google.com/maps/search/?api=1&query={$clockInLatitude},{$clockInLongitude})";
+                                   }
+
+
+                                   $clockOutLink = "";
+                                   if (!empty($clockOutLatitude) && !empty($clockOutLongitude))
+                                   {
+                                        $clockOutLink = "(https://www.google.com/maps/search/?api=1&query={$clockOutLatitude},{$clockOutLongitude})";
+                                   }
+
+                                   // $clockInLinkShow = '=HYPERLINK("' . $clockInLink . '", "Click Here")';
+                                   // $clockOurLinkShow = '=HYPERLINK("' . $clockOutLink . '", "Click Here")';
+
+
+                                   // $attendanceStatus[$date] = $clockIn . " $clockInLink , " . $clockOut . " $clockOutLink";
+                                   // $attendanceStatus[$date] = $clockIn . " , " . $clockOut;
+                                   $attendanceStatus[$date] = "P (" . $clockIn . " , " . $clockOut . ")";
+                                   // $attendanceStatus[$date] = "<a href='https://www.google.com'>Click Here</a>";
+                                   $present_days++;
+                              }
+                              else
+                              {
+                                   $attendanceStatus[$date] = '-';
+                              }
+                         }
+                         else
+                         {
+                              if ($isWeekOff)
+                              // if (in_array($days, $weefOffArray))
+                              {
+                                   $attendanceStatus[$date] = 'WO';
+                              }
+                              else
+                              {
+                                   $holidays_branch_ids = json_decode($holiday->branch_id ?? "") ?? [];
+                                   if (array_intersect([0, $employee->branch_id], $holidays_branch_ids))
+                                   {
+                                        $attendanceStatus[$date] = 'H';
+                                   }
+                                   else
+                                   {
+                                        $attendanceStatus[$date] = '-';
+                                   }
+                              }
+                         }
+                    }
+                    $attendances[$date] = $attendanceStatus[$date];
+               }
+
+               $attendances['present_days'] = $present_days;
+               $attendances['absend_days'] = $absend_days;
+
+               $employeesAttendance[] = $attendances;
+          }
+
+          $headers = array(
+               "Content-type" => "text/csv",
+               "Content-Disposition" => "attachment; filename=$fileName",
+               "Pragma" => "no-cache",
+               "Cache-Control" => "must-revalidate, post-check=0, pre-check=0",
+               "Expires" => "0",
+          );
+          $emp = array(
+               'Employee Id',
+               'Employee',
+               'Branch',
+               'Designation',
+               'Present (In Days)',
+               'Absent (In Days)',
+          );
+
+          $changedColumns = [];
+
+          foreach ($dates as $columnsRow)
+          {
+               // $changedColumns[] = $columnsRow . "-" . $month . "-" . $year;
+               $changedColumns[] = Auth::user()->dateFormat($columnsRow . "-" . $month . "-" . $year);
+          }
+
+          $columns = array_merge($emp, $changedColumns);
+
+          $data = [
+               "columns" => $columns,
+               "data" => $employeesAttendance,
+          ];
+
+          // return Excel::download(new MonthelyAttendanceReportExport($data), 'exported_data.xlsx');
+
+          $callback = function () use ($employeesAttendance, $columns)
+          {
+               $file = fopen('php://output', 'w');
+               fputcsv($file, $columns);
+
+               foreach ($employeesAttendance as $attendance)
+               {
+                    fputcsv($file, str_replace('"', '', array_values($attendance)));
+               }
+
+               fclose($file);
+          };
+
+          return response()->stream($callback, 200, $headers);
+     }
+
+     public function monthelyAttendanceRepor_OldExcel($filter_month, $branch, $department, $employee)
+     {
+          $setting = Utility::settings();
+
+          $weefOffArray = [];
+          if ($setting['company_office_week_off_monday'] == 'on')
+          {
+               $weefOffArray[] = "Monday";
+          }
+          if ($setting['company_office_week_off_tuesday'] == 'on')
+          {
+               $weefOffArray[] = "Tuesday";
+          }
+          if ($setting['company_office_week_off_wednesday'] == 'on')
+          {
+               $weefOffArray[] = "Wednesday";
+          }
+          if ($setting['company_office_week_off_thusday'] == 'on')
+          {
+               $weefOffArray[] = "Thursday";
+          }
+          if ($setting['company_office_week_off_friday'] == 'on')
+          {
+               $weefOffArray[] = "Friday";
+          }
+          if ($setting['company_office_week_off_saturday'] == 'on')
+          {
+               $weefOffArray[] = "Saturday";
+          }
+          if ($setting['company_office_week_off_sunday'] == 'on')
+          {
+               $weefOffArray[] = "Sunday";
+          }
+
+          $data['branch'] = __('All');
+          $data['department'] = __('All');
+
+          $employees = Employee::with('designation')->select('id', 'name', 'designation_id', 'branch_id', 'department_id')->where('created_by', Auth::user()->creatorId());
+
+          if (Auth::user()->type != 'company')
+          {
+               $assign_employees = json_decode(Auth::user()->assign_employees) ?? [];
+               $employees = $employees->whereIn('id', $assign_employees);
+          }
+
+          if ($branch != 0)
+          {
+               $employees->where('branch_id', $branch);
+               $data['branch'] = !empty(Branch::find($branch)) ? Branch::find($branch)->name : '';
+          }
+
+          if ($department != 0)
+          {
+               $employees->where('department_id', $department);
+               $data['department'] = !empty(Department::find($department)) ? Department::find($department)->name : '';
+          }
+          if ($employee != 0)
+          {
+               $employeeIds = explode(',', $employee);
+               $employees->whereIn('id', $employeeIds);
+          }
+
+          $employees = $employees->get();
+
+          $currentdate = strtotime($filter_month);
+          $month       = date('m', $currentdate);
+          $year        = date('Y', $currentdate);
+          $data['curMonth']    = date('M-Y', strtotime($filter_month));
+
+
+          $fileName = $data['branch'] . ' ' . __('Branch') . ' ' . $data['curMonth'] . ' ' . __('Attendance Report of') . ' ' . $data['department'] . ' ' . __('Department') . ' ' . '.csv';
+
+
+          $num_of_days = date('t', mktime(0, 0, 0, $month, 1, $year));
+          for ($i = 1; $i <= $num_of_days; $i++)
+          {
+               $dates[] = str_pad($i, 2, '0', STR_PAD_LEFT);
+          }
+
+          $employeesAttendance = [];
+          foreach ($employees as $key => $employee)
+          {
+               $attendances['employee_id'] = Auth::user()->employeeIdFormat($employee->id);
+               $attendances['name'] = $employee->name;
+               $attendances['designation'] = (!empty($employee->designation)) ? $employee->designation->name : '';
+               $attendances['department'] = (!empty($employee->department)) ? $employee->department->name : '';
+
+               // Present
+               // Leave
+
+               $employeeAttendanceData = AttendanceEmployee::where('employee_id', $employee->id)->whereYear("date", $year)->whereMonth("date", $month)->get();
+
+               $attendances['present_days'] = $employeeAttendanceData->where("status", "Present")->count("*") ?? 0;
+               $attendances['absend_days'] = $employeeAttendanceData->where("status", "Leave")->count("*") ?? 0;
+
+               $present_days = 0;
+               $absend_days = 0;
+
+               foreach ($dates as $date)
+               {
+                    $dateFormat = $year . '-' . $month . '-' . $date;
+                    $days = date('l', strtotime($dateFormat));
+
+                    $localLeave = Leave::where('employee_id', $employee->id)->where('status', 'Approved')
+                         ->where('start_date', '<=', $dateFormat)->where('end_date', '>=', $dateFormat)
+                         ->where('created_by', Auth::user()->creatorId())
+                         ->first();
+
+                    $holiday = Holiday::where('status', 1)
+                         ->where('start_date', '<=', $dateFormat)->where('end_date', '>=', $dateFormat)
+                         ->where('created_by', Auth::user()->creatorId())
+                         ->first();
+
+                    if (!empty($localLeave))
+                    {
+                         if ($localLeave->total_leave_days == "0.5")
+                         {
+                              $attendanceStatus[$date] = "HD";
+                         }
+                         else
+                         {
+                              $attendanceStatus[$date] = "L";
+                         }
+                    }
+                    else
+                    {
+                         if ($dateFormat <= date('Y-m-d'))
+                         {
+                              $employeeAttendance = AttendanceEmployee::where('employee_id', $employee->id)->where('date', $dateFormat)->first();
+
+                              if (empty($employeeAttendance))
+                              {
+                                   if (in_array($days, $weefOffArray))
+                                   {
+                                        $attendanceStatus[$date] = 'WO';
+                                   }
+                                   else
+                                   {
+                                        $holidays_branch_ids = json_decode($holiday->branch_id ?? "") ?? [];
+                                        if (array_intersect([0, $employee->branch_id], $holidays_branch_ids))
+                                        {
+                                             $attendanceStatus[$date] = 'H';
+                                        }
+                                        else
+                                        {
+                                             if ($dateFormat == date('Y-m-d') && $setting['company_start_time'] >= date('H:i'))
+                                             {
+                                                  $attendanceStatus[$date] = '-';
+                                             }
+                                             else
+                                             {
+                                                  $attendanceStatus[$date] = 'A';
+                                                  $absend_days++;
+                                             }
+                                        }
+                                   }
+                              }
+                              elseif (!empty($employeeAttendance) && $employeeAttendance->status == 'Present')
+                              {
+                                   // dd("employeeAttendance", $employeeAttendance);
+
+                                   $clockIn = Auth::user()->timeFormat($employeeAttendance->clock_in);
+                                   $clockOut = Auth::user()->timeFormat($employeeAttendance->clock_out);
+
+                                   $clockInLatitude = $employeeAttendance->clock_in_latitude;
+                                   $clockInLongitude = $employeeAttendance->clock_in_longitude;
+
+                                   $clockOutLatitude = $employeeAttendance->clock_out_latitude;
+                                   $clockOutLongitude = $employeeAttendance->clock_out_longitude;
+
+
+                                   $clockInLink = "";
+                                   if (!empty($clockInLatitude) && !empty($clockInLongitude))
+                                   {
+                                        $clockInLink = "(https://www.google.com/maps/search/?api=1&query={$clockInLatitude},{$clockInLongitude})";
+                                   }
+
+
+                                   $clockOutLink = "";
+                                   if (!empty($clockOutLatitude) && !empty($clockOutLongitude))
+                                   {
+                                        $clockOutLink = "(https://www.google.com/maps/search/?api=1&query={$clockOutLatitude},{$clockOutLongitude})";
+                                   }
+
+                                   // $clockInLinkShow = '=HYPERLINK("' . $clockInLink . '", "Click Here")';
+                                   // $clockOurLinkShow = '=HYPERLINK("' . $clockOutLink . '", "Click Here")';
+
+
+                                   $attendanceStatus[$date] = $clockIn . " $clockInLink , " . $clockOut . " $clockOutLink";
+                                   $present_days++;
+                              }
+                              else
+                              {
+                                   $attendanceStatus[$date] = '-';
+                              }
+                         }
+                         else
+                         {
+                              if (in_array($days, $weefOffArray))
+                              {
+                                   $attendanceStatus[$date] = 'WO';
+                              }
+                              else
+                              {
+                                   $holidays_branch_ids = json_decode($holiday->branch_id ?? "") ?? [];
+                                   if (array_intersect([0, $employee->branch_id], $holidays_branch_ids))
+                                   {
+                                        $attendanceStatus[$date] = 'H';
+                                   }
+                                   else
+                                   {
+                                        $attendanceStatus[$date] = '-';
+                                   }
+                              }
+                         }
+                    }
+                    $attendances[$date] = $attendanceStatus[$date];
+               }
+
+               $attendances['present_days'] = $present_days;
+               $attendances['absend_days'] = $absend_days;
+
+               $employeesAttendance[] = $attendances;
+          }
+
+          $headers = array(
+               "Content-type" => "text/csv",
+               "Content-Disposition" => "attachment; filename=$fileName",
+               "Pragma" => "no-cache",
+               "Cache-Control" => "must-revalidate, post-check=0, pre-check=0",
+               "Expires" => "0",
+          );
+          $emp = array(
+               'Employee Id',
+               'Employee',
+               'Designation',
+               'Department',
+               'Present (In Days)',
+               'Absent (In Days)',
+          );
+
+          $changedColumns = [];
+
+          foreach ($dates as $columnsRow)
+          {
+               $changedColumns[] = $columnsRow . "-" . $month . "-" . $year;
+          }
+
+          $columns = array_merge($emp, $changedColumns);
+
+          $data = [
+               "columns" => $columns,
+               "data" => $employeesAttendance,
+          ];
+          // return Excel::download(new MonthelyAttendanceReportExport($data), 'exported_data.xlsx');
+
+          $callback = function () use ($employeesAttendance, $columns)
+          {
+               $file = fopen('php://output', 'w');
+               fputcsv($file, $columns);
+
+               foreach ($employeesAttendance as $attendance)
+               {
+                    fputcsv($file, str_replace('"', '', array_values($attendance)));
+               }
+
+               fclose($file);
+          };
+
+          return response()->stream($callback, 200, $headers);
+     }
+
+     public function monthelyAttendanceReport_ORIGINAL($filter_month, $branch, $department, $employee)
+     {
+          $setting = Utility::settings();
+
+          $weefOffArray = [];
+          if ($setting['company_office_week_off_monday'] == 'on')
+          {
+               $weefOffArray[] = "Monday";
+          }
+          if ($setting['company_office_week_off_tuesday'] == 'on')
+          {
+               $weefOffArray[] = "Tuesday";
+          }
+          if ($setting['company_office_week_off_wednesday'] == 'on')
+          {
+               $weefOffArray[] = "Wednesday";
+          }
+          if ($setting['company_office_week_off_thusday'] == 'on')
+          {
+               $weefOffArray[] = "Thursday";
+          }
+          if ($setting['company_office_week_off_friday'] == 'on')
+          {
+               $weefOffArray[] = "Friday";
+          }
+          if ($setting['company_office_week_off_saturday'] == 'on')
+          {
+               $weefOffArray[] = "Saturday";
+          }
+          if ($setting['company_office_week_off_sunday'] == 'on')
+          {
+               $weefOffArray[] = "Sunday";
+          }
+
+          $data['branch'] = __('All');
+          $data['department'] = __('All');
+
+          $employees = Employee::with('designation')->select('id', 'name', 'designation_id')->where('created_by', Auth::user()->creatorId());
+
+          if (Auth::user()->type != 'company')
+          {
+               $assign_employees = json_decode(Auth::user()->assign_employees) ?? [];
+               $employees = $employees->whereIn('id', $assign_employees);
+          }
+
+          if ($branch != 0)
+          {
+               $employees->where('branch_id', $branch);
+               $data['branch'] = !empty(Branch::find($branch)) ? Branch::find($branch)->name : '';
+          }
+
+          if ($department != 0)
+          {
+               $employees->where('department_id', $department);
+               $data['department'] = !empty(Department::find($department)) ? Department::find($department)->name : '';
+          }
+          if ($employee != 0)
+          {
+               $employeeIds = explode(',', $employee);
+               $employees->whereIn('id', $employeeIds);
+          }
+
+          $employees = $employees->get();
+
+          $currentdate = strtotime($filter_month);
+          $month       = date('m', $currentdate);
+          $year        = date('Y', $currentdate);
+          $data['curMonth']    = date('M-Y', strtotime($filter_month));
+
+
+          $fileName = $data['branch'] . ' ' . __('Branch') . ' ' . $data['curMonth'] . ' ' . __('Attendance Report of') . ' ' . $data['department'] . ' ' . __('Department') . ' ' . '.csv';
+
+
+          $num_of_days = date('t', mktime(0, 0, 0, $month, 1, $year));
+          for ($i = 1; $i <= $num_of_days; $i++)
+          {
+               $dates[] = str_pad($i, 2, '0', STR_PAD_LEFT);
+          }
+
+          $employeesAttendance = [];
+          foreach ($employees as $key => $employee)
+          {
+               $attendances['name'] = $employee->name;
+               $attendances['designation'] = (!empty($employee->designation)) ? $employee->designation->name : '';
+
+               foreach ($dates as $date)
+               {
+                    $dateFormat = $year . '-' . $month . '-' . $date;
+                    $days = date('l', strtotime($dateFormat));
+
+                    $localLeave = Leave::where('employee_id', $employee->id)->where('status', 'Approved')
+                         ->where('start_date', '<=', $dateFormat)->where('end_date', '>=', $dateFormat)
+                         ->where('created_by', Auth::user()->creatorId())
+                         ->first();
+
+                    // $halfDay = Leave::where('employee_id', $employee->id)->where('total_leave_days',0.5)->where('status', 'Approved')
+                    //      ->where('start_date', '<=', $dateFormat)->where('end_date', '>=', $dateFormat)
+                    //      ->where('created_by', Auth::user()->creatorId())
+                    //      ->first();
+
+                    $holiday = Holiday::where('status', 1)
+                         ->where('start_date', '<=', $dateFormat)->where('end_date', '>=', $dateFormat)
+                         ->where('created_by', Auth::user()->creatorId())
+                         ->first();
+
+                    if (!empty($localLeave))
+                    {
+                         if ($localLeave->total_leave_days == "0.5")
+                         {
+                              $attendanceStatus[$date] = "HD";
+                         }
+                         else
+                         {
+                              $attendanceStatus[$date] = "L";
+                         }
+                    }
+                    else
+                    {
+                         if ($dateFormat <= date('Y-m-d'))
+                         {
+                              $employeeAttendance = AttendanceEmployee::where('employee_id', $employee->id)->where('date', $dateFormat)->first();
+
+                              if (empty($employeeAttendance))
+                              {
+                                   if (in_array($days, $weefOffArray))
+                                   {
+                                        $attendanceStatus[$date] = 'WO';
+                                   }
+                                   else
+                                   {
+                                        if (!empty($holiday))
+                                        {
+                                             $attendanceStatus[$date] = 'H';
+                                        }
+                                        else
+                                        {
+                                             if ($dateFormat == date('Y-m-d') && $setting['company_start_time'] >= date('H:i'))
+                                             {
+                                                  $attendanceStatus[$date] = '-';
+                                             }
+                                             else
+                                             {
+                                                  $attendanceStatus[$date] = 'A';
+                                             }
+                                        }
+                                   }
+                              }
+                              elseif (!empty($employeeAttendance) && $employeeAttendance->status == 'Present')
+                              {
+                                   $attendanceStatus[$date] = 'P';
+                              }
+                              else
+                              {
+                                   $attendanceStatus[$date] = '-';
+                              }
+                         }
+                         else
+                         {
+                              if (in_array($days, $weefOffArray))
+                              {
+                                   $attendanceStatus[$date] = 'WO';
+                              }
+                              else
+                              {
+                                   if (!empty($holiday))
+                                   {
+                                        $attendanceStatus[$date] = 'H';
+                                   }
+                                   else
+                                   {
+                                        $attendanceStatus[$date] = '-';
+                                   }
+                              }
+                         }
+                    }
+
+                    // if ($dateFormat <= date('Y-m-d')) {
+                    //      $employeeAttendance = AttendanceEmployee::where('employee_id', $employee->id)->where('date', $dateFormat)->first();
+
+                    //      if (!empty($employeeAttendance) && $employeeAttendance->status == 'Present') {
+                    //           $attendanceStatus[$date] = 'P';
+                    //      } elseif (!empty($employeeAttendance) && $employeeAttendance->status == 'Leave') {
+                    //           $attendanceStatus[$date] = 'A';
+                    //      } else {
+                    //           $attendanceStatus[$date] = '-';
+                    //      }
+                    // } else {
+                    //      $attendanceStatus[$date] = '-';
+                    // }
+                    $attendances[$date] = $attendanceStatus[$date];
+               }
+
+               $employeesAttendance[] = $attendances;
+          }
+
+          $headers = array(
+               "Content-type" => "text/csv",
+               "Content-Disposition" => "attachment; filename=$fileName",
+               "Pragma" => "no-cache",
+               "Cache-Control" => "must-revalidate, post-check=0, pre-check=0",
+               "Expires" => "0",
+          );
+          $emp = array(
+               'Employee',
+               'Designation',
+          );
+
+          $columns = array_merge($emp, $dates);
+
+          $callback = function () use ($employeesAttendance, $columns)
+          {
+               $file = fopen('php://output', 'w');
+               fputcsv($file, $columns);
+
+               foreach ($employeesAttendance as $attendance)
+               {
+                    fputcsv($file, str_replace('"', '', array_values($attendance)));
+               }
+
+               fclose($file);
+          };
+
+          return response()->stream($callback, 200, $headers);
+     }
+
+     public function getdepartment(Request $request)
+     {
+          $branch_id = $request->branch_id ?? 0;
+          $departments = Department::where('created_by', '=', Auth::user()->creatorId());
+
+          if ($branch_id != 0)
+          {
+               $departments->where('branch_id', $request->branch_id);
+          }
+          $departments = $departments->get()->pluck('name', 'id')->toArray();
+
+          // if ($request->branch_id == 0) {
+          //      $departments = Department::where('created_by', '=', Auth::user()->creatorId())->get()->pluck('name', 'id')->toArray();
+          // } else {
+          //      $departments = Department::where('created_by', '=', Auth::user()->creatorId())->where('branch_id', $request->branch_id)->get()->pluck('name', 'id')->toArray();
+          // }
+          return response()->json($departments);
+     }
+
+     public function getemployee(Request $request)
+     {
+          $department_id = $request->department_id ?? 0;
+          $employees = Employee::Query();
+          if (Auth::user()->type == 'company')
+          {
+               $employees->where('created_by', '=', Auth::user()->creatorId());
+          }
+          else
+          {
+               $assign_employees = json_decode(Auth::user()->assign_employees) ?? [];
+               $employees->whereIn('id', $assign_employees)->where('created_by', '=', Auth::user()->creatorId());
+          }
+          if ($department_id != 0)
+          {
+               $employees->where('department_id', $department_id);
+          }
+          $employees =  $employees->where("employee_exit", 0)->get()->pluck('name', 'id')->toArray();
+
+          // if (!$request->department_id) {
+          //      $employees = Employee::where('created_by', '=', Auth::user()->creatorId())->get()->pluck('name', 'id')->toArray();
+          // } else {
+          //      $employees = Employee::where('created_by', '=', Auth::user()->creatorId())->where('department_id', $request->department_id)->get()->pluck('name', 'id')->toArray();
+          // }
+
+          return response()->json($employees);
+     }
+
+     public function claim(Request $request)
+     {
+          try
+          {
+               if (Auth::user()->can('Manage Report'))
+               {
+                    $status = [
+                         '' => 'All',
+                         'Pending' => 'Pending',
+                         'Approved' => 'Approved',
+                         'Rejected' => 'Rejected'
+                    ];
+                    $filterYear['type']          = __('Daily');
+                    $filterYear['dateYearRange'] = date('M-Y');
+
+                    $start_date = $request->start_date;
+                    $end_date = $request->end_date;
+
+                    DB::enableQueryLog();
+                    $claim = MyClaimModel::with('GradeName', 'myvisitData', 'employee');
+
+                    $approved = MyClaimModel::where('status', 'Approved');
+
+                    $reject = MyClaimModel::where('status', 'Rejected');
+
+                    $pending = MyClaimModel::where('status', 'Pending');
+
+                    $claim->where('created_by', '=', Auth::user()->creatorId());
+                    if (!empty($request->status))
+                    {
+                         $claim->where('status', $request->status);
+                    }
+
+
+                    // Start Date and End Date filter 
+                    if ($request->type == 'daily' && !empty($request->start_date) && !empty($request->end_date))
+                    {
+
+                         $claim->where([['created_at', '>=', $request->start_date . " 00:00:00"], ['created_at', '<=', $request->end_date . " 23:59:59"]]);
+                         $approved->where([['created_at', '>=', $request->start_date . " 00:00:00"], ['created_at', '<=', $request->end_date . " 23:59:59"]]);
+                         $reject->where([['created_at', '>=', $request->start_date . " 00:00:00"], ['created_at', '<=', $request->end_date . " 23:59:59"]]);
+                         $pending->where([['created_at', '>=', $request->start_date . " 00:00:00"], ['created_at', '<=', $request->end_date . " 23:59:59"]]);
+
+                         $filterYear['dateYearRange'] = date('d-M-Y', strtotime($request->start_date)) . ' to ' . date('d-M-Y', strtotime($request->end_date));
+                         $filterYear['type']          = __('Daily');
+                    }
+                    elseif (!isset($request->type))
+                    {
+                         $month     = date('m');
+                         $year      = date('Y');
+                         $monthYear = date('Y-m');
+
+                         $claim->whereMonth('created_at', $month)->whereYear('created_at', $year);
+                         $approved->whereMonth('created_at', $month)->whereYear('created_at', $year);
+                         $reject->whereMonth('created_at', $month)->whereYear('created_at', $year);
+                         $pending->whereMonth('created_at', $month)->whereYear('created_at', $year);
+
+                         $filterYear['dateYearRange'] = date('d-M-Y', strtotime($monthYear));
+                         $filterYear['type']          = __('Daily');
+                    }
+
+                    if ($request->type == 'monthly' && !empty($request->month))
+                    {
+                         $month = date('m', strtotime($request->month));
+                         $year  = date('Y', strtotime($request->month));
+
+                         $claim->whereMonth('created_at', $month)->whereYear('created_at', $year);
+                         $approved->whereMonth('created_at', $month)->whereYear('created_at', $year);
+                         $reject->whereMonth('created_at', $month)->whereYear('created_at', $year);
+                         $pending->whereMonth('created_at', $month)->whereYear('created_at', $year);
+
+                         $filterYear['dateYearRange'] = date('M-Y', strtotime($request->month));
+                         $filterYear['type']          = __('Monthly');
+                    }
+
+                    if ($request->type == 'yearly' && !empty($request->year))
+                    {
+                         $claim->whereYear('created_at', $request->year);
+                         $approved->whereYear('created_at', $request->year);
+                         $reject->whereYear('created_at', $request->year);
+                         $pending->whereYear('created_at', $request->year);
+
+
+                         $filterYear['dateYearRange'] = $request->year;
+                         $filterYear['type']          = __('Yearly');
+                    }
+
+                    $claims = $claim->where('created_by', '=', Auth::user()->creatorId())->orderBy("id", "DESC")->get();
+                    $totalApproved = $approved->count();
+                    $totalReject = $reject->count();
+                    $totalPending = $pending->count();
+
+
+                    $starting_year = date('Y', strtotime('-5 year'));
+                    $ending_year   = date('Y', strtotime('+5 year'));
+
+                    $filterYear['starting_year'] = $starting_year;
+                    $filterYear['ending_year']   = $ending_year;
+
+                    $filter['totalApproved'] = $totalApproved;
+                    $filter['totalReject']   = $totalReject;
+                    $filter['totalPending']  = $totalPending;
+
+                    if ($request->export)
+                    {
+                         if (empty($claims) || count($claims) <= 0)
+                         {
+                              return redirect()->back()->with('error', __('No records to export.'));
+                         }
+
+                         $fileName = 'claims.csv';
+
+                         $headers = array(
+                              "Content-type"        => "text/csv",
+                              "Content-Disposition" => "attachment; filename=$fileName",
+                              "Pragma"              => "no-cache",
+                              "Cache-Control"       => "must-revalidate, post-check=0, pre-check=0",
+                              "Expires"             => "0"
+                         );
+
+                         $columns = array(
+                              'Sr No',
+                              'Employee Id',
+                              'Employee',
+                              'Visit Type',
+                              'Visit Name',
+                              'Other Claim',
+                              'Visit Date',
+                              'Vehicle Type',
+                              'Tier',
+                              'City',
+                              'Amount',
+                              'Status',
+                              'Status Changed By'
+                         );
+
+                         $callback = function () use ($claims, $columns)
+                         {
+                              $file = fopen('php://output', 'w');
+                              fputcsv($file, $columns);
+
+                              $srNo = 1;
+                              foreach ($claims as $claim)
+                              {
+                                   $visit_type = "";
+                                   $visitDate = "";
+                                   if ($claim->visit_type == 0)
+                                   {
+                                        if (!empty($claim->myvisitData))
+                                        {
+                                             $visitDate = (Auth::user()->dateFormat($claim->myvisitData->form_date) ?? "");
+                                             if ($claim->myvisitData->visit_type == 1)
+                                             {
+                                                  $visit_type = 'Local visit';
+                                             }
+                                             else
+                                             {
+                                                  $visit_type = 'Out of City visit';
+                                             }
+                                        }
+                                        else
+                                        {
+                                             $visit_type = 'Out of City visit';
+                                        }
+                                   }
+                                   else
+                                   {
+                                        $visit_type = 'Other Claim';
+                                        $visitDate = Auth::user()->dateFormat($claim->created_at);
+                                   }
+
+                                   if ($claim->status == 'Approved')
+                                   {
+                                        $status = "Approved";
+                                   }
+                                   else if ($claim->status == 'Rejected')
+                                   {
+                                        $status = 'Rejected';
+                                   }
+                                   else
+                                   {
+                                        $status = 'Pending';
+                                   }
+
+                                   $vehicleType = "";
+
+                                   if ($claim->commuting_type == 1)
+                                   {
+                                        $vehicleType = "Two wheeler";
+                                   }
+                                   else
+                                   {
+                                        $vehicleType = "Four wheeler";
+                                   }
+
+                                   $tier = "";
+                                   $city = "";
+
+                                   if ($claim->visit_type == 0)
+                                   {
+                                        if (($claim->myvisitData->visit_type ?? 0) == 2)
+                                        {
+                                             $tierData = CityTier::find($claim->myvisitData->tier_id);
+                                             $tier = $tierData->name ?? '';
+
+                                             $cityData = CityModel::find($claim->myvisitData->city_id);
+                                             $city = $cityData->name;
+                                        }
+                                   }
+
+                                   $row['Sr No']  = $srNo;
+                                   $row['Employee Id']  = $claim->employee->employee_id;
+                                   $row['Employee']  = $claim->employee->name;
+                                   $row['Visit Type']    = $visit_type;
+                                   $row['Visit Name']    = $claim->myvisitData->visit_name ?? "";
+                                   $row['Other Claim']    = $claim->name ?? "";
+                                   $row['Visit Date']    = $visitDate;
+                                   $row['Vehicle Type']    = $vehicleType;
+                                   $row['Tier']    = $tier;
+                                   $row['City']    = $city;
+                                   $row['Amount']    = $claim->total_amount;
+                                   $row['Status']    = $status;
+                                   $row['Status Changed By']    = findEmployeeByUser($claim->status_changed_by);
+
+                                   fputcsv($file, array(
+                                        $row['Sr No'],
+                                        $row['Employee Id'],
+                                        $row['Employee'],
+                                        $row['Visit Type'],
+                                        $row['Visit Name'],
+                                        $row['Other Claim'],
+                                        $row['Visit Date'],
+                                        $row['Vehicle Type'],
+                                        $row['Tier'],
+                                        $row['City'],
+                                        $row['Amount'],
+                                        $row['Status'],
+                                        $row['Status Changed By'],
+                                   ));
+                                   $srNo++;
+                              }
+
+                              fclose($file);
+                         };
+                         return response()->stream($callback, 200, $headers);
+                    }
+                    return view('report.claim', compact('claims', 'status', 'filterYear', 'filter'));
+               }
+               else
+               {
+                    return redirect()->back()->with('error', __('Permission denied.'));
+               }
+          }
+          catch (Exception $e)
+          {
+               // dd($e);
+               return redirect()->back()->with('error', showExceptionMessage($e));
+          }
+          catch (Throwable $e)
+          {
+               return redirect()->back()->with('error', showExceptionMessage($e));
+          }
+     }
+
+     public function getBirthdayListReport(Request $request)
+     {
+          try
+          {
+               if (Auth::user()->can('Manage Report'))
+               {
+                    $btn_trigger = $request->btn_trigger ?? "";
+
+                    $branch = Branch::select("id", "name", "created_by")->where('created_by', Auth::user()->creatorId())->get()->pluck('name', 'id');
+                    $branch->prepend('All', '');
+
+                    $department = Department::select("id", "name", "created_by")->where('created_by', Auth::user()->creatorId())->get()->pluck('name', 'id');
+                    $department->prepend('All', '');
+
+                    $data['branch']     = __('All');
+                    $data['department'] = __('All');
+
+                    $month    = date('m');
+                    $year     = date('Y');
+                    $currentMonth = Carbon::now()->startOfMonth()->format('Y-m-d');
+                    if (!empty($request->month))
+                    {
+                         $currentdate = strtotime($request->month);
+                         $currentMonth       = date('m', $currentdate);
+                         $curMonth    = date('M-Y', strtotime($request->month));
+                    }
+                    else
+                    {
+                         $month    = date('m');
+                         $year     = date('Y');
+                         $curMonth = date('M-Y', strtotime($year . '-' . $month));
+                         $currentMonth = $month;
+                    }
+
+                    $employees = Employee::with('designation:id,department_id,name')->select('id', 'name', 'designation_id', 'branch_id', 'department_id', 'email', 'employee_id', 'dob');
+                    $employees->whereMonth('dob', $currentMonth)
+                         ->where("employee_exit", 0);
+
+                    if (!empty($request->employee_id) && $request->employee_id[0] != 0)
+                    {
+                         $employees->whereIn('id', $request->employee_id);
+                    }
+
+                    if (Auth::user()->type == 'company')
+                    {
+                         $employees = $employees->where('created_by', Auth::user()->creatorId());
+                    }
+                    else
+                    {
+                         $assign_employees = json_decode(Auth::user()->assign_employees) ?? [];
+                         $employees = $employees->whereIn('id', $assign_employees)->where('created_by', Auth::user()->creatorId());
+                    }
+
+                    if (!empty($request->branch))
+                    {
+                         $employees->where('branch_id', $request->branch);
+                         $data['branch'] = !empty(Branch::find($request->branch)) ? Branch::find($request->branch)->name : '';
+                    }
+
+                    if (!empty($request->department))
+                    {
+                         $employees->where('department_id', $request->department);
+                         $data['department'] = !empty(Department::find($request->department)) ? Department::find($request->department)->name : '';
+                    }
+
+                    if (!empty($request->employees))
+                    {
+                         $employees->where('employee_id', $request->employees);
+                         $data['employees'] = !empty(Employee::find($request->employees)) ? Employee::find($request->employees)->name : '';
+                    }
+
+                    $employees = $employees->get();
+
+                    $data['curMonth']        = $curMonth;
+
+                    $requestMonth = $request->month ?? date('Y-m');
+                    $requestBranchId = $request->branch_id ?? "";
+                    $requestDepartmentId = $request->department ?? "";
+                    $requestEmployeeId = $request->employee_id ?? [0];
+                    if ($btn_trigger == "export")
+                    {
+                         if ($employees->isEmpty())
+                         {
+                              return redirect()->back()->with('error', __('No data to export.'));
+                         }
+
+                         $name = 'BirthdayList_' . date('Y-m-d i:h:s');
+                         return Excel::download(new BirthdayListReportExport($employees), $name . '.xlsx');
+                    }
+                    else if ($btn_trigger == "reset")
+                    {
+                         return redirect()->route("report.birthday_list");
+                    }
+                    else
+                    {
+                         return view('report.birthday_list', compact('data', 'branch', 'department', 'requestMonth', 'requestBranchId', 'requestDepartmentId', 'requestEmployeeId', 'employees'));
+                    }
+               }
+               else
+               {
+                    return redirect()->back()->with('error', __('Permission denied.'));
+               }
+          }
+          catch (Exception $ex)
+          {
+               return redirect()->back()->with('error', showExceptionMessage($ex));
+          }
+          catch (Throwable $ex)
+          {
+               return redirect()->back()->with('error', showExceptionMessage($ex));
+          }
+     }
+
+     public function getWorkAnniversaryListReport(Request $request)
+     {
+          try
+          {
+               if (Auth::user()->can('Manage Report'))
+               {
+                    $btn_trigger = $request->btn_trigger ?? "";
+
+                    $branch = Branch::select("id", "name", "created_by")->where('created_by', Auth::user()->creatorId())->get()->pluck('name', 'id');
+                    $branch->prepend('All', '');
+
+                    $department = Department::select("id", "name", "created_by")->where('created_by', Auth::user()->creatorId())->get()->pluck('name', 'id');
+                    $department->prepend('All', '');
+
+                    $data['branch']     = __('All');
+                    $data['department'] = __('All');
+
+                    $month    = date('m');
+                    $year     = date('Y');
+                    $currentMonth = Carbon::now()->startOfMonth()->format('Y-m-d');
+                    if (!empty($request->month))
+                    {
+                         $currentdate = strtotime($request->month);
+                         $currentMonth       = date('m', $currentdate);
+                         $curMonth    = date('M-Y', strtotime($request->month));
+                    }
+                    else
+                    {
+                         $month    = date('m');
+                         $year     = date('Y');
+                         $curMonth = date('M-Y', strtotime($year . '-' . $month));
+                         $currentMonth = $month;
+                    }
+
+                    $employees = Employee::with('designation:id,department_id,name')->select('id', 'name', 'designation_id', 'branch_id', 'department_id', 'email', 'employee_id', 'dob', 'company_doj');
+
+                    //->whereDay('company_doj', '>=', date('d'))
+                    $employees->whereMonth("company_doj", $currentMonth)
+                         ->where("employee_exit", 0)
+                         ->where("created_by", Auth::user()->creatorId());
+
+                    if (!empty($request->employee_id) && $request->employee_id[0] != 0)
+                    {
+                         $employees->whereIn('id', $request->employee_id);
+                    }
+
+                    if (Auth::user()->type == 'company')
+                    {
+                         $employees = $employees->where('created_by', Auth::user()->creatorId());
+                    }
+                    else
+                    {
+                         $assign_employees = json_decode(Auth::user()->assign_employees) ?? [];
+                         $employees = $employees->whereIn('id', $assign_employees)->where('created_by', Auth::user()->creatorId());
+                    }
+
+                    if (!empty($request->branch))
+                    {
+                         $employees->where('branch_id', $request->branch);
+                         $data['branch'] = !empty(Branch::find($request->branch)) ? Branch::find($request->branch)->name : '';
+                    }
+
+                    if (!empty($request->department))
+                    {
+                         $employees->where('department_id', $request->department);
+                         $data['department'] = !empty(Department::find($request->department)) ? Department::find($request->department)->name : '';
+                    }
+
+                    if (!empty($request->employees))
+                    {
+                         $employees->where('employee_id', $request->employees);
+                         $data['employees'] = !empty(Employee::find($request->employees)) ? Employee::find($request->employees)->name : '';
+                    }
+
+                    $employees = $employees->get();
+
+                    $data['curMonth']        = $curMonth;
+
+                    $requestMonth = $request->month ?? date('Y-m');
+                    $requestBranchId = $request->branch_id ?? "";
+                    $requestDepartmentId = $request->department ?? "";
+                    $requestEmployeeId = $request->employee_id ?? [0];
+                    if ($btn_trigger == "export")
+                    {
+                         if ($employees->isEmpty())
+                         {
+                              return redirect()->back()->with('error', __('No data to export.'));
+                         }
+
+                         $name = 'WorkAnniversaryList_' . date('Y-m-d i:h:s');
+                         return Excel::download(new WorkAnniversaryListReportExport($employees), $name . '.xlsx');
+                    }
+                    else if ($btn_trigger == "reset")
+                    {
+                         return redirect()->route("report.work_anniversary_list");
+                    }
+                    else
+                    {
+                         return view('report.work_anniversary_list', compact('data', 'branch', 'department', 'requestMonth', 'requestBranchId', 'requestDepartmentId', 'requestEmployeeId', 'employees'));
+                    }
+               }
+               else
+               {
+                    return redirect()->back()->with('error', __('Permission denied.'));
+               }
+          }
+          catch (Exception $ex)
+          {
+               return redirect()->back()->with('error', showExceptionMessage($ex));
+          }
+          catch (Throwable $ex)
+          {
+               return redirect()->back()->with('error', showExceptionMessage($ex));
+          }
+     }
+
+     public function getMarriageAnniversaryListReport(Request $request)
+     {
+          try
+          {
+               if (Auth::user()->can('Manage Report'))
+               {
+                    $btn_trigger = $request->btn_trigger ?? "";
+
+                    $branch = Branch::select("id", "name", "created_by")->where('created_by', Auth::user()->creatorId())->get()->pluck('name', 'id');
+                    $branch->prepend('All', '');
+
+                    $department = Department::select("id", "name", "created_by")->where('created_by', Auth::user()->creatorId())->get()->pluck('name', 'id');
+                    $department->prepend('All', '');
+
+                    $data['branch']     = __('All');
+                    $data['department'] = __('All');
+
+                    $month    = date('m');
+                    $year     = date('Y');
+                    $currentMonth = Carbon::now()->startOfMonth()->format('Y-m-d');
+                    if (!empty($request->month))
+                    {
+                         $currentdate = strtotime($request->month);
+                         $currentMonth       = date('m', $currentdate);
+                         $curMonth    = date('M-Y', strtotime($request->month));
+                    }
+                    else
+                    {
+                         $month    = date('m');
+                         $year     = date('Y');
+                         $curMonth = date('M-Y', strtotime($year . '-' . $month));
+                         $currentMonth = $month;
+                    }
+
+                    $employees = Employee::with('designation:id,department_id,name')->select('id', 'name', 'designation_id', 'branch_id', 'department_id', 'email', 'employee_id', 'dob', 'marriage_anniversary_date');
+
+                    //->whereDay('marriage_anniversary_date', '>=', date('d'))
+                    $employees->whereMonth("marriage_anniversary_date", $currentMonth)
+                         ->where("employee_exit", 0)
+                         ->where("created_by", Auth::user()->creatorId());
+
+                    if (!empty($request->employee_id) && $request->employee_id[0] != 0)
+                    {
+                         $employees->whereIn('id', $request->employee_id);
+                    }
+
+                    if (Auth::user()->type == 'company')
+                    {
+                         $employees = $employees->where('created_by', Auth::user()->creatorId());
+                    }
+                    else
+                    {
+                         $assign_employees = json_decode(Auth::user()->assign_employees) ?? [];
+                         $employees = $employees->whereIn('id', $assign_employees)->where('created_by', Auth::user()->creatorId());
+                    }
+
+                    if (!empty($request->branch))
+                    {
+                         $employees->where('branch_id', $request->branch);
+                         $data['branch'] = !empty(Branch::find($request->branch)) ? Branch::find($request->branch)->name : '';
+                    }
+
+                    if (!empty($request->department))
+                    {
+                         $employees->where('department_id', $request->department);
+                         $data['department'] = !empty(Department::find($request->department)) ? Department::find($request->department)->name : '';
+                    }
+
+                    if (!empty($request->employees))
+                    {
+                         $employees->where('employee_id', $request->employees);
+                         $data['employees'] = !empty(Employee::find($request->employees)) ? Employee::find($request->employees)->name : '';
+                    }
+
+                    $employees = $employees->get();
+
+                    $data['curMonth']        = $curMonth;
+
+                    $requestMonth = $request->month ?? date('Y-m');
+                    $requestBranchId = $request->branch_id ?? "";
+                    $requestDepartmentId = $request->department ?? "";
+                    $requestEmployeeId = $request->employee_id ?? [0];
+                    if ($btn_trigger == "export")
+                    {
+                         if ($employees->isEmpty())
+                         {
+                              return redirect()->back()->with('error', __('No data to export.'));
+                         }
+
+                         $name = 'MarriageAnniversaryList_' . date('Y-m-d i:h:s');
+                         return Excel::download(new MarriageAnniversaryListReportExport($employees), $name . '.xlsx');
+                    }
+                    else if ($btn_trigger == "reset")
+                    {
+                         return redirect()->route("report.marriage_anniversary_list");
+                    }
+                    else
+                    {
+                         return view('report.marriage_anniversary_list', compact('data', 'branch', 'department', 'requestMonth', 'requestBranchId', 'requestDepartmentId', 'requestEmployeeId', 'employees'));
+                    }
+               }
+               else
+               {
+                    return redirect()->back()->with('error', __('Permission denied.'));
+               }
+          }
+          catch (Exception $ex)
+          {
+               return redirect()->back()->with('error', showExceptionMessage($ex));
+          }
+          catch (Throwable $ex)
+          {
+               return redirect()->back()->with('error', showExceptionMessage($ex));
+          }
+     }
+     public function lateComingReport(Request $request)
+     {
+          if (Auth::user()->can('Manage Report'))
+          {
+               $setting = Utility::settings();
+
+               $branch = Branch::where('created_by', Auth::user()->creatorId())->get()->pluck('name', 'id');
+               $branch->prepend('All', '');
+
+               $department = Department::where('created_by', Auth::user()->creatorId())->get()->pluck('name', 'id');
+               $department->prepend('All', '');
+
+               $data = [
+                    'branch' => __('All'),
+                    'department' => __('All'),
+               ];
+
+               $month = $request->month ? date('m', strtotime($request->month)) : date('m');
+               $year = $request->month ? date('Y', strtotime($request->month)) : date('Y');
+               $curMonth = date('M-Y', strtotime("$year-$month"));
+               $currentMonth = "$month-$year";
+               $data['curMonth'] = $curMonth;
+
+               $employees = Employee::select('id', 'employee_id', 'name', 'designation_id', 'branch_id')
+                    ->with([
+                         'branch',
+                         'designation',
+                         'attendances' => function ($query) use ($month, $year)
+                         {
+                              $query->select("*", "date as attendance_date")
+                                   ->whereMonth('date', $month)
+                                   ->whereYear('date', $year)
+                                   ->where('late', '!=', '00:00:00');
+                         }
+                    ]);
+               $employees->whereHas('attendances', function ($query) use ($month, $year)
+               {
+                    // Ensure only employees with attendances for the specified month/year are selected
+                    $query->whereMonth('date', $month)
+                         ->whereYear('date', $year)
+                         ->where('late', '!=', '00:00:00');
+               });
+               if (!empty($request->employee_id) && $request->employee_id[0] != 0)
+               {
+                    $employees->whereIn('id', $request->employee_id);
+               }
+
+               if (Auth::user()->type == 'company')
+               {
+                    $employees->where('created_by', Auth::user()->creatorId());
+               }
+               else
+               {
+                    $assign_employees = json_decode(Auth::user()->assign_employees, true) ?? [];
+                    $employees->whereIn('id', $assign_employees)
+                         ->where('created_by', Auth::user()->creatorId());
+               }
+
+               if (!empty($request->branch_id) && $request->branch_id != 0)
+               {
+                    $employees->where('branch_id', $request->branch_id);
+                    $data['branch'] = Branch::find($request->branch_id)->name ?? '';
+               }
+
+               if (!empty($request->department) && $request->department != 0)
+               {
+                    $employees->where('department_id', $request->department);
+                    $data['department'] = Department::find($request->department)->name ?? '';
+               }
+
+               $employees = $employees->get();
+               $employeeIds = $employees->pluck("id")->toArray();
+
+               $monthDates = [];
+               $date = DateTime::createFromFormat('Y-m-d', "$year-$month-01");
+               $daysInMonth = $date->format('t');
+
+               for ($day = 1; $day <= $daysInMonth; $day++)
+               {
+                    $formattedDate = $date->format('Y-m-d');
+                    $monthDates[] = $formattedDate;
+                    $date->modify('+1 day');
+               }
+
+               // $employeeLateCounts = AttendanceEmployee::whereIn('employee_id', $employeeIds)
+               //      ->whereRaw('YEAR(date) = ?', [$year]) // Check the year
+               //      ->whereRaw('MONTH(date) = ?', [$month]) // Check the month
+               //      ->where('late', '!=', '00:00:00') // Exclude cases where late is '00:00:00'
+               //      ->get();
+
+               $employeeLateData = []; // Initialize the array
+               foreach ($employees as $record)
+               {
+                    foreach ($record->attendances as $lateRecord)
+                    {
+                         $employeeId = $record->id;
+                         if (!isset($employeeLateData[$employeeId]))
+                         {
+                              $employeeLateData[$employeeId] = [];
+                         }
+                         if (!isset($employeeLateData[$employeeId][$lateRecord->date]))
+                         {
+                              $employeeLateData[$employeeId][$lateRecord->date] = 1;
+                         }
+                    }
+               }
+               $employeeLateDataFinal = [];
+
+               foreach ($employeeLateData as $employeeId => $dates_count)
+               {
+                    $totalLateCount = array_sum($dates_count);
+                    $employeeLateDataFinal[$employeeId] = ['count' => $totalLateCount];
+               }
+
+               $user = User::find(Auth::user()->creatorId());
+
+               $num_of_days = date('t', mktime(0, 0, 0, $month, 1, $year));
+               $dates = range(1, $num_of_days);
+
+               $requestMonth = $request->month ?? date('Y-m');
+               $requestBranchId = $request->branch_id ?? "";
+               $requestDepartmentId = $request->department ?? "";
+               $requestEmployeeId = $request->employee_id ?? [0];
+
+               if ($request->has("export"))
+               {
+                    $pasasData = [
+                         "month" => $month,
+                         "year" => $year,
+                         "data" => $employees,
+                         "monthDates" => $monthDates,
+                         "employeeLateDataFinal" => $employeeLateDataFinal,
+                    ];
+
+                    return Excel::download(new LateComingExport($pasasData), "late-coming-export($month-$year).xlsx");
+               }
+               return view('report.late-coming-report', compact('requestMonth', 'requestBranchId', 'requestDepartmentId', 'requestEmployeeId', 'branch', 'department', 'employees', 'dates', "monthDates", 'data', 'employeeLateDataFinal'));
+          }
+          else
+          {
+               return redirect()->back()->with('error', __('Permission denied.'));
+          }
+     }
+     public function newJoineeReport(Request $request)
+     {
+          try
+          {
+               if (Auth::user()->can('Manage Report'))
+               {
+                    $btn_trigger = $request->btn_trigger ?? "";
+
+                    $branch = Branch::where('created_by', Auth::user()->creatorId())->get()->pluck('name', 'id');
+                    $branch->prepend('All', '');
+
+                    $department = Department::where('created_by', Auth::user()->creatorId())->get()->pluck('name', 'id');
+                    $department->prepend('All', '');
+
+
+                    $joining_from_date = (!empty($request->joining_from_date)) ? $request->joining_from_date : Carbon::now()->startOfMonth()->format('Y-m-d');
+                    $joining_to_date = (!empty($request->joining_to_date)) ? $request->joining_to_date : Carbon::now()->endOfMonth()->format('Y-m-d');
+                    if ($btn_trigger == "reset")
+                    {
+                         $joining_from_date = Carbon::now()->startOfMonth()->format('Y-m-d');
+                         $joining_to_date = Carbon::now()->endOfMonth()->format('Y-m-d');
+                    }
+                    if (Auth::user()->type == 'company')
+                    {
+                         $employees = Employee::where('created_by', Auth::user()->creatorId())->where('company_doj', '>=', $joining_from_date)->where('company_doj', '<=', $joining_to_date);
+                    }
+                    else
+                    {
+                         $assign_employees = json_decode(Auth::user()->assign_employees) ?? [];
+                         $employees = Employee::whereIn('id', $assign_employees)->where('created_by', Auth::user()->creatorId())->where('company_doj', '>=', $joining_from_date)->where('company_doj', '<=', $joining_to_date);
+                    }
+
+                    if (!empty($request->employee_id) && ($request->employee_id[0] != 0 || !in_array(0, $request->employee_id)) && $btn_trigger != "reset")
+                    {
+                         $employees->whereIn('id', $request->employee_id);
+                    }
+
+                    if (!empty($request->branch) && $btn_trigger != "reset")
+                    {
+                         $employees->where('branch_id', $request->branch);
+                    }
+
+                    if (!empty($request->department) && $btn_trigger != "reset")
+                    {
+                         $employees->where('department_id', $request->department);
+                    }
+
+                    $employees = $employees->orderBy('id', 'desc')->get();
+
+                    $requestBranchId = $request->branch ?? "";
+                    $requestDepartmentId = $request->department ?? "";
+                    $requestEmployeeId = $request->employee_id ?? [0];
+
+                    if ($btn_trigger == "export")
+                    {
+                         if ($employees->isEmpty())
+                         {
+                              return redirect()->back()->with('error', __('No data to export.'));
+                         }
+
+                         $name = 'NewJoinee_' . date('Y-m-d i:h:s');
+                         return Excel::download(new NewJoineeReportExport($employees), $name . '.xlsx');
+                    }
+                    else if ($btn_trigger == "reset")
+                    {
+                         return redirect()->route("new-joinee-report");
+                    }
+                    else
+                    {
+                         return view('report.new_joinee', compact('employees', 'branch', 'department', 'requestBranchId', 'requestDepartmentId', 'requestEmployeeId'));
+                    }
+               }
+               else
+               {
+                    return redirect()->back()->with('error', __('Permission denied.'));
+               }
+          }
+          catch (Exception $ex)
+          {
+               return redirect()->back()->with('error', showExceptionMessage($ex));
+          }
+          catch (Throwable $ex)
+          {
+               return redirect()->back()->with('error', showExceptionMessage($ex));
+          }
+     }
+
+     public function resignedEmployeeReport(Request $request)
+     {
+          try
+          {
+               if (Auth::user()->can('Manage Report'))
+               {
+                    $btn_trigger = $request->btn_trigger ?? "";
+
+                    $branch = Branch::where('created_by', Auth::user()->creatorId())->get()->pluck('name', 'id');
+                    $branch->prepend('All', '');
+
+                    $department = Department::where('created_by', Auth::user()->creatorId())->get()->pluck('name', 'id');
+                    $department->prepend('All', '');
+
+                    $resigned_from_date = (!empty($request->resigned_from_date)) ? $request->resigned_from_date : Carbon::now()->startOfMonth()->format('Y-m-d');
+                    $resigned_to_date = (!empty($request->resigned_to_date)) ? $request->resigned_to_date : Carbon::now()->endOfMonth()->format('Y-m-d');
+                    if ($btn_trigger == "reset")
+                    {
+                         $resigned_from_date = Carbon::now()->startOfMonth()->format('Y-m-d');
+                         $resigned_to_date = Carbon::now()->endOfMonth()->format('Y-m-d');
+                    }
+
+                    if (Auth::user()->type == 'company')
+                    {
+                         $resigned_employee = Resignation::where('created_by', Auth::user()->creatorId())->where('resignation_date', '>=', $resigned_from_date)->where('resignation_date', '<=', $resigned_to_date);
+                    }
+                    else
+                    {
+                         //leftjoin('employee', 'resignation.employee_id', '=', 'employee.id')->
+                         $assign_employees = json_decode(Auth::user()->assign_employees) ?? [];
+                         $resigned_employee = Resignation::whereIn('employee_id', $assign_employees)->where('created_by', Auth::user()->creatorId())->where('resignation_date', '>=', $resigned_from_date)->where('resignation_date', '<=', $resigned_to_date);
+                    }
+
+                    if (!empty($request->employee_id) && ($request->employee_id[0] != 0 || !in_array(0, $request->employee_id)) && $btn_trigger != "reset")
+                    {
+                         $resigned_employee->whereIn('id', $request->employee_id);
+                    }
+
+                    // if (!empty($request->branch) && $btn_trigger != "reset")
+                    // {
+                    //      $resigned_employee->where('employee.branch_id', $request->branch);
+                    // }
+
+                    // if (!empty($request->department) && $btn_trigger != "reset")
+                    // {
+                    //      $resigned_employee->where('employee.department_id', $request->department);
+                    // }
+
+                    $resigned_employee = $resigned_employee->orderBy('id', 'desc')->get();
+
+                    $requestBranchId = $request->branch ?? "";
+                    $requestDepartmentId = $request->department ?? "";
+                    $requestEmployeeId = $request->employee_id ?? [0];
+
+                    if ($btn_trigger == "export")
+                    {
+                         if ($resigned_employee->isEmpty())
+                         {
+                              return redirect()->back()->with('error', __('No data to export.'));
+                         }
+
+                         $name = 'ResignedEmployee_' . date('Y-m-d i:h:s');
+                         return Excel::download(new ResignedEmployeeReport($resigned_employee), $name . '.xlsx');
+                    }
+                    else if ($btn_trigger == "reset")
+                    {
+                         return redirect()->route("resigned-employee-report");
+                    }
+                    else
+                    {
+                         return view('report.resigned_employee', compact('resigned_employee', 'branch', 'department', 'requestBranchId', 'requestDepartmentId', 'requestEmployeeId'));
+                    }
+               }
+               else
+               {
+                    return redirect()->back()->with('error', __('Permission denied.'));
+               }
+          }
+          catch (Exception $ex)
+          {
+               return redirect()->back()->with('error', showExceptionMessage($ex));
+          }
+          catch (Throwable $ex)
+          {
+               return redirect()->back()->with('error', showExceptionMessage($ex));
+          }
+     }
+}

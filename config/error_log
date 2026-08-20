@@ -1,0 +1,184 @@
+[04-Jun-2024 13:17:42 America/Chicago] PHP Fatal error:  Uncaught Error: Call to undefined function env() in /home1/hrshashtri/app.hrshastri.com/config/database.php:18
+Stack trace:
+#0 {main}
+  thrown in /home1/hrshashtri/app.hrshastri.com/config/database.php on line 18
+[05-Aug-2024 04:47:17 America/Chicago] PHP Fatal error:  Uncaught Error: Call to undefined function env() in /home1/hrshashtri/app.hrshastri.com/config/database.php:18
+Stack trace:
+#0 {main}
+  thrown in /home1/hrshashtri/app.hrshastri.com/config/database.php on line 18
+[05-Dec-2024 11:48:37 America/Chicago] PHP Fatal error:  Uncaught Error: Call to undefined function env() in /home1/hrshashtri/app.hrshastri.com/config/database.php:18
+Stack trace:
+#0 {main}
+  thrown in /home1/hrshashtri/app.hrshastri.com/config/database.php on line 18
+[23-Mar-2025 16:58:23 America/Chicago] PHP Fatal error:  Uncaught Error: Call to undefined function env() in /home1/hrshashtri/app.hrshastri.com/config/app.php:18
+Stack trace:
+#0 {main}
+  thrown in /home1/hrshashtri/app.hrshastri.com/config/app.php on line 18
+[15-Jun-2025 02:43:24 America/Chicago] PHP Fatal error:  Uncaught Error: Call to undefined function env() in /home1/hrshashtri/app.hrshastri.com/config/database.php:18
+Stack trace:
+#0 {main}
+  thrown in /home1/hrshashtri/app.hrshastri.com/config/database.php on line 18
+[15-Jun-2025 02:43:39 America/Chicago] PHP Fatal error:  Uncaught Error: Call to undefined function env() in /home1/hrshashtri/app.hrshastri.com/config/app.php:18
+Stack trace:
+#0 {main}
+  thrown in /home1/hrshashtri/app.hrshastri.com/config/app.php on line 18
+[18-Jun-2025 01:22:59 America/Chicago] PHP Fatal error:  Uncaught Error: Call to undefined function env() in /home1/hrshashtri/app.hrshastri.com/config/database.php:18
+Stack trace:
+#0 {main}
+  thrown in /home1/hrshashtri/app.hrshastri.com/config/database.php on line 18
+[18-Jun-2025 01:23:14 America/Chicago] PHP Fatal error:  Uncaught Error: Call to undefined function env() in /home1/hrshashtri/app.hrshastri.com/config/app.php:18
+Stack trace:
+#0 {main}
+  thrown in /home1/hrshashtri/app.hrshastri.com/config/app.php on line 18
+[19-Jun-2025 23:04:12 America/Chicago] PHP Fatal error:  Uncaught Error: Call to undefined function env() in /home1/hrshashtri/app.hrshastri.com/config/database.php:18
+Stack trace:
+#0 {main}
+  thrown in /home1/hrshashtri/app.hrshastri.com/config/database.php on line 18
+[19-Jun-2025 23:04:34 America/Chicago] PHP Fatal error:  Uncaught Error: Call to undefined function env() in /home1/hrshashtri/app.hrshastri.com/config/app.php:18
+Stack trace:
+#0 {main}
+  thrown in /home1/hrshashtri/app.hrshastri.com/config/app.php on line 18
+[23-Jun-2025 02:16:47 America/Chicago] PHP Fatal error:  Uncaught Error: Call to undefined function env() in /home1/hrshashtri/app.hrshastri.com/config/app.php:18
+Stack trace:
+#0 {main}
+  thrown in /home1/hrshashtri/app.hrshastri.com/config/app.php on line 18
+[23-Jun-2025 02:17:13 America/Chicago] PHP Fatal error:  Uncaught Error: Call to undefined function env() in /home1/hrshashtri/app.hrshastri.com/config/broadcasting.php:18
+Stack trace:
+#0 {main}
+  thrown in /home1/hrshashtri/app.hrshastri.com/config/broadcasting.php on line 18
+[23-Jun-2025 02:17:22 America/Chicago] PHP Fatal error:  Uncaught Error: Call to undefined function env() in /home1/hrshashtri/app.hrshastri.com/config/cache.php:18
+Stack trace:
+#0 {main}
+  thrown in /home1/hrshashtri/app.hrshastri.com/config/cache.php on line 18
+[23-Jun-2025 02:17:46 America/Chicago] PHP Fatal error:  Uncaught Error: Call to undefined function env() in /home1/hrshashtri/app.hrshastri.com/config/database.php:18
+Stack trace:
+#0 {main}
+  thrown in /home1/hrshashtri/app.hrshastri.com/config/database.php on line 18
+[23-Jun-2025 02:18:06 America/Chicago] PHP Fatal error:  Uncaught Error: Call to undefined function env() in /home1/hrshashtri/app.hrshastri.com/config/filesystems.php:16
+Stack trace:
+#0 {main}
+  thrown in /home1/hrshashtri/app.hrshastri.com/config/filesystems.php on line 16
+[23-Jun-2025 02:18:48 America/Chicago] PHP Fatal error:  Uncaught Error: Call to undefined function env() in /home1/hrshashtri/app.hrshastri.com/config/queue.php:16
+Stack trace:
+#0 {main}
+  thrown in /home1/hrshashtri/app.hrshastri.com/config/queue.php on line 16
+[23-Jun-2025 02:19:19 America/Chicago] PHP Fatal error:  Uncaught Error: Call to undefined function env() in /home1/hrshashtri/app.hrshastri.com/config/services.php:18
+Stack trace:
+#0 {main}
+  thrown in /home1/hrshashtri/app.hrshastri.com/config/services.php on line 18
+[23-Jun-2025 02:19:26 America/Chicago] PHP Fatal error:  Uncaught Error: Call to undefined function env() in /home1/hrshashtri/app.hrshastri.com/config/session.php:21
+Stack trace:
+#0 {main}
+  thrown in /home1/hrshashtri/app.hrshastri.com/config/session.php on line 21
+[23-Jun-2025 02:20:17 America/Chicago] PHP Fatal error:  Uncaught Error: Call to undefined function resource_path() in /home1/hrshashtri/app.hrshastri.com/config/view.php:17
+Stack trace:
+#0 {main}
+  thrown in /home1/hrshashtri/app.hrshastri.com/config/view.php on line 17
+[30-Jun-2025 08:55:11 America/Chicago] PHP Fatal error:  Uncaught Error: Call to undefined function env() in /home1/hrshashtri/app.hrshastri.com/config/database.php:18
+Stack trace:
+#0 {main}
+  thrown in /home1/hrshashtri/app.hrshastri.com/config/database.php on line 18
+[30-Jun-2025 08:55:32 America/Chicago] PHP Fatal error:  Uncaught Error: Call to undefined function env() in /home1/hrshashtri/app.hrshastri.com/config/app.php:18
+Stack trace:
+#0 {main}
+  thrown in /home1/hrshashtri/app.hrshastri.com/config/app.php on line 18
+[03-Jul-2025 02:47:18 America/Chicago] PHP Fatal error:  Uncaught Error: Call to undefined function env() in /home1/hrshashtri/app.hrshastri.com/config/database.php:18
+Stack trace:
+#0 {main}
+  thrown in /home1/hrshashtri/app.hrshastri.com/config/database.php on line 18
+[03-Jul-2025 02:47:36 America/Chicago] PHP Fatal error:  Uncaught Error: Call to undefined function env() in /home1/hrshashtri/app.hrshastri.com/config/app.php:18
+Stack trace:
+#0 {main}
+  thrown in /home1/hrshashtri/app.hrshastri.com/config/app.php on line 18
+[11-Jul-2025 00:36:23 America/Chicago] PHP Fatal error:  Uncaught Error: Call to undefined function env() in /home1/hrshashtri/app.hrshastri.com/config/database.php:18
+Stack trace:
+#0 {main}
+  thrown in /home1/hrshashtri/app.hrshastri.com/config/database.php on line 18
+[14-Jul-2025 10:40:58 America/Chicago] PHP Fatal error:  Uncaught Error: Call to undefined function env() in /home1/hrshashtri/app.hrshastri.com/config/database.php:18
+Stack trace:
+#0 {main}
+  thrown in /home1/hrshashtri/app.hrshastri.com/config/database.php on line 18
+[21-Jul-2025 15:44:22 America/Chicago] PHP Fatal error:  Uncaught Error: Call to undefined function env() in /home1/hrshashtri/app.hrshastri.com/config/database.php:18
+Stack trace:
+#0 {main}
+  thrown in /home1/hrshashtri/app.hrshastri.com/config/database.php on line 18
+[21-Jul-2025 15:44:31 America/Chicago] PHP Fatal error:  Uncaught Error: Call to undefined function env() in /home1/hrshashtri/app.hrshastri.com/config/app.php:18
+Stack trace:
+#0 {main}
+  thrown in /home1/hrshashtri/app.hrshastri.com/config/app.php on line 18
+[23-Jul-2025 13:09:06 America/Chicago] PHP Fatal error:  Uncaught Error: Call to undefined function env() in /home1/hrshashtri/app.hrshastri.com/config/database.php:18
+Stack trace:
+#0 {main}
+  thrown in /home1/hrshashtri/app.hrshastri.com/config/database.php on line 18
+[25-Jul-2025 21:30:50 America/Chicago] PHP Fatal error:  Uncaught Error: Call to undefined function env() in /home1/hrshashtri/app.hrshastri.com/config/database.php:18
+Stack trace:
+#0 {main}
+  thrown in /home1/hrshashtri/app.hrshastri.com/config/database.php on line 18
+[25-Jul-2025 21:30:50 America/Chicago] PHP Fatal error:  Uncaught Error: Call to undefined function env() in /home1/hrshashtri/app.hrshastri.com/config/app.php:18
+Stack trace:
+#0 {main}
+  thrown in /home1/hrshashtri/app.hrshastri.com/config/app.php on line 18
+[25-Jul-2025 21:31:34 America/Chicago] PHP Fatal error:  Uncaught Error: Call to undefined function env() in /home1/hrshashtri/app.hrshastri.com/config/cache.php:18
+Stack trace:
+#0 {main}
+  thrown in /home1/hrshashtri/app.hrshastri.com/config/cache.php on line 18
+[25-Jul-2025 21:33:32 America/Chicago] PHP Fatal error:  Uncaught Error: Call to undefined function env() in /home1/hrshashtri/app.hrshastri.com/config/filesystems.php:16
+Stack trace:
+#0 {main}
+  thrown in /home1/hrshashtri/app.hrshastri.com/config/filesystems.php on line 16
+[25-Jul-2025 21:33:32 America/Chicago] PHP Fatal error:  Uncaught Error: Call to undefined function env() in /home1/hrshashtri/app.hrshastri.com/config/session.php:21
+Stack trace:
+#0 {main}
+  thrown in /home1/hrshashtri/app.hrshastri.com/config/session.php on line 21
+[25-Jul-2025 21:33:32 America/Chicago] PHP Fatal error:  Uncaught Error: Call to undefined function env() in /home1/hrshashtri/app.hrshastri.com/config/logging.php:20
+Stack trace:
+#0 {main}
+  thrown in /home1/hrshashtri/app.hrshastri.com/config/logging.php on line 20
+[31-Jul-2025 13:38:17 America/Chicago] PHP Fatal error:  Uncaught Error: Call to undefined function env() in /home1/hrshashtri/app.hrshastri.com/config/database.php:18
+Stack trace:
+#0 {main}
+  thrown in /home1/hrshashtri/app.hrshastri.com/config/database.php on line 18
+[07-Aug-2025 12:15:36 America/Chicago] PHP Fatal error:  Uncaught Error: Call to undefined function env() in /home1/hrshashtri/app.hrshastri.com/config/database.php:18
+Stack trace:
+#0 {main}
+  thrown in /home1/hrshashtri/app.hrshastri.com/config/database.php on line 18
+[07-Aug-2025 12:16:09 America/Chicago] PHP Fatal error:  Uncaught Error: Call to undefined function env() in /home1/hrshashtri/app.hrshastri.com/config/app.php:18
+Stack trace:
+#0 {main}
+  thrown in /home1/hrshashtri/app.hrshastri.com/config/app.php on line 18
+[10-Aug-2025 08:08:14 America/Chicago] PHP Fatal error:  Uncaught Error: Call to undefined function env() in /home1/hrshashtri/app.hrshastri.com/config/database.php:18
+Stack trace:
+#0 {main}
+  thrown in /home1/hrshashtri/app.hrshastri.com/config/database.php on line 18
+[10-Aug-2025 08:09:28 America/Chicago] PHP Fatal error:  Uncaught Error: Call to undefined function env() in /home1/hrshashtri/app.hrshastri.com/config/app.php:18
+Stack trace:
+#0 {main}
+  thrown in /home1/hrshashtri/app.hrshastri.com/config/app.php on line 18
+[11-Aug-2025 05:53:11 America/Chicago] PHP Fatal error:  Uncaught Error: Call to undefined function env() in /home1/hrshashtri/app.hrshastri.com/config/database.php:18
+Stack trace:
+#0 {main}
+  thrown in /home1/hrshashtri/app.hrshastri.com/config/database.php on line 18
+[11-Aug-2025 05:53:26 America/Chicago] PHP Fatal error:  Uncaught Error: Call to undefined function env() in /home1/hrshashtri/app.hrshastri.com/config/app.php:18
+Stack trace:
+#0 {main}
+  thrown in /home1/hrshashtri/app.hrshastri.com/config/app.php on line 18
+[14-Aug-2025 20:43:02 America/Chicago] PHP Fatal error:  Uncaught Error: Call to undefined function env() in /home1/hrshashtri/app.hrshastri.com/config/database.php:18
+Stack trace:
+#0 {main}
+  thrown in /home1/hrshashtri/app.hrshastri.com/config/database.php on line 18
+[17-Aug-2025 22:51:16 America/Chicago] PHP Fatal error:  Uncaught Error: Call to undefined function env() in /home1/hrshashtri/app.hrshastri.com/config/database.php:18
+Stack trace:
+#0 {main}
+  thrown in /home1/hrshashtri/app.hrshastri.com/config/database.php on line 18
+[24-Aug-2025 12:59:07 America/Chicago] PHP Fatal error:  Uncaught Error: Call to undefined function env() in /home1/hrshashtri/app.hrshastri.com/config/services.php:18
+Stack trace:
+#0 {main}
+  thrown in /home1/hrshashtri/app.hrshastri.com/config/services.php on line 18
+[24-Aug-2025 13:00:21 America/Chicago] PHP Fatal error:  Uncaught Error: Call to undefined function env() in /home1/hrshashtri/app.hrshastri.com/config/app.php:18
+Stack trace:
+#0 {main}
+  thrown in /home1/hrshashtri/app.hrshastri.com/config/app.php on line 18
+[24-Aug-2025 13:09:14 America/Chicago] PHP Fatal error:  Uncaught Error: Call to undefined function env() in /home1/hrshashtri/app.hrshastri.com/config/database.php:18
+Stack trace:
+#0 {main}
+  thrown in /home1/hrshashtri/app.hrshastri.com/config/database.php on line 18

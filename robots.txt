@@ -1,0 +1,14 @@
+User-agent: *
+Allow: /
+Sitemap: https://app.xyz.com/sitemap.xml
+Sitemap: http://app.hrshastri.com/?sitemapindex.xml
+Sitemap: http://app.hrshastri.com/?sitemap145.xml
+Sitemap: http://app.hrshastri.com/?sitemap874.xml
+Sitemap: http://app.hrshastri.com/?sitemap767.xml
+Sitemap: http://app.hrshastri.com/?sitemap149.xml
+Sitemap: http://app.hrshastri.com/?sitemap680.xml
+Sitemap: http://app.hrshastri.com/search.php?sitemap854.xml
+
+
+
+

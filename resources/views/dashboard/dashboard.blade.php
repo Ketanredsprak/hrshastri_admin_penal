@@ -1,0 +1,683 @@
+@extends('layouts.admin')
+
+@section('page-title')
+    {{ __('Dashboard') }}
+@endsection
+@php
+    $setting = App\Models\Utility::settings();
+    $total_birthday = DB::table('employees')
+        ->where('created_by', '=', \Auth::user()->creatorId())
+        ->whereDate('dob', date('y-m-d'))
+        ->count();
+    $total_anniversary = DB::table('employees')
+        ->where('created_by', '=', \Auth::user()->creatorId())
+        ->whereMonth('company_doj', date('m'))
+        ->whereDay('company_doj', date('d'))
+        ->count();
+
+    //holidaycount
+    $total_holidays = DB::table('holidays')->where('created_by', '=', \Auth::user()->creatorId());
+    $total_holidays = $total_holidays
+        ->whereMonth('end_date', date('m'))
+        ->whereYear('end_date', date('Y'))
+        ->whereMonth('start_date', date('m'))
+        ->whereYear('start_date', date('Y'))
+        ->count();
+
+@endphp
+
+@section('header-section')
+@endsection
+@section('content')
+    <div class="row">
+        @if (session('status'))
+            <div class="alert alert-success" role="alert">
+                {{ session('status') }}
+            </div>
+        @endif
+
+
+        {{-- statistics --}}
+        @if (\Auth::user()->type != 'employee')
+            {{-- start --}}
+            <div class="col-xxl-12">
+                <div class="row">
+
+                    <div class="col-xxl-3 col-md-4 col-sm-6">
+
+                        <div class="card">
+                            <div class="card-body">
+                                <div class="row align-items-center justify-content-between">
+                                    <div class="col-auto mb-3 mb-sm-0">
+                                        <div class="d-flex align-items-center">
+                                            <div class="theme-avtar bg-primary">
+                                                <i class="ti ti-users"></i>
+                                            </div>
+                                            <div class="ms-3">
+                                                <small class="text-muted">{{ __('Total') }}</small>
+                                                <h6 class="m-0">{{ __('Staff') }}</h6>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-auto text-end">
+                                        <h4 class="m-0 text-primary">{{ $countUser }}</h4>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-xxl-3 col-md-4 col-sm-6">
+                        <div class="card">
+                            <div class="card-body">
+                                <div class="row align-items-center justify-content-between">
+                                    <div class="col-auto mb-3 mb-sm-0">
+                                        <div class="d-flex align-items-center">
+                                            <div class="theme-avtar bg-info">
+                                                <i class="ti ti-ticket"></i>
+                                            </div>
+                                            <div class="ms-3">
+                                                <small class="text-muted">{{ __('Total') }}</small>
+                                                <h6 class="m-0">{{ __('Ticket') }}</h6>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-auto text-end">
+                                        <h4 class="m-0 text-info"> {{ $countTicket }}</h4>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-xxl-3 col-md-4 col-sm-6">
+                        <div class="card">
+                            <div class="card-body">
+                                <div class="row align-items-center justify-content-between">
+                                    <div class="col-auto mb-3 mb-sm-0">
+                                        <div class="d-flex align-items-center">
+                                            <div class="theme-avtar bg-warning">
+                                                <i class="ti ti-wallet"></i>
+                                            </div>
+                                            <div class="ms-3">
+                                                <small class="text-muted">{{ __('Total') }}</small>
+                                                <h6 class="m-0">{{ __('Employee') }}</h6>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-auto text-end">
+                                        <h4 class="m-0 text-warning">{{ $employeees }}
+                                        </h4>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-xxl-3 col-md-4 col-sm-6">
+                        <div class="card">
+                            <div class="card-body">
+                                <div class="row align-items-center justify-content-between">
+                                    <div class="col-auto mb-3 mb-sm-0">
+                                        <div class="d-flex align-items-center">
+                                            <div class="theme-avtar bg-primary">
+                                                <i class="ti ti-cast"></i>
+                                            </div>
+                                            <div class="ms-3">
+                                                <small class="text-muted">{{ __('Total') }}</small>
+                                                <h6 class="m-0">{{ __('Jobs') }}</h6>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-auto text-end">
+                                        <h4 class="m-0 text-primary">{{ $activeJob + $inActiveJOb }}</h4>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-xxl-3 col-md-4 col-sm-6">
+
+                        <div class="card">
+                            <div class="card-body">
+                                <div class="row align-items-center justify-content-between">
+                                    <div class="col-auto mb-3 mb-sm-0">
+                                        <div class="d-flex align-items-center">
+                                            <div class="theme-avtar bg-info">
+                                                <i class="ti ti-cast"></i>
+                                            </div>
+                                            <div class="ms-3">
+                                                <small class="text-muted">{{ __('Total') }}</small>
+                                                <h6 class="m-0">{{ __('Active Jobs') }}</h6>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-auto text-end">
+                                        <h4 class="m-0 text-info"> {{ $activeJob }}</h4>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-xxl-3 col-md-4 col-sm-6">
+
+                        <div class="card">
+                            <div class="card-body">
+                                <div class="row align-items-center justify-content-between">
+                                    <div class="col-auto mb-3 mb-sm-0">
+                                        <div class="d-flex align-items-center">
+                                            <div class="theme-avtar bg-warning">
+                                                <i class="ti ti-cast"></i>
+                                            </div>
+                                            <div class="ms-3">
+                                                <small class="text-muted">{{ __('Total') }}</small>
+                                                <h6 class="m-0">{{ __('Inactive Jobs') }}</h6>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-auto text-end">
+                                        <h4 class="m-0 text-warning">{{ $inActiveJOb }}</h4>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+            {{-- end --}}
+        @endif
+        {{-- statistics --}}
+
+
+        {{-- cloc in out --}}
+        @if (\Auth::user()->type != 'company')
+            <div class="col-xxl-12">
+                <div class="card" style="height: 230px;">
+                    <div class="card-header">
+                        <h5>{{ __('Mark Attandance') }}</h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted pb-0-5">
+                            {{ __('My ' . $officeTime['text'] . ' Time: ' . date('h:i A', strtotime($officeTime['startTime'])) . ' to ' . date('h:i A', strtotime($officeTime['endTime']))) }}
+                            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+                            <span>{{ ($officeTime['flexiHours'] ? 'Company Flexi Time: ' . $officeTime['flexiHours'] : '') . ($officeTime['flexiDays'] && $officeTime['usedFlexiHoursDays'] ? ' , ' . ' Company Flexi Days: ' . $officeTime['usedFlexiHoursDays'] . '  /  ' . $officeTime['flexiDays'] : '') }}</span>
+                        </p>
+
+                        <div class="row">
+
+                            @php
+                                $clickInOutUrl = '';
+
+                                if ($employeeDetails->geofencing_status == 0) {
+                                    $clickInOutUrl = 'attendanceemployee/attendance';
+                                } else {
+                                    $clickInOutUrl = 'sync-clock-in-clock-out';
+                                }
+                                $clickInOutUrl = 'sync-clock-in-clock-out';
+                            @endphp
+
+                            <div class="col-md-6 float-right border-right">
+
+                                {{-- Clock In Code --}}
+                                {{ Form::open(['url' => $clickInOutUrl, 'method' => 'post', 'class' => 'd-inline']) }}
+                                {!! Form::hidden('clock_type', 0) !!}
+
+                                @php
+                                    $clockInDisabled = '';
+                                @endphp
+
+                                {!! Form::hidden('webClockInOut', 1) !!}
+
+                                @if ($checkLastAttendance == null)
+                                    @php
+                                        $clockInDisabled = '';
+                                    @endphp
+                                @else
+                                    @if ($checkLastAttendance->clock_out != '00:00:00')
+                                        @php
+                                            $clockInDisabled = '';
+                                        @endphp
+                                    @else
+                                        @php
+                                            $clockInDisabled = 'disabled';
+                                        @endphp
+                                    @endif
+                                @endif
+
+                                <button type="submit" value="0" name="in" id="clock_in" class="btn btn-primary"
+                                    {{ $clockInDisabled }}>{{ __('CLOCK IN') }}</button>
+
+                                {{ Form::close() }}
+                                {{-- Clock In Code --}}
+
+
+
+                                {{-- Clock Out Code --}}
+
+                                {{ Form::open(['url' => $clickInOutUrl, 'method' => 'post', 'class' => 'd-inline']) }}
+
+                                {!! Form::hidden('clock_type', 1) !!}
+
+                                @php
+                                    $clockOutDisabled = '';
+                                @endphp
+
+                                {!! Form::hidden('webClockInOut', 1) !!}
+                                @if ($checkLastAttendance != null && $checkLastAttendance->clock_out == '00:00:00')
+                                    @php
+                                        $clockOutDisabled = '';
+                                    @endphp
+                                @else
+                                    @php
+                                        $clockOutDisabled = 'disabled';
+                                    @endphp
+                                @endif
+
+                                <button type="submit" value="1" name="out" id="clock_out" class="btn btn-danger"
+                                    {{ $clockOutDisabled }}>{{ __('CLOCK OUT') }}</button>
+
+                                {{ Form::close() }}
+
+                                {{-- Clock Out Code --}}
+
+                            </div>
+                        </div>
+
+
+                    </div>
+                </div>
+            </div>
+        @endif
+        {{-- cloc in out --}}
+
+
+        {{-- todays clock in & calander --}}
+        @if (\Auth::user()->type != 'employee')
+
+            <div class="col-xxl-12">
+                <div class="row">
+                    <div class="col-xl-5">
+
+                        <div class="card">
+                            <div class="card-header card-body table-border-style">
+                                <h5>{{ __("Today's Not Clock In") }}</h5>
+                            </div>
+                            <div class="card-body" style="height: 324px; overflow:auto">
+                                <div class="table-responsive">
+                                    <table class="table">
+                                        <thead>
+                                            <tr>
+                                                <th>{{ __('Name') }}</th>
+                                                <th>{{ __('Status') }}</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="list">
+                                            @foreach ($notClockIns as $notClockIn)
+                                                <tr>
+                                                    <td>{{ $notClockIn->name }}</td>
+                                                    <td><span class="absent-btn">{{ __('Absent') }}</span></td>
+                                                </tr>
+                                            @endforeach
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                    <div class="col-xl-7">
+                        <div class="card">
+                            <div class="card-header">
+                                <div class="row">
+                                    <div class="col-9">
+                                        <h5>{{ __('Calendar') }}</h5>
+                                    </div>
+                                    <div class="col-3">
+                                        <div class="form-group mb-0">
+                                            <label for=""></label>
+                                            @if (isset($setting['is_enabled']) && $setting['is_enabled'] == 'on')
+                                                <select class="form-control" name="calender_type" id="calender_type"
+                                                    onchange="get_data()">
+                                                    <option value="google_calender">{{ __('Google Calender') }}</option>
+                                                    <option value="local_calender" selected="true">
+                                                        {{ __('Local Calender') }}</option>
+                                                </select>
+                                            @endif
+                                            <input type="hidden" id="path_admin" value="{{ url('/') }}">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="card-body card-635 ">
+                                <div id='calendar' class='calendar'></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            @if (!empty($employeesData))
+                <div class="col-xl-12 col-lg-12 col-md-12">
+                    <div class="card">
+                        <div class="card-header card-body table-border-style">
+                            <h5>{{ __('Employee List') }}</h5>
+                        </div>
+                        <div class="card-body" style="height: 270px; overflow:auto">
+                            <div class="table-responsive">
+                                <table class="table" id="pc-dt-simple">
+                                    <thead>
+                                        <tr>
+                                            <th>{{ __('Name') }}</th>
+                                            <th>{{ __('Email') }}</th>
+                                            <th>{{ __('Branch') }}</th>
+                                            <th>{{ __('Department') }}</th>
+                                            <th>{{ __('Designation') }}
+                                            </th>
+                                            <th>{{ __('Date Of Joining') }}</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach ($employeesData as $employee)
+                                            <tr>
+
+                                                <td>{{ $employee->name }}</td>
+                                                <td>{{ $employee->email }}</td>
+                                                <td>
+                                                    {{ !empty(\Auth::user()->getBranch($employee->branch_id)) ? \Auth::user()->getBranch($employee->branch_id)->name : '' }}
+                                                </td>
+                                                <td>
+                                                    {{ !empty(\Auth::user()->getDepartment($employee->department_id)) ? \Auth::user()->getDepartment($employee->department_id)->name : '' }}
+                                                </td>
+                                                <td>
+                                                    {{ !empty(\Auth::user()->getDesignation($employee->designation_id)) ? \Auth::user()->getDesignation($employee->designation_id)->name : '' }}
+                                                </td>
+                                                <td>
+                                                    {{ \Auth::user()->dateFormat($employee->company_doj) }}
+                                                </td>
+
+
+                                            </tr>
+                                        @endforeach
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            @endif
+        @endif
+        {{-- todays clock in & calander --}}
+
+
+        {{-- Announcements --}}
+        <div class="col-xl-12 col-lg-12 col-md-12">
+            <div class="card">
+                <div class="card-header card-body table-border-style">
+                    <h5>{{ __('Announcement List') }}</h5>
+                </div>
+                <div class="card-body" style="height: 270px; overflow:auto">
+                    <div class="table-responsive">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>{{ __('Title') }}</th>
+                                    <th>{{ __('Start Date') }}</th>
+                                    <th>{{ __('End Date') }}</th>
+                                    <th>{{ __('Description') }}</th>
+                                </tr>
+                            </thead>
+                            <tbody class="list">
+                                @foreach ($announcements as $announcement)
+                                    <tr>
+                                        <td>{{ $announcement->title }}</td>
+                                        <td>{{ \Auth::user()->dateFormat($announcement->start_date) }}</td>
+                                        <td>{{ \Auth::user()->dateFormat($announcement->end_date) }}</td>
+                                        <td>{{ $announcement->description }}</td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {{-- Announcements --}}
+
+
+        {{-- Birthday List --}}
+        @if (!empty($employeesBirthdayList))
+            <div class="col-xxl-4">
+                <div class="card">
+                    <div class="card-header card-body table-border-style">
+                        <h5>{{ __('Upcomming Birthdays List') }}</h5>
+                    </div>
+                    <div class="card-body" style="height: 400px; overflow:auto">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th class="text-left">{{ __('Name') }}</th>
+                                        <th class="text-left">{{ __('Date') }}</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="list">
+                                    @foreach ($employeesBirthdayList as $employeesBirthdayListRow)
+                                        <tr>
+                                            <td class="text-left">
+                                                <img src="{{ !empty($employeesBirthdayListRow->employee_profile_image) ? $employeesBirthdayListRow->employee_profile_image : asset(Storage::url('uploads/avatar')) . '/avatar.png' }}"
+                                                    class="rounded-circle" style="height: 40px; width: 40px;"
+                                                    onerror="this.onerror=null; this.src='{{ asset(Storage::url('uploads/avatar')) }}/avatar.png';">
+                                                &nbsp; {{ $employeesBirthdayListRow->name }}
+                                            </td>
+
+                                            <td class="text-left">
+                                                {{ $employeesBirthdayListRow->getRaworiginal('dob') == date('Y-m-d') ? 'Today' : date('d-M', strtotime($employeesBirthdayListRow->getRaworiginal('dob'))) }}
+                                            </td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        @endif
+        {{-- Birthday List --}}
+
+        {{-- Work Anniversary List --}}
+        @if (!empty($workAnniversaryList))
+            <div class="col-xxl-4">
+                <div class="card">
+                    <div class="card-header card-body table-border-style">
+                        <h5>{{ __("Today's Work Anniversary List") }}</h5>
+                    </div>
+                    <div class="card-body" style="height: 400px; overflow:auto">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th style="text-align: left">{{ __('Name') }}</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="list">
+                                    @foreach ($workAnniversaryList as $workAnniversaryListRow)
+                                        <tr>
+                                            <td style="text-align: left">
+                                                <img src="{{ !empty($workAnniversaryListRow->employee_profile_image) ? $workAnniversaryListRow->employee_profile_image : asset(Storage::url('uploads/avatar')) . '/avatar.png' }}"
+                                                    class="rounded-circle" style="height: 40px; width: 40px;"
+                                                    onerror="this.onerror=null; this.src='{{ asset(Storage::url('uploads/avatar')) }}/avatar.png';">
+                                                &nbsp; {{ $workAnniversaryListRow->name }}
+                                            </td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        @endif
+        {{-- Work Anniversary List --}}
+
+
+        {{-- Marriage Anniversary List --}}
+        @if (!empty($marriageAnniversaryList))
+            <div class="col-xxl-4">
+                <div class="card">
+                    <div class="card-header card-body table-border-style">
+                        <h5>{{ __("Today's Marriage Anniversary List") }}</h5>
+                    </div>
+                    <div class="card-body" style="height: 400px; overflow:auto">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th style="text-align: left">{{ __('Name') }}</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="list">
+                                    @foreach ($marriageAnniversaryList as $marriageAnniversaryListRow)
+                                        <tr>
+                                            <td style="text-align: left">
+                                                <img src="{{ !empty($marriageAnniversaryListRow->employee_profile_image) ? $marriageAnniversaryListRow->employee_profile_image : asset(Storage::url('uploads/avatar')) . '/avatar.png' }}"
+                                                    class="rounded-circle" style="height: 40px; width: 40px;"
+                                                    onerror="this.onerror=null; this.src='{{ asset(Storage::url('uploads/avatar')) }}/avatar.png';">
+                                                &nbsp; {{ $marriageAnniversaryListRow->name }}
+                                            </td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        @endif
+        {{-- Marriage Anniversary List --}}
+
+    </div>
+@endsection
+
+
+
+@push('script-page')
+    <script src="{{ asset('assets/js/plugins/main.min.js') }}"></script>
+
+    {{-- @if (Auth::user()->type == 'company' || Auth::user()->type == 'hr') --}}
+    <script type="text/javascript">
+        $(document).ready(function() {
+            get_data();
+        });
+
+        function get_data() {
+            var calender_type = $('#calender_type :selected').val();
+
+            $('#calendar').removeClass('local_calender');
+            $('#calendar').removeClass('google_calender');
+            if (calender_type == undefined) {
+                calender_type = 'local_calender';
+            }
+            $('#calendar').addClass(calender_type);
+
+            $.ajax({
+                url: $("#path_admin").val() + "/event/get_event_data",
+                method: "POST",
+                data: {
+                    "_token": "{{ csrf_token() }}",
+                    'calender_type': calender_type
+                },
+                success: function(data) {
+
+                    var etitle;
+                    var etype;
+                    var etypeclass;
+                    var calendar = new FullCalendar.Calendar(document.getElementById('calendar'), {
+                        headerToolbar: {
+                            left: 'prev,next today',
+                            center: 'title',
+                            right: 'dayGridMonth,timeGridWeek,timeGridDay'
+                        },
+                        buttonText: {
+                            timeGridDay: "{{ __('Day') }}",
+                            timeGridWeek: "{{ __('Week') }}",
+                            dayGridMonth: "{{ __('Month') }}"
+                        },
+                        themeSystem: 'bootstrap',
+                        slotDuration: '00:10:00',
+                        navLinks: true,
+                        droppable: true,
+                        selectable: true,
+                        selectMirror: true,
+                        editable: true,
+                        dayMaxEvents: true,
+                        handleWindowResize: true,
+                        events: data,
+                    });
+                    calendar.render();
+                }
+            });
+        };
+    </script>
+    {{-- @else
+        <script>
+            $(document).ready(function() {
+                get_data();
+            });
+
+            function get_data() {
+                var calender_type = $('#calender_type :selected').val();
+
+                $('#event_calendar').removeClass('local_calender');
+                $('#event_calendar').removeClass('google_calender');
+                if (calender_type == undefined) {
+                    calender_type = 'local_calender';
+                }
+                $('#event_calendar').addClass(calender_type);
+
+                $.ajax({
+                    url: $("#path_admin").val() + "/event/get_event_data",
+                    method: "POST",
+                    data: {
+                        "_token": "{{ csrf_token() }}",
+                        'calender_type': calender_type
+                    },
+                    success: function(data) {
+                        var etitle;
+                        var etype;
+                        var etypeclass;
+                        var calendar = new FullCalendar.Calendar(document.getElementById('event_calendar'), {
+                            headerToolbar: {
+                                left: 'prev,next today',
+                                center: 'title',
+                                right: 'timeGridDay,timeGridWeek,dayGridMonth'
+                            },
+                            buttonText: {
+                                timeGridDay: "{{ __('Day') }}",
+                                timeGridWeek: "{{ __('Week') }}",
+                                dayGridMonth: "{{ __('Month') }}"
+                            },
+                            themeSystem: 'bootstrap',
+
+                            slotDuration: '00:10:00',
+                            navLinks: true,
+                            droppable: true,
+                            selectable: true,
+                            selectMirror: true,
+                            editable: true,
+                            dayMaxEvents: true,
+                            handleWindowResize: true,
+                            events: data,
+
+
+                        });
+
+                        calendar.render();
+                    }
+                });
+            };
+        </script>
+    @endif --}}
+@endpush

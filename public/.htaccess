@@ -1,0 +1,16 @@
+<IfModule mod_rewrite.c>
+    <IfModule mod_negotiation.c>
+        Options -MultiViews -Indexes
+    </IfModule>
+
+    RewriteEngine On
+
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteRule ^ index.php [L]
+</IfModule>
+
+
+<FilesMatch "\.env|composer.json|composer.lock|package-lock.json|package.json|user.ini|.editorconfig|.gitattributes|.gitignore|.styleci.yml|artisan|webpack.config.js|webpack.mix.js|aws.zip">
+    Require all denied
+</FilesMatch>

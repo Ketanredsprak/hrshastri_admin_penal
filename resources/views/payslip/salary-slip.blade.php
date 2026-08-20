@@ -1,0 +1,698 @@
+@php
+
+    // $logo = asset(Storage::url('uploads/logo/'));
+    $logo = \App\Models\Utility::get_file('uploads/logo/');
+    $company_logo = Utility::get_company_logo_without_auth($employee->created_by);
+    $Designation = App\Models\Designation::find($employee->designation_id);
+    $departments = App\Models\Department::find($employee->department_id);
+    $employeesId = employeeIdFormat($employee->id);
+@endphp
+
+<!DOCTYPE html
+    PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+
+
+<head>
+
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+
+    <title>{{ __('Salary Slip') }}</title>
+
+</head>
+
+<style type="text/css">
+    body {
+
+        margin: 0;
+
+        padding: 0;
+
+        font-family: Arial, Helvetica, sans-serif;
+
+        color: #000000;
+
+        font-size: 14px;
+
+    }
+
+
+
+    * {
+
+        box-sizing: border-box;
+
+        -webkit-box-sizing: border-box;
+
+        -moz-box-sizing: border-box;
+
+        -o-box-sizing: border-box;
+
+    }
+
+
+
+    table {
+
+        margin: 0;
+
+        padding: 0;
+
+        width: 100%;
+
+        border-collapse: collapse;
+
+    }
+
+    .row-border {
+        border: 1px solid #000000;
+        border-right: 1px solid #000000;
+    }
+</style>
+
+
+
+<body>
+
+    <div class="modal-body">
+
+        <div class="text-md-end mb-2">
+
+            <a href="#" class="btn btn-sm btn-primary" data-bs-toggle="tooltip" data-bs-placement="bottom"
+                title="{{ __('Download') }}" onclick="saveAsPDF()"><span class="fa fa-download"></span></a>
+
+
+            <a title="Mail Send" href="{{ route('payslip.send', [$employee->id, $payslip->salary_month]) }}"
+                class="btn btn-sm btn-warning"><span class="fa fa-paper-plane"></span></a>
+
+        </div>
+
+
+
+        <table width="100%" border="0" cellspacing="0" cellpadding="0" id="printableArea">
+
+            <tr>
+
+                <td align="left" valign="top" style="padding:20px;">
+
+                    <table width="100%" border="0" cellspacing="0" cellpadding="0">
+
+                        <tr>
+
+
+
+                            <td align="center" valign="top">
+
+                                <table width="100%" border="0" cellspacing="0" cellpadding="0">
+
+                                    <tr>
+
+                                        <td align="center" style="text-align:center;">
+
+                                            <span style="font-size:18px; font-weight:bold;">Payslip</span>
+
+                                            <p>{{ __('Payment slip for the month of ') }}
+                                                {{ date('F-Y', strtotime($payslip->salary_month)) }}
+                                            </p>
+
+                                            @if (property_exists($payslipDetail, 'salaryCalculationStartDate') &&
+                                                    property_exists($payslipDetail, 'salaryCalculationEndDate'))
+                                                <p>From: {{ dateFormat($payslipDetail->salaryCalculationStartDate) }}
+                                                    To: {{ dateFormat($payslipDetail->salaryCalculationEndDate) }}</p>
+                                            @endif
+
+                                        </td>
+
+                                    </tr>
+
+                                </table>
+
+                            </td>
+
+
+
+                        </tr>
+
+                        <tr>
+
+                            <td align="left" valign="top">
+
+                                <table width="100%" border="0" cellspacing="0" cellpadding="0">
+
+                                    <tr>
+
+                                        <td align="left" valign="top" width="50%"
+                                            style="width:50%; padding:10px; line-height:24px; font-family:Arial, Helvetica, sans-serif; font-size:14px; color:#222222; border-bottom:0px; border:1px solid #000000;">
+
+
+
+                                            <div class="invoice-number">
+
+                                                <img src="{{ $logo . '/' . $payslipDetail->companyLogo }}"
+                                                    width="170px;">
+
+                                            </div>
+
+                                            <br />
+
+                                            <strong>{{ $payslipDetail->companyName }}</strong><br />
+
+                                            {{ $payslipDetail->companyAddress }}<br />
+
+                                            {{ $payslipDetail->companyCity }}<br />
+
+                                            {{ $payslipDetail->companyState }}
+                                            {{ $payslipDetail->companyZipcode }}
+
+                                        </td>
+
+                                        <td align="left" valign="top" width="50%"
+                                            style="width:50%; padding:10px; line-height:24px; font-family:Arial, Helvetica, sans-serif; font-size:14px; color:#222222; border-bottom:0px; border:1px solid #000000;">
+
+                                            <strong>Employee Id:</strong> {{ $payslipDetail->employeeId }} <br />
+                                            <strong>Name:</strong> {{ $payslipDetail->employeeName }}<br />
+                                            <strong>DOJ:</strong> {{ dateFormat($employee->company_doj) }}<br />
+                                            <!-- <strong>PAN:</strong> {{ $employee->pan_number }}<br /> -->
+                                            @if ($employee->epf_status == 1)
+                                                <strong>PF No.:</strong> {{ $employee->epf_number }}<br />
+                                                <strong>UAN:</strong> {{ $employee->uan_no }}<br />
+                                            @endif
+                                            <strong>Designation:</strong>
+                                            {{ $payslipDetail->employeeDesignation }}<br />
+
+                                            <strong>Department:</strong> {{ $payslipDetail->employeeDepartment }}<br />
+
+                                            <strong>{{ __('Salary Date') }} :</strong>
+
+                                            {{ dateFormat($payslip->created_at) }}<br>
+
+                                        </td>
+                                    </tr>
+                                </table>
+                            </td>
+                        </tr>
+
+                        <tr>
+                            <td align="left" valign="top">
+                                <table width="100%" border="0" cellspacing="0" cellpadding="0">
+                                    <thead>
+                                        <tr>
+                                            <th bgcolor="#cccccc" width="50%"
+                                                style="width:50%; font-size:16px; border:1px solid #000000; border-top:0px; text-align:center; background:#cccccc; padding:10px; font-family:Arial, Helvetica, sans-serif; font-weight:bold;">
+                                                Earnings</th>
+
+                                            <th bgcolor="#cccccc" width="50%"
+                                                style="width:50%; font-size:16px; border:1px solid #000000; border-top:0px; text-align:center; background:#cccccc; padding:10px; font-family:Arial, Helvetica, sans-serif; font-weight:bold;">
+                                                Deductions</th>
+                                        </tr>
+                                    </thead>
+
+                                    <tbody>
+
+                                        <tr>
+
+                                            {{-- Earnings --}}
+                                            <td align="left" valign="top" style="border:1px solid #000000;">
+
+                                                <table width="100%" border="0" cellspacing="0" cellpadding="0">
+                                                    <thead>
+                                                        <tr class="row-border">
+                                                            <th width="50%" align="left" valign="middle"
+                                                                style="width:50%; text-align:left; padding:8px 10px; font-weight:bold;">
+                                                                Description</th>
+
+                                                            <th width="50%" align="right" valign="middle"
+                                                                style="width:50%; text-align:right; padding:8px 10px; font-weight:bold;">
+                                                                Amount</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+
+                                                        {{-- Basic Salary --}}
+                                                        <tr class="row-border">
+                                                            <td width="50%" align="left" valign="middle"
+                                                                style="width:50%; text-align:left; padding:8px 10px;">
+                                                                Basic Salary</td>
+
+                                                            <td width="50%" align="right" valign="middle"
+                                                                style="width:50%; text-align:right; padding:8px 10px;">
+                                                                {{ priceFormat($payslipDetail->employeeBasicSalary) }}
+                                                            </td>
+                                                        </tr>
+                                                        {{-- Basic Salary --}}
+
+                                                        {{-- Earning Rows --}}
+
+                                                        @foreach ($payslipDetail->earnings as $earningName => $earnings)
+                                                            @if (is_object($earnings))
+                                                                @foreach ($earnings->data as $earnongRow)
+                                                                    <tr class="row-border">
+                                                                        <td width="50%" align="left"
+                                                                            valign="middle"
+                                                                            style="width:50%; text-align:left; padding:8px 10px;">
+                                                                            {{ $earnongRow->name }}</td>
+
+                                                                        @php
+                                                                            $amoutValue = '';
+
+                                                                            if ($earnongRow->type == 'percentage') {
+                                                                                $amoutValue =
+                                                                                    "$earnongRow->percentage % (" .
+                                                                                    priceFormat($earnongRow->amount) .
+                                                                                    ')';
+                                                                            } else {
+                                                                                $amoutValue = priceFormat(
+                                                                                    $earnongRow->amount,
+                                                                                );
+                                                                            }
+                                                                        @endphp
+                                                                        <td width="50%" align="right"
+                                                                            valign="middle"
+                                                                            style="width:50%; text-align:right; padding:8px 10px;">
+                                                                            {{ $amoutValue }}</td>
+                                                                    </tr>
+                                                                @endforeach
+                                                            @endif
+                                                            {{-- @endif --}}
+                                                        @endforeach
+                                                        {{-- Earning Rows --}}
+
+                                                        <tr class="row-border">
+                                                            <td align="left" valign="middle"
+                                                                style="text-align:left; padding:8px 10px; border-bottom:1px solid #000000;font-weight:bold;">
+                                                                Gross Earning</td>
+
+                                                            <td align="right" valign="middle"
+                                                                style="width:100px; text-align:right; padding:8px 10px; border-bottom:1px solid #000000;font-weight:bold;">
+                                                                {{ priceFormat($payslipDetail->employeeBasicSalary + $payslipDetail->totalEarnings) }}
+
+                                                            </td>
+
+                                                        </tr>
+
+                                                    </tbody>
+                                                </table>
+
+                                            </td>
+                                            {{-- Earnings --}}
+
+
+                                            {{-- Deductions --}}
+                                            <td align="left" valign="top" style="border:1px solid #000000;">
+                                                <table width="100%" border="0" cellspacing="0"
+                                                    cellpadding="0">
+
+                                                    <thead>
+                                                        <tr class="row-border">
+                                                            <th width="50%" align="left" valign="middle"
+                                                                style="width:50%; text-align:left; padding:8px 10px; font-weight:bold;">
+                                                                Description</th>
+
+                                                            <th width="50%" align="right" valign="middle"
+                                                                style="width:50%; text-align:right; padding:8px 10px; font-weight:bold;">
+                                                                Amount</th>
+                                                        </tr>
+                                                    </thead>
+
+                                                    <tbody>
+
+                                                        {{-- Deductions Rows --}}
+
+                                                        @foreach ($payslipDetail->deductions as $deductionName => $deductions)
+                                                            @if (is_object($deductions))
+                                                                @foreach ($deductions->data as $deductionsRow)
+                                                                    <tr class="row-border">
+                                                                        <td width="50%" align="left"
+                                                                            valign="middle"
+                                                                            style="width:50%; text-align:left; padding:8px 10px;">
+                                                                            {{ $deductionsRow->name }}</td>
+
+                                                                        @php
+                                                                            $amoutValue = '';
+
+                                                                            if ($deductionsRow->type == 'percentage') {
+                                                                                $amoutValue =
+                                                                                    "$deductionsRow->percentage % (" .
+                                                                                    priceFormat(
+                                                                                        $deductionsRow->amount,
+                                                                                    ) .
+                                                                                    ')';
+                                                                            } else {
+                                                                                $amoutValue = priceFormat(
+                                                                                    $deductionsRow->amount,
+                                                                                );
+                                                                            }
+                                                                        @endphp
+                                                                        <td width="50%" align="right"
+                                                                            valign="middle"
+                                                                            style="width:50%; text-align:right; padding:8px 10px;">
+                                                                            {{ $amoutValue }}</td>
+                                                                    </tr>
+                                                                @endforeach
+                                                            @endif
+                                                        @endforeach
+
+                                                        <tr class="row-border">
+                                                            <td align="left" valign="middle"
+                                                                style="text-align:left; padding:8px 10px; border-bottom:1px solid #000000;font-weight:bold;">
+                                                                Gross Deduction</td>
+
+                                                            <td align="right" valign="middle"
+                                                                style="width:100px; text-align:right; padding:8px 10px; border-bottom:1px solid #000000;font-weight:bold;">
+                                                                {{ priceFormat($payslipDetail->totalDeductions) }}
+                                                            </td>
+
+                                                        </tr>
+                                                        {{-- Deductions Rows --}}
+
+                                                    </tbody>
+
+
+                                                </table>
+                                            </td>
+                                            {{-- Deductions --}}
+
+                                        </tr>
+
+                                    </tbody>
+
+                                    <tfoot>
+                                        <tr>
+                                            <th colspan="2" bgcolor="#cccccc"
+                                                style="text-align:right; font-size:16px; background:#cccccc; padding:10px; border-left:1px solid #000000; border-right:1px solid #000000;">
+
+                                                Net Pay: {{ priceFormat($payslip->net_payble) }} for the Month of
+                                                {{ date('F-Y', strtotime($payslip->salary_month)) }}
+
+                                                <?php
+                                                $digit = new NumberFormatter('en', NumberFormatter::SPELLOUT);
+                                                ?>
+                                            </th>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </td>
+                        </tr>
+
+                        <tr>
+                            <td align="left" valign="top">
+                                <table width="100%" border="0" cellspacing="0" cellpadding="0">
+                                    <thead>
+                                        <tr>
+                                            <th bgcolor="#cccccc" width="50%"
+                                                style="width:50%; font-size:16px; border:1px solid #000000; text-align:left; background:#cccccc; padding:10px; font-family:Arial, Helvetica, sans-serif; font-weight:bold;">
+                                                Employer's Contribution (CTC)</th>
+                                        </tr>
+                                    </thead>
+
+                                    <tbody>
+
+                                        <tr>
+                                            <td align="left" valign="top" style="border:1px solid #000000;">
+
+                                                <table width="100%" border="0" cellspacing="0"
+                                                    cellpadding="0">
+                                                    <tbody>
+
+                                                        {{-- GROSS EARNING  --}}
+                                                        <tr class="row-border">
+                                                            <td width="50%" align="left" valign="middle"
+                                                                style="width:50%; text-align:left; padding:8px 10px;">
+                                                                GROSS EARNING </td>
+
+                                                            <td width="50%" align="right" valign="middle"
+                                                                style="width:50%; text-align:right; padding:8px 10px;">
+                                                                {{ priceFormat($payslipDetail->employeeBasicSalary + $payslipDetail->totalEarnings) }}
+                                                            </td>
+                                                        </tr>
+                                                        {{-- GROSS EARNING  --}}
+
+
+                                                        {{-- EMPLOYER'S PROVIDENT FUND   --}}
+                                                        @php
+                                                            $providentFundCompanyDeductionTotal =
+                                                                $payslipDetail->providentFundCompanyDeduction->total;
+                                                            $providentFundCompanyDeductionData =
+                                                                $payslipDetail->providentFundCompanyDeduction->data;
+                                                        @endphp
+                                                        @if (!empty($providentFundCompanyDeductionData))
+                                                            <tr class="row-border">
+                                                                <td width="50%" align="left" valign="middle"
+                                                                    style="width:50%; text-align:left; padding:8px 10px;">
+                                                                    {{ $providentFundCompanyDeductionData->name }}</td>
+
+                                                                <td width="50%" align="right" valign="middle"
+                                                                    style="width:50%; text-align:right; padding:8px 10px;">
+                                                                    {{ priceFormat($providentFundCompanyDeductionData->amount) }}
+                                                                </td>
+                                                            </tr>
+                                                        @endif
+                                                        {{-- EMPLOYER'S PROVIDENT FUND   --}}
+
+                                                        {{-- EMPLOYER'S STATE INSURANCE --}}
+                                                        @php
+                                                            $employeesStateInsuranceCompanyDeductionTotal =
+                                                                $payslipDetail->employeesStateInsuranceCompanyDeduction
+                                                                    ->total;
+                                                            $employeesStateInsuranceCompanyDeductionData =
+                                                                $payslipDetail->employeesStateInsuranceCompanyDeduction
+                                                                    ->data;
+                                                        @endphp
+                                                        @if (!empty($employeesStateInsuranceCompanyDeductionData))
+                                                            <tr class="row-border">
+                                                                <td width="50%" align="left" valign="middle"
+                                                                    style="width:50%; text-align:left; padding:8px 10px;">
+                                                                    {{ $employeesStateInsuranceCompanyDeductionData->name }}
+                                                                </td>
+
+                                                                <td width="50%" align="right" valign="middle"
+                                                                    style="width:50%; text-align:right; padding:8px 10px;">
+                                                                    {{ priceFormat($employeesStateInsuranceCompanyDeductionData->amount) }}
+                                                                </td>
+                                                            </tr>
+                                                        @endif
+                                                        {{-- EMPLOYER'S STATE INSURANCE --}}
+
+                                                        {{-- STATUTORY BONUS  --}}
+                                                        @php
+                                                            $statutoryBonusTotal =
+                                                                $payslipDetail->statutoryBonus->total;
+                                                            $statutoryBonusData = $payslipDetail->statutoryBonus->data;
+
+                                                        @endphp
+                                                        @if (!empty($statutoryBonusData))
+                                                            <tr class="row-border">
+                                                                <td width="50%" align="left" valign="middle"
+                                                                    style="width:50%; text-align:left; padding:8px 10px;">
+                                                                    {{ $statutoryBonusData->name }}
+                                                                </td>
+
+                                                                <td width="50%" align="right" valign="middle"
+                                                                    style="width:50%; text-align:right; padding:8px 10px;">
+                                                                    {{ priceFormat($statutoryBonusData->amount) }}
+                                                                </td>
+                                                            </tr>
+                                                        @endif
+                                                        {{-- STATUTORY BONUS  --}}
+
+                                                        {{-- Total --}}
+                                                        <tr class="row-border">
+                                                            @php
+                                                                $ctc =
+                                                                    $payslipDetail->employeeBasicSalary +
+                                                                    $payslipDetail->totalEarnings +
+                                                                    $providentFundCompanyDeductionTotal +
+                                                                    $employeesStateInsuranceCompanyDeductionTotal +
+                                                                    $statutoryBonusTotal;
+                                                            @endphp
+
+                                                            <td valign="middle"
+                                                                style="text-align:right; padding:8px 10px;"
+                                                                colspan="2">
+                                                                <b>Total : {{ priceFormat($ctc) }}</b>
+                                                            </td>
+                                                        </tr>
+                                                        {{-- Total --}}
+
+                                                        {{-- CTC --}}
+                                                        <tr class="row-border">
+                                                            <td width="100%" align="left" valign="middle"
+                                                                style="width:100%; text-align:left; padding:8px 10px;">
+                                                                <b>Total CTC : {{ priceFormat($ctc) }}</b>
+                                                            </td>
+                                                        </tr>
+
+                                                        <tr class="row-border">
+
+                                                            <td width="100%" align="left" valign="middle"
+                                                                style="width:100%; text-align:left; padding:8px 10px;">
+                                                                <b>In Words :
+                                                                    {{ ucwords($digit->format(number_format($ctc, 0, '', ''))) }}</b>
+                                                            </td>
+                                                        </tr>
+                                                        {{-- CTC --}}
+
+                                                    </tbody>
+                                                </table>
+                                            </td>
+                                        </tr>
+
+                                    </tbody>
+                                </table>
+                            </td>
+                        </tr>
+
+                        {{-- Leave Data Listing --}}
+                        <tr>
+                            <td align="left" valign="top">
+                                <table width="100%" border="0" cellspacing="0" cellpadding="0">
+                                    <thead>
+                                        <tr>
+                                            <th bgcolor="#cccccc"
+                                                style="border:1px solid #000000; text-align:center; background:#cccccc;">
+                                                Leave Type</th>
+                                            <th bgcolor="#cccccc"
+                                                style="border:1px solid #000000; text-align:center; background:#cccccc;">
+                                                Approved Leaves</th>
+                                            <th bgcolor="#cccccc"
+                                                style="border:1px solid #000000; text-align:center; background:#cccccc;">
+                                                Extra Leaves</th>
+                                            <th bgcolor="#cccccc"
+                                                style="border:1px solid #000000; text-align:center; background:#cccccc;">
+                                                Balance Leave</th>
+                                        </tr>
+                                    </thead>
+
+                                    <tbody>
+
+                                        @foreach ($leave_counts as $leave)
+                                            @php
+
+                                                try {
+                                                $extraLeaveText = 0;
+
+                                                    //   $extraLeaveData = collect($payslipDetail->leave->data)
+                                                    //       ->where('leave_type_id', $leave->id)
+                                                    //       ->first();
+
+                                                    $extraLeaveSum = collect($payslipDetail->leave->data)
+                                                    ->where('leave_type_id', $leave->id)
+                                                        ->reduce(function ($carry, $item) {
+                                                            $carry['extradays'] =
+                                                                ($carry['extradays'] ?? 0) + $item->extradays;
+                                                            $carry['amountdeduct'] =
+                                                                ($carry['amountdeduct'] ?? 0) + $item->amountdeduct;
+                                                            return $carry;
+                                                        }, []);
+
+                                                    if (!empty($extraLeaveSum)) {
+                                                    $extraLeaveText =
+                                                            "{$extraLeaveSum['extradays']} (" .
+                                                            priceFormat($extraLeaveSum['amountdeduct']) .
+                                                        ')';
+                                                }
+                                                } catch (\Throwable $th) {
+                                                    throw $th;
+                                                }
+                                            @endphp
+                                            <tr>
+                                                <td
+                                                    style="text-align:center; padding:8px 10px; border:1px solid #000000;">
+                                                    {{ $leave->title }}</td>
+                                                <td
+                                                    style="text-align:right; padding:8px 10px; border:1px solid #000000;">
+                                                    {{ $leave->applied_leaves }}</td>
+                                                <td
+                                                    style="text-align:right; padding:8px 10px; border:1px solid #000000;">
+                                                    {{ $extraLeaveText }}</td>
+                                                <td
+                                                    style="text-align:right; padding:8px 10px; border:1px solid #000000;">
+                                                    {{ $leave->used_leaved }}</td>
+                                            </tr>
+                                        @endforeach
+
+                                    </tbody>
+                                </table>
+                            </td>
+                        </tr>
+                        {{-- Leave Data Listing --}}
+
+                        <tr>
+
+                            <td align="left" valign="top"
+                                style="padding:10px; font-family:Arial, Helvetica, sans-serif; color:#000000; line-height:24px; border:1px solid #000000;">
+
+                                <strong>Received with thanks:
+                                    {{ ucwords($digit->format($payslip->net_payble)) }}.</strong> <br />
+                                Net Salary Credited to Your {{ $employee->bank_name }} Account Number
+                                {{ $employee->account_number }} <br />
+
+                                1] AS PART OF OUR POLICY OF PRIVACY YOU ARE REQUESTED NOT TO DISCUSS YOUR REMUNERATION
+                                WITH ANY PERSON
+
+                                OTHER THEN YOUR CLOSE FAMILY MEMBER. <br />
+
+                                2] THIS IS A COMPUTER GENERATED PAYSLIP, NO SIGNATURE OR STAMP IS REQUIRED.
+
+                            </td>
+
+                        </tr>
+
+                    </table>
+
+                </td>
+
+            </tr>
+
+        </table>
+
+        <script type="text/javascript" src="{{ asset('js/html2pdf.bundle.min.js') }}"></script>
+
+        <script>
+            function saveAsPDF() {
+
+                var element = document.getElementById('printableArea');
+
+                var opt = {
+
+                    margin: 0.3,
+
+                    filename: "<?php echo str_replace('.', '', $employee->name); ?>",
+
+                    image: {
+
+                        type: 'jpeg',
+
+                        quality: 1
+
+                    },
+
+                    html2canvas: {
+
+                        scale: 4,
+
+                        dpi: 72,
+
+                        letterRendering: true
+
+                    },
+
+                    jsPDF: {
+
+                        unit: 'in',
+
+                        format: 'A4'
+
+                    }
+
+                };
+
+                html2pdf().set(opt).from(element).save();
+
+            }
+        </script>
+</body>
+
+</html>

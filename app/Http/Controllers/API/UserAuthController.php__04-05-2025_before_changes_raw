@@ -1,0 +1,2928 @@
+<?php
+
+namespace App\Http\Controllers\API;
+
+use App\Http\Controllers\Auth\PasswordResetLinkController;
+use URL;
+use Exception;
+use Throwable;
+use App\Models\User;
+use App\Models\Utility;
+use App\Models\Document;
+use App\Models\Employee;
+use App\Models\EXPTable;
+use App\Models\IpRestrict;
+use Illuminate\Http\Request;
+use App\Models\DependentData;
+use App\Models\EdcutionTable;
+use App\Models\AttendanceEmployee;
+use App\Models\LeaveType;
+use App\Models\Leave as LocalLeave;
+use App\Models\EarlyLateCommingLeave;
+use Illuminate\Support\Facades\DB;
+
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Artisan;
+
+use Illuminate\Support\Facades\Storage;
+
+use App\Http\Controllers\Controller;
+use App\Models\Branch;
+use App\Models\EmployeeDocument;
+use App\Models\Holiday;
+use App\Models\Leave;
+use App\Models\NotificationModel;
+use App\Models\WorkingShiftEmployees;
+use App\Models\WorkingShifts;
+use Carbon\Carbon;
+use Carbon\CarbonPeriod;
+use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Password;
+use Illuminate\Support\Facades\Route;
+use Illuminate\Validation\ValidationException;
+use Inertia\Inertia;
+
+
+
+use Intervention\Image\ImageManager;
+use Intervention\Image\Drivers\Imagick\Driver;
+
+use Illuminate\Support\Facades\Validator;
+
+class UserAuthController extends Controller
+{
+     public function get_attendance_list(request $request)
+     {
+          try
+          {
+
+               $emp = !empty(Auth::user()->employee) ? Auth::user()->employee->id : 0;
+
+               $attendanceEmployee = AttendanceEmployee::where('employee_id', $emp);
+
+               if ($request->type == 'monthly')
+               {
+                    $month = date('m', strtotime($request->month));
+                    $year  = date('Y', strtotime($request->month));
+
+
+                    $start_date = date($year . '-' . $month . '-01');
+                    $end_date = date('Y-m-t', strtotime('01-' . $month . '-' . $year));
+
+                    $attendanceEmployee->whereBetween(
+                         'date',
+                         [
+                              $start_date,
+                              $end_date,
+                         ]
+                    );
+               }
+               elseif ($request->type == 'daily')
+               {
+                    $attendanceEmployee->where('date', $request->date);
+               }
+               else
+               {
+                    $month      = date('m');
+                    $year       = date('Y');
+                    $start_date = date($year . '-' . $month . '-01');
+                    $end_date = date('Y-m-t', strtotime('01-' . $month . '-' . $year));
+                    $attendanceEmployee->whereBetween(
+                         'date',
+                         [
+                              $start_date,
+                              $end_date,
+                         ]
+                    );
+               }
+
+               $user_device_configurations = User::where("id", Auth::user()->id)->first()->user_device_configurations ?? "";
+               $user_device_configurations = json_decode($user_device_configurations);
+
+               $attendanceEmployee = $attendanceEmployee->orderBy('id', 'desc')->get();
+               if (!empty($attendanceEmployee))
+               {
+                    foreach ($attendanceEmployee as $row)
+                    {
+                         $row->clock_in = ($row->clock_in != '00:00:00') ? Auth::user()->timeFormat($row->clock_in) : '00:00:00';
+                         $row->clock_out = ($row->clock_out != '00:00:00') ? Auth::user()->timeFormat($row->clock_out) : '00:00:00';
+                    }
+                    $response = [
+                         'status' => 1,
+                         'message' => 'success',
+                         'data' => $attendanceEmployee,
+                         'user_device_configurations' => $user_device_configurations,
+                    ];
+                    return $response;
+               }
+               else
+               {
+                    $response = [
+                         'status' => 0,
+                         'message' => 'Data not found',
+                         'user_device_configurations' => $user_device_configurations,
+                    ];
+                    return $response;
+               }
+          }
+          catch (Exception | Throwable $e)
+          {
+               return ApiResponse(error_msg(showExceptionMessage($e)));
+          }
+     }
+
+
+     public function get_attendance(request $request)
+     {
+          try
+          {
+               $employeeId      = !empty(Auth::user()->employee) ? Auth::user()->employee->id : 0;
+               $todayAttendance = AttendanceEmployee::where('employee_id', '=', $employeeId)->where('date', date('Y-m-d'))->first();
+
+
+               // get employee working hours
+
+               $officeTime['startTime'] = timeFormat(Utility::getValByName('company_start_time'));
+               $officeTime['endTime']   = timeFormat(Utility::getValByName('company_end_time'));
+
+               $officeTime['flexiHours'] = Utility::getValByName('company_flexi_hours');
+               $officeTime['flexiDays'] = Utility::getValByName('company_flexi_days');
+
+               // dd(Utility::getValByName('company_start_time'));
+
+               // check if employee is assigned to any shift calculate according that shift
+               $workingShiftEmployees = WorkingShiftEmployees::where("employee_id", !empty(Auth::user()->employee) ? Auth::user()->employee->id : 0)->first();
+               $employeeShift = null;
+               if ($workingShiftEmployees != null)
+               {
+                    $employeeShift = WorkingShifts::where("id", $workingShiftEmployees->working_shifts_id)->first();
+                    if ($employeeShift != null)
+                    {
+                         $officeTime['startTime'] = timeFormat($employeeShift->start_time);
+                         $officeTime['endTime'] = timeFormat($employeeShift->end_time);
+
+                         $officeTime['flexiHours'] = $employeeShift->flexi_hours;
+                         $officeTime['flexiDays'] = $employeeShift->flexi_days;
+                    }
+               }
+               // get employee working hours
+
+
+
+               if (empty($todayAttendance))
+               {
+                    $data = [
+                         // 'is_clockin' => true,
+                         // 'is_clockout' => true,
+                         'is_clockin' => false,  //button click thase simple
+                         'is_clockout' => true,
+                         'officeTime' => $officeTime
+                    ];
+                    $response = [
+                         'status' => 1,
+                         'message' => 'success',
+                         'data' => $data,
+                    ];
+                    return $response;
+               }
+               else
+               {
+                    if ($todayAttendance->clock_in && $todayAttendance->clock_out != "00:00:00" && $todayAttendance->clock_out != "" && !is_null($todayAttendance->clock_out) && $todayAttendance->clock_out != "null")
+                    {
+                         $data = [
+                              'is_clockin' => false,
+                              'is_clockout' => true,
+                              'officeTime' => $officeTime
+                         ];
+                         $response = [
+                              'status' => 1,
+                              'message' => 'success',
+                              'data' => $data,
+                         ];
+                         return $response;
+                    }
+                    else
+                    {
+
+                         $data = [
+                              'is_clockin' => true,
+                              'is_clockout' => false,
+                              'officeTime' => $officeTime
+                         ];
+                         $response = [
+                              'status' => 1,
+                              'message' => 'success',
+                              'data' => $data,
+                         ];
+                         return $response;
+                    }
+               }
+          }
+          catch (Exception | Throwable $e)
+          {
+               $response = error_msg(showExceptionMessage($e));
+          }
+     }
+
+     public function login(Request $request)
+     {
+          try
+          {
+               $data = $request->validate([
+                    'email' => 'email|required',
+                    'password' => 'required'
+               ]);
+               $data = array(
+                    'email'  => $request->get('email'),
+                    'password' => $request->get('password')
+               );
+
+               if (auth()->attempt($data))
+               {
+                    $customer_data =  User::find(Auth::id());
+
+                    if ($request->has("device_token") && !empty($request->device_token))
+                    {
+                         $customer_data->device_token = $request->device_token;
+                    }
+
+                    // 'device_type', Platform.OS === 'android' ? '2' : ‘1.   //{0=web,1=ios,2=android}
+                    $customer_data->device_type = $request->device_type ?? 0;
+                    $customer_data->user_device_configurations = json_encode($request->user_device_configurations ?? "");
+                    $customer_data->save();
+
+                    $user_token = $customer_data->createToken('api token')->accessToken;
+                    $customer_data->token = $user_token;
+
+                    $emp = Employee::select("*", "employee_profile as employee_profile_image")->where('user_id', '=', $customer_data->id)->first();
+                    if ($emp == null)
+                    {
+                         $response = [
+                              'status' => 0,
+                              'message' => __('Please Login with Employee credentials.'),
+                         ];
+                         return $response;
+                    }
+                    else if ($emp->employee_exit == 1)
+                    {
+                         $response = [
+                              'status' => 0,
+                              'message' => __("You're not allowed to login."),
+                         ];
+                         return $response;
+                    }
+
+
+                    // get employee working hours
+
+
+                    $officeTime['startTime'] = timeFormat(Utility::getValByName('company_start_time'));
+                    $officeTime['endTime']   = timeFormat(Utility::getValByName('company_end_time'));
+
+                    $officeTime['flexiHours'] = Utility::getValByName('company_flexi_hours');
+                    $officeTime['flexiDays'] = Utility::getValByName('company_flexi_days');
+
+                    // dd(Utility::getValByName('company_start_time'));
+
+                    // check if employee is assigned to any shift calculate according that shift
+                    $workingShiftEmployees = WorkingShiftEmployees::where("employee_id", !empty(Auth::user()->employee) ? Auth::user()->employee->id : 0)->first();
+                    $employeeShift = null;
+                    if ($workingShiftEmployees != null)
+                    {
+                         $employeeShift = WorkingShifts::where("id", $workingShiftEmployees->working_shifts_id)->first();
+                         if ($employeeShift != null)
+                         {
+                              $officeTime['startTime'] = timeFormat($employeeShift->start_time);
+                              $officeTime['endTime'] = timeFormat($employeeShift->end_time);
+
+                              $officeTime['flexiHours'] = $employeeShift->flexi_hours;
+                              $officeTime['flexiDays'] = $employeeShift->flexi_days;
+                         }
+                    }
+                    // get employee working hours
+
+
+                    $customer_data->workingData = $officeTime;
+
+                    $customer_data->company_doj = $emp->getRawOriginal("company_doj");
+                    $customer_data->isTodayWorkAnniversary = ($emp->getRawOriginal("company_doj") == date("Y-m-d") ? true : false);
+
+                    $isTodayMarriageAnniversary = false;
+                    if ($emp->marital_status == "Married" || $emp->marital_status == "Widowed")
+                    {
+                         if ($emp->marriage_anniversary_date == date("Y-m-d"))
+                         {
+                              $isTodayMarriageAnniversary = true;
+                         }
+                    }
+                    $customer_data->isTodayMarriageAnniversary = $isTodayMarriageAnniversary;
+
+                    $customer_data->geofencing_status = $emp->geofencing_status;
+                    $customer_data->branch_id = $emp->branch_id;
+
+                    $customer_data->geofencing_status = $emp->geofencing_status;
+                    $customer_data->multi_clock_in_out_status = $emp->geofencing_status;
+                    $customer_data->geofencing_radius = ($emp->branch->geofencing_radius ?? 0);
+                    $customer_data->employee_id = $emp->employee_id;
+                    $customer_data->employee_profile_image = $emp->employee_profile_image;
+                    $customer_data->personal_email = $emp->personal_email;
+                    $customer_data->add_multiple_employee_attendance = $customer_data->hasPermissionTo('Add Multiple Employee Attendance') ? 1 : 0;
+
+                    $response = [
+                         'status' => 1,
+                         'message' => 'success',
+                         'data' => $customer_data,
+                    ];
+
+                    return $response;
+               }
+               else
+               {
+                    $response = [
+                         'status' => 0,
+                         'message' => __('These credentials do not match our records'),
+                    ];
+                    return $response;
+               }
+          }
+          catch (Exception | Throwable $e)
+          {
+               return error_msg(showExceptionMessage($e));
+          }
+     }
+
+
+
+     public function clockInOutBranchList(Request $request)
+     {
+          try
+          {
+               $user =  User::find(Auth::id());
+               $data = Branch::where('created_by', '=', Auth::user()->creatorId())
+                    ->orderBy('name', 'ASC')
+                    ->get()
+                    ->pluck('name', 'id')
+                    ->prepend('All', 0)
+                    ->map(function ($name, $id)
+                    {
+                         return [
+                              'id' => $id,
+                              'name' => $name,
+                         ];
+                    })
+                    ->values(); // Optional: to reset the keys to numeric indices
+
+               return response()->json([
+                    'status' => 1,
+                    'message' =>  __("Branch List."),
+                    'data' => $data,
+               ]);
+          }
+          catch (Exception | Throwable $e)
+          {
+               return ApiResponse(error_msg(showExceptionMessage($e)));
+          }
+     }
+     public function clockInOutEmployeesList(Request $request)
+     {
+          try
+          {
+               // Get the page_no parameter, default to 1 if not provided
+               $pageNo = $request->page  ?? 1;
+               // Get the search query parameter, default to an empty string if not provided
+               $search = $request->search ?? '';
+               // Define the number of items per page
+               $perPage = 25;
+
+               // Query employees with optional search and pagination
+
+               // add last clock in, out status
+
+               // Auth::user()->hasPermissionTo('Add Multiple Employee Attendance')
+
+               $user =  User::find(Auth::id());
+               $userEmployee = Employee::select("id", "name", "user_id", "branch_id")->where('user_id', '=', $user->id)->first();
+               if ($userEmployee == null)
+               {
+                    $response = [
+                         'status' => 0,
+                         'message' => __('Please Login with Employee credentials.'),
+                    ];
+                    return $response;
+               }
+
+               $branchIds = $request->branch_ids ?? [];
+               if (empty($branchIds))
+               {
+                    $branchIds = [$userEmployee->branch_id];
+               }
+               else
+               {
+                    if (in_array(0, $branchIds))
+                    {
+                         $branchIds = Branch::where('created_by', '=', Auth::user()->creatorId())->orderBy('name', 'ASC')->get()->pluck("id")->toArray();
+                    }
+               }
+
+               // dd(Auth::user()->creatorId());
+
+               $employees = Employee::select(
+                    "id",
+                    "employee_id",
+                    "name",
+                    "phone",
+                    "email",
+                    "employee_profile",
+                    "employee_profile as employee_profile_image",
+                    "geofencing_status",
+                    "branch_id",
+                    "created_by",
+                    "id as last_clock_in_out_data"
+               )
+                    ->when(!empty(trim($search)), function ($query)  use ($search)
+                    {
+                         $query
+                              ->where("created_by", Auth::user()->creatorId())
+                              ->where('name', 'like', '%' . $search . '%')
+                              ->orWhere('email', 'like', '%' . $search . '%')
+                              // ->orWhere('phone', 'like', '%' . $search . '%')
+                         ;
+                    })
+
+                    ->whereIn("branch_id", $branchIds)
+                    ->where("created_by", Auth::user()->creatorId())
+                    ->orderBy('name', 'ASC')
+                    ->paginate($perPage, ['*'], 'page', $pageNo);
+
+               return response()->json([
+                    'status' => 1,
+                    'message' =>  __("Employees List."),
+                    'data' => $employees->items(),
+                    'current_page' => $employees->currentPage(),
+                    'total_page' => $employees->lastPage(),
+                    'total_items' => $employees->total(),
+               ]);
+          }
+          catch (Exception | Throwable $e)
+          {
+               return ApiResponse(error_msg(showExceptionMessage($e)));
+          }
+     }
+
+     public function clock_in(Request $request)
+     {
+          Log::info("CLock In Api Call Request Data - " . $request);
+          Log::info("CLock In Api Call - Parameters of [ " . Auth::user()->id . " ] ----- ", $request->all());
+
+          try
+          {
+               $latitude = $request->latitude ?? "";
+               $longitude = $request->longitude ?? "";
+
+               $metaData = json_encode($request->meta_data ?? "");
+
+               $employeeId = !empty(Auth::user()->employee) ? Auth::user()->employee->id : 0;
+
+               if ($request->has("employee_id"))
+               {
+                    if ($request->employee_id > 0)
+                    {
+                         $employeeId = $request->employee_id;
+                    }
+               }
+
+               $employeeDetails = Employee::where("id", $employeeId)->first();
+
+               $date = date("Y-m-d");
+               $time = date("H:i:s");
+
+               $currentDateTime = date("Y-m-d H:i:s");
+
+               $checkLastAttendance = AttendanceEmployee::where('employee_id', '=', $employeeId)->orderBy("id", "DESC")->first();
+
+
+
+               $isCreateClockIn = false;
+
+               if ($checkLastAttendance == null || ($checkLastAttendance->clock_out ?? "") != "00:00:00") // if null then create new clock in entry
+               {
+                    $late = "00:00:00";
+                    $is_flexi_hour_applied = 0;
+
+                    //29-08 told to rmeove geofencing condition --Monali
+                    //if ($employeeDetails->geofencing_status == 0) // calculate attendance data only if geofancing is no enabled for this employee
+                    //{
+                    // Attandence Calculation Late Comming, & Flexi hours
+                    $clockInDatetime = date("Y-m-d H:i:s");
+
+                    $calculateAttendanceData = (object)calculateAttendanceData($employeeId, $date, $clockInDatetime, null);
+                    if ($calculateAttendanceData->status == 1)
+                    {
+                         if (!empty($calculateAttendanceData->data))
+                         {
+                              $calculateAttendanceDataRow = (object)$calculateAttendanceData->data ?? [];
+
+                              $late = $calculateAttendanceDataRow->late_comming ?? $late;
+                              $is_flexi_hour_applied = ($calculateAttendanceDataRow->is_flexi_hour_applied == true ? 1 : 0);
+                         }
+                    }
+                    // Attandence Calculation Late Comming, & Flexi hours
+                    //}
+
+                    $imageName = null;
+                    if ($request->hasFile('image'))
+                    {
+                         $image_name = time() . rand(100, 10000) . '.' . $request->file('image')->getClientOriginalExtension();
+                         $uploadImageData = uploadFile($request->file('image'), $image_name, "images/clock_in_out/$employeeId/", true, true);
+                         if ($uploadImageData['status'] == 1)
+                         {
+                              $imageName = $image_name;
+                         }
+                    }
+
+                    DB::beginTransaction();
+
+                    $employeeAttendance                = new AttendanceEmployee();
+                    $employeeAttendance->employee_id   = $employeeId;
+                    $employeeAttendance->date          = $date;
+                    $employeeAttendance->status        = 'Present';
+
+                    $employeeAttendance->clock_in_date_time = $currentDateTime;
+                    $employeeAttendance->clock_out_date_time = null;
+
+                    $employeeAttendance->clock_in = $time;
+                    $employeeAttendance->clock_out     = '00:00:00';
+
+                    $employeeAttendance->clock_in_latitude    = (string)$latitude;
+                    $employeeAttendance->clock_in_longitude   = (string)$longitude;
+
+                    $employeeAttendance->late          = $late;
+                    $employeeAttendance->early_leaving = '00:00:00';
+                    $employeeAttendance->overtime      = '00:00:00';
+                    $employeeAttendance->total_rest    = '00:00:00';
+                    $employeeAttendance->is_flexi_hours_used = $is_flexi_hour_applied;
+
+                    $employeeAttendance->image = $imageName;
+                    $employeeAttendance->clock_in_meta_data = $metaData;
+
+                    $employeeAttendance->created_by = Auth::user()->id;
+                    $employeeAttendance->geofencing_status = $employeeDetails->geofencing_status;
+
+                    if ($request->has("webClockInOut"))
+                    {
+                         $employeeAttendance->clock_in_ip_address = ($request->ip() ?? null);
+                    }
+
+                    $employeeAttendance->save();
+
+                    DB::commit();
+
+                    // Last Clock In Data
+
+                    $checkLastAttendance = AttendanceEmployee::select("id", "employee_id", "clock_in_date_time", "clock_out_date_time", "clock_in_latitude", "clock_in_longitude", "clock_out_latitude", "clock_out_longitude", "clock_in", "clock_out",  "image", "image as clocked_in_image", "clock_out_image", "clock_out_image as clocked_out_image")
+                         ->where('employee_id', '=', $employeeDetails->id)
+                         ->orderBy("id", "DESC")
+                         ->first();
+
+                    // Last Clock In Data
+
+                    $response = [
+                         'status' => 1,
+                         'message' => __("You have successfully clocked in."),
+                         "data" => $checkLastAttendance,
+                    ];
+               }
+               else // return with validation message of already clocked in
+               {
+                    $checkLastAttendance = AttendanceEmployee::select("id", "employee_id", "clock_in_date_time", "clock_out_date_time", "clock_in_latitude", "clock_in_longitude", "clock_out_latitude", "clock_out_longitude", "clock_in", "clock_out",  "image", "image as clocked_in_image", "clock_out_image", "clock_out_image as clocked_out_image")
+                         ->where('employee_id', '=', $employeeDetails->id)
+                         ->orderBy("id", "DESC")
+                         ->first();
+
+                    $response = [
+                         'status' => 0,
+                         'message' => __("You have already clocked in, first clock out to clock in again."),
+                         "data" => $checkLastAttendance,
+                    ];
+               }
+          }
+          catch (Exception | Throwable $e)
+          {
+               return ApiResponse(error_msg(showExceptionMessage($e)));
+          }
+
+          return $response;
+     }
+
+     public function clock_out(Request $request)
+     {
+          Log::info("CLock In Api Call Request Data - " . $request);
+          Log::info("CLock In Api Call - Parameters of [ " . Auth::user()->id . " ] ----- ", $request->all());
+
+          try
+          {
+               $latitude = $request->latitude ?? "";
+               $longitude = $request->longitude ?? "";
+
+               $metaData = json_encode($request->meta_data ?? "");
+
+               $employeeId = !empty(Auth::user()->employee) ? Auth::user()->employee->id : 0;
+
+               if ($request->has("employee_id"))
+               {
+                    if ($request->employee_id > 0)
+                    {
+                         $employeeId = $request->employee_id;
+                    }
+               }
+
+               $employeeDetails = Employee::where("id", $employeeId)->first();
+
+               $date = date("Y-m-d");
+               $time = date("H:i:s");
+
+               $currentDateTime = date("Y-m-d H:i:s");
+
+               $checkLastAttendance = AttendanceEmployee::where('employee_id', '=', $employeeId)->orderBy("id", "DESC")->first();
+               $clockout_early = false;
+               if ($checkLastAttendance != null && ($checkLastAttendance->clock_out ?? "") == "00:00:00") // if null then create new clock in entry
+               {
+                    $is_flexi_hour_applied = 0;
+                    $late = "00:00:00";
+                    $earlyLeaving = "00:00:00";
+                    $overtime = '00:00:00';
+
+                    // Attandence Calculation Late Comming, Early Leaving, Overtime,
+                    $clockInTime = date("H:i", strtotime($checkLastAttendance->clock_in));
+
+                    $clockInDatetime = date("Y-m-d H:i:s", strtotime($checkLastAttendance->clock_in));
+                    $clockOutDatetime = date("Y-m-d H:i:s");
+
+                    $calculateAttendanceData = (object)calculateAttendanceData($employeeId, $date, $clockInDatetime, $clockOutDatetime);
+                    if ($calculateAttendanceData->status == 1)
+                    {
+                         if (!empty($calculateAttendanceData->data))
+                         {
+                              $calculateAttendanceDataRow = (object)$calculateAttendanceData->data ?? [];
+
+                              $is_flexi_hour_applied = ($calculateAttendanceDataRow->is_flexi_hour_applied == true ? 1 : 0);
+                              $late = $calculateAttendanceDataRow->late_comming ?? $late;
+                              $earlyLeaving = $calculateAttendanceDataRow->early_leaving ?? $earlyLeaving;
+                              $overtime = $calculateAttendanceDataRow->overtime ?? $overtime;
+
+                              $startTime_new = Carbon::parse($calculateAttendanceDataRow->startTime);
+                              $endTime_new = Carbon::parse($calculateAttendanceDataRow->endTime);
+                              if ($endTime_new->lt($startTime_new))
+                              {
+                                   $endTime_new->addDay();
+                              }
+                              $companyWorking = $endTime_new->diffInSeconds($startTime_new);
+
+                              $inParseTime = Carbon::parse($calculateAttendanceDataRow->clockInTime);
+                              $outParseTime = Carbon::parse($calculateAttendanceDataRow->clockOutTime);
+                              if ($outParseTime->lt($inParseTime))
+                              {
+                                   $outParseTime->addDay();
+                              }
+                              $totalWorked = $inParseTime->diffInSeconds($outParseTime);
+                              if($employeeId == 817) {
+                                   Log::info(["totalWorked"=> $totalWorked, "companyWorking"=>$companyWorking]);
+                              }
+                              if ($totalWorked < $companyWorking)
+                              {
+                                   $clockout_early = true;
+                              }
+                         }
+                    }
+                    // Attandence Calculation Late Comming, Early Leaving, Overtime,
+
+                    $imageName = null;
+                    if ($request->hasFile('image'))
+                    {
+                         $image_name = time() . rand(100, 10000) . '.' . $request->file('image')->getClientOriginalExtension();
+                         $uploadImageData = uploadFile($request->file('image'), $image_name, "images/clock_in_out/$employeeId/", true, true);
+                         if ($uploadImageData['status'] == 1)
+                         {
+                              $imageName = $image_name;
+                         }
+                    }
+
+                    AttendanceEmployee::where("id", $checkLastAttendance->id)
+                         ->update([
+                              "clock_out_date_time" => $currentDateTime,
+                              "clock_out" => $time,
+                              "clock_out_latitude" => (string)$latitude,
+                              "clock_out_longitude" => (string)$longitude,
+
+                              "early_leaving" => $earlyLeaving,
+                              "overtime" => $overtime,
+
+                              "clock_out_ip_address" => ($request->has("webClockInOut") ? $request->ip() : null),
+                              "clock_out_image" => $imageName,
+                              "clock_out_meta_data" => $metaData,
+
+                         ]);
+
+                    // Last Clock In Data
+
+                    $checkLastAttendance = AttendanceEmployee::select("id", "employee_id", "clock_in_date_time", "clock_out_date_time", "clock_in_latitude", "clock_in_longitude", "clock_out_latitude", "clock_out_longitude", "clock_in", "clock_out",  "image", "image as clocked_in_image", "clock_out_image", "clock_out_image as clocked_out_image")
+                         ->where('employee_id', '=', $employeeDetails->id)
+                         ->orderBy("id", "DESC")
+                         ->first();
+
+                    // Last Clock In Data
+                    if($request->is_from_kill_mode == 1) {
+                         AttendanceEmployee::where('employee_id', '=', $employeeDetails->id)->update(['is_clock_by_killapp' => 1]);
+                    }
+                    // Last Clock In Data
+                    if ($clockout_early)
+                    {
+                         $title_notification = __("Attendance Alert");
+                         $body_notification = __("You have clocked out successfully. You have not completed your required working hours.");
+                    }
+                    else
+                    {
+                         $title_notification = __("Attendance Notification");
+                         $body_notification = __("You have clocked out successfully.");
+                    }
+
+                    // notification Code
+                    $notification               = new NotificationModel();
+                    $notification->user_id      = Auth::user()->id;
+                    $notification->employee_id  = $employeeId;
+                    $notification->title        = $title_notification;
+                    $notification->details      = $body_notification;
+                    $notification->status       = 0;
+                    $notification->date         = Carbon::now();
+                    $notification->created_by   = Auth::user()->created_by;
+                    $notification->redirect     = 'dashboard_user_clock_out';
+                    $notification->save();
+                    //end notification
+                    
+                    // Send Push Notification to App
+                    $usersData = User::where('id', Auth::id())->where("device_token", "!=", NULL)->select("id", "device_type", "device_token")->get();
+
+                    if (!$usersData->isEmpty())
+                    {
+                         $device_type = implode(',', $usersData->pluck('device_type')->toArray());
+                         if($request->is_from_kill_mode == 1) {
+                              if($device_type == 2) {
+                                   $title = $title_notification;
+                                   $body = $body_notification;
+          
+                                   $click_action = 'dashboard_user_clock_out';
+                                   $extraData = ['id' => (string)$notification->id];
+          
+                                   sendpPushNotification($title, $body, $usersData, $click_action, $extraData);
+                              }
+                         } else {
+                              $title = $title_notification;
+                              $body = $body_notification;
+
+                              $click_action = 'dashboard_user_clock_out';
+                              $extraData = ['id' => (string)$notification->id];
+
+                              sendpPushNotification($title, $body, $usersData, $click_action, $extraData);
+                         } 
+                    }
+                    // Send Push Notification to App
+                    $response = [
+                         'status' => 1,
+                         'message' => __("You have clocked out successfully."),
+                         "data" => $checkLastAttendance,
+                    ];
+               }
+               else // return with validation message of already clocked in
+               {
+                    $checkLastAttendance = AttendanceEmployee::select("id", "employee_id", "clock_in_date_time", "clock_out_date_time", "clock_in_latitude", "clock_in_longitude", "clock_out_latitude", "clock_out_longitude", "clock_in", "clock_out",  "image", "image as clocked_in_image", "clock_out_image", "clock_out_image as clocked_out_image")
+                         ->where('employee_id', '=', $employeeDetails->id)
+                         ->orderBy("id", "DESC")
+                         ->first();
+
+                    $response = [
+                         'status' => 0,
+                         'message' => __("You have already clocked out, first clock in to clock out again."),
+                         "data" => $checkLastAttendance,
+                    ];
+               }
+          }
+          catch (Exception | Throwable $e)
+          {
+               return ApiResponse(error_msg(showExceptionMessage($e)));
+          }
+
+          return $response;
+     }
+
+     public function syncClockInClockOut(Request $request)
+     {
+          Log::info("CLock In Api Call Request Data - " . $request);
+          Log::info("CLock In Api Call - Parameters of [ " . Auth::user()->id . " ] ----- ", $request->all());
+
+          #debug validations
+          // if (!$request->has("webClockInOut"))
+          // {
+          //      $validator = Validator::make($request->all(), [
+          //           'latitude' => 'required',
+          //           'longitude' => 'required',
+          //           'meta_data' => 'required',
+          //      ]);
+
+          //      if ($validator->fails())
+          //      {
+          //           // Return all validation error messages
+          //           return response()->json([
+          //                'status' => 0,
+          //                'message' => $validator->errors()->first(),
+          //                "data" => [],
+
+          //           ], 422);
+          //      }
+          // }
+          $body_notification = __("You have clocked out successfully.");
+          try
+          {
+               $latitude = $request->latitude ?? "";
+               $longitude = $request->longitude ?? "";
+
+               #debug validations
+               // if (!$request->has("webClockInOut"))
+               // {
+               //      $request_meta_data = $request->meta_data ?? "";
+               //      if (empty(trim($latitude)) || empty(trim($longitude)) || $request_meta_data == "" || $request_meta_data == null)
+               //      {
+               //           return response()->json([
+               //                'status' => 0,
+               //                'message' => "The latitude, longitude & meta data fields are required.",
+               //                "data" => [],
+
+               //           ], 422);
+               //      }
+               // }
+
+               $metaData = json_encode($request->meta_data ?? "");
+
+               // $request->merge(['skip_ip' => false]);
+               // $request->merge(['sample_parameter_testing_demo_1' => true]);
+
+               $employeeId = !empty(Auth::user()->employee) ? Auth::user()->employee->id : 0;
+
+               if ($request->has("employee_id"))
+               {
+                    if ($request->employee_id > 0)
+                    {
+                         $employeeId = $request->employee_id;
+                    }
+               }
+
+               $employeeDetails = Employee::where("id", $employeeId)->first();
+
+               $date = date("Y-m-d");
+               $time = date("H:i:s");
+
+               $currentDateTime = date("Y-m-d H:i:s");
+
+               $checkLastAttendance = AttendanceEmployee::where('employee_id', '=', $employeeId)
+                    // ->where('geofencing_status', '=', $employeeDetails->geofencing_status)
+                    ->orderBy("id", "DESC")->first();
+
+               DB::beginTransaction();
+
+               $isCreateClockIn = false;
+               $clockout_early = false;
+               if ($checkLastAttendance == null) // if null then create new clock in entry
+               {
+                    $isCreateClockIn = true;
+               }
+               else
+               {
+                    if ($checkLastAttendance->clock_out == "00:00:00") // if not clocked out then update the clock out
+                    {
+                         $is_flexi_hour_applied = 0;
+                         $late = "00:00:00";
+                         $earlyLeaving = "00:00:00";
+                         $overtime = '00:00:00';
+
+                         //29-08 told to rmeove geofencing condition --Monali
+                         //if ($employeeDetails->geofencing_status == 0) // calculate attendance data only if geofancing is no enabled for this employee
+                         //{
+                         // Attandence Calculation Late Comming, Early Leaving, Overtime,
+                         $clockInTime = date("H:i", strtotime($checkLastAttendance->clock_in));
+
+                         $clockInDatetime = date("Y-m-d H:i:s", strtotime($checkLastAttendance->clock_in));
+                         $clockOutDatetime = date("Y-m-d H:i:s");
+
+                         $calculateAttendanceData = (object)calculateAttendanceData($employeeId, $date, $clockInDatetime, $clockOutDatetime);
+                         if ($calculateAttendanceData->status == 1)
+                         {
+                              if (!empty($calculateAttendanceData->data))
+                              {
+                                   $calculateAttendanceDataRow = (object)$calculateAttendanceData->data ?? [];
+
+                                   $is_flexi_hour_applied = ($calculateAttendanceDataRow->is_flexi_hour_applied == true ? 1 : 0);
+                                   $late = $calculateAttendanceDataRow->late_comming ?? $late;
+                                   $earlyLeaving = $calculateAttendanceDataRow->early_leaving ?? $earlyLeaving;
+                                   $overtime = $calculateAttendanceDataRow->overtime ?? $overtime;
+
+                                   $startTime_new = Carbon::parse($calculateAttendanceDataRow->startTime);
+                                   $endTime_new = Carbon::parse($calculateAttendanceDataRow->endTime);
+                                   if ($endTime_new->lt($startTime_new))
+                                   {
+                                        $endTime_new->addDay();
+                                   }
+
+                                   $companyWorking = $endTime_new->diffInSeconds($startTime_new);
+                                   $inParseTime = Carbon::parse($calculateAttendanceDataRow->clockInTime);
+                                   $outParseTime = Carbon::parse($calculateAttendanceDataRow->clockOutTime);
+                                   if ($outParseTime->lt($inParseTime))
+                                   {
+                                        $outParseTime->addDay();
+                                   }
+                                   $totalWorked = $inParseTime->diffInSeconds($outParseTime);
+                                   if($employeeId == 817) {
+                                        Log::info(["totalWorked"=> $totalWorked, "companyWorking"=>$companyWorking]);
+                                   }
+                                   if ($totalWorked < $companyWorking)
+                                   {
+                                        $clockout_early = true;
+                                   }
+                              }
+                         }
+                         // Attandence Calculation Late Comming, Early Leaving, Overtime,
+                         //}
+
+
+
+                         $imageName = null;
+                         if ($request->hasFile('image'))
+                         {
+                              $image_name = time() . rand(100, 10000) . '.' . $request->file('image')->getClientOriginalExtension();
+                              $uploadImageData = uploadFile($request->file('image'), $image_name, "images/clock_in_out/$employeeId/", true, true);
+                              if ($uploadImageData['status'] == 1)
+                              {
+                                   $imageName = $image_name;
+                              }
+                         }
+
+                         AttendanceEmployee::where("id", $checkLastAttendance->id)
+                              ->update([
+                                   "clock_out_date_time" => $currentDateTime,
+                                   "clock_out" => $time,
+                                   "clock_out_latitude" => (string)$latitude,
+                                   "clock_out_longitude" => (string)$longitude,
+
+                                   "early_leaving" => $earlyLeaving,
+                                   "overtime" => $overtime,
+
+                                   "clock_out_ip_address" => ($request->has("webClockInOut") ? $request->ip() : null),
+                                   "clock_out_image" => $imageName,
+                                   "clock_out_meta_data" => $metaData,
+
+                              ]);
+
+                         $isCreateClockIn = false;
+                    }
+                    // else if ($employeeDetails->geofencing_status == 1) // else if geofancing is enabled and and use user is already clocked out then clocked out for last clock in, create new entry for clock in
+                    else
+                    {
+                         $isCreateClockIn = true;
+                    }
+               }
+
+               if ($isCreateClockIn) // clock in
+               {
+                    $late = "00:00:00";
+                    $is_flexi_hour_applied = 0;
+
+                    //29-08 told to rmeove geofencing condition --Monali
+                    //if ($employeeDetails->geofencing_status == 0) // calculate attendance data only if geofancing is no enabled for this employee
+                    //{
+                    // Attandence Calculation Late Comming, & Flexi hours
+                    $clockInDatetime = date("Y-m-d H:i:s");
+
+                    $calculateAttendanceData = (object)calculateAttendanceData($employeeId, $date, $clockInDatetime, null);
+                    if ($calculateAttendanceData->status == 1)
+                    {
+                         if (!empty($calculateAttendanceData->data))
+                         {
+                              $calculateAttendanceDataRow = (object)$calculateAttendanceData->data ?? [];
+
+                              $late = $calculateAttendanceDataRow->late_comming ?? $late;
+                              $is_flexi_hour_applied = ($calculateAttendanceDataRow->is_flexi_hour_applied == true ? 1 : 0);
+                         }
+                    }
+                    // Attandence Calculation Late Comming, & Flexi hours
+                    //}
+
+                    $imageName = null;
+                    if ($request->hasFile('image'))
+                    {
+                         $image_name = time() . rand(100, 10000) . '.' . $request->file('image')->getClientOriginalExtension();
+                         $uploadImageData = uploadFile($request->file('image'), $image_name, "images/clock_in_out/$employeeId/", true, true);
+                         if ($uploadImageData['status'] == 1)
+                         {
+                              $imageName = $image_name;
+                         }
+                    }
+
+                    $employeeAttendance                = new AttendanceEmployee();
+                    $employeeAttendance->employee_id   = $employeeId;
+                    $employeeAttendance->date          = $date;
+                    $employeeAttendance->status        = 'Present';
+
+                    $employeeAttendance->clock_in_date_time = $currentDateTime;
+                    $employeeAttendance->clock_out_date_time = null;
+
+                    $employeeAttendance->clock_in = $time;
+                    $employeeAttendance->clock_out     = '00:00:00';
+
+                    $employeeAttendance->clock_in_latitude    = (string)$latitude;
+                    $employeeAttendance->clock_in_longitude   = (string)$longitude;
+
+                    $employeeAttendance->late          = $late;
+                    $employeeAttendance->early_leaving = '00:00:00';
+                    $employeeAttendance->overtime      = '00:00:00';
+                    $employeeAttendance->total_rest    = '00:00:00';
+                    $employeeAttendance->is_flexi_hours_used = $is_flexi_hour_applied;
+
+                    $employeeAttendance->image = $imageName;
+                    $employeeAttendance->clock_in_meta_data = $metaData;
+
+                    $employeeAttendance->created_by = Auth::user()->id;
+                    $employeeAttendance->geofencing_status = $employeeDetails->geofencing_status;
+
+                    if ($request->has("webClockInOut"))
+                    {
+                         $employeeAttendance->clock_in_ip_address = ($request->ip() ?? null);
+                    }
+
+                    $employeeAttendance->save();
+               }
+
+               $body_notification = __("You have clocked out successfully.");
+               if (!$isCreateClockIn)
+               {
+                    if($request->is_from_kill_mode == 1) {
+                         AttendanceEmployee::where('employee_id', '=', $employeeId)->update(['is_clock_by_killapp' => 1]);
+                    }
+                    if ($clockout_early)
+                    {
+                         $title_notification = __("Attendance Alert");
+                         $body_notification = __("You have clocked out successfully. You have not completed your required working hours.");
+                    }
+                    else
+                    {
+                         $title_notification = __("Attendance Notification");
+                         $body_notification = __("You have clocked out successfully.");
+                    }
+
+                    // notification Code
+                    $notification               = new NotificationModel();
+                    $notification->user_id      = Auth::user()->id;
+                    $notification->employee_id  = $employeeId;
+                    $notification->title        = $title_notification;
+                    $notification->details      = $body_notification;
+                    $notification->status       = 0;
+                    $notification->date         = Carbon::now();
+                    $notification->created_by   = Auth::user()->created_by;
+                    $notification->redirect     = 'dashboard_user_clock_out';
+                    $notification->save();
+                    //end notification
+
+                    // Send Push Notification to App
+                    $usersData = User::where('id', Auth::id())->where("device_token", "!=", NULL)->select("id", "device_type", "device_token")->get();
+
+                    if (!$usersData->isEmpty())
+                    {
+                         $device_type = implode(',', $usersData->pluck('device_type')->toArray());
+                         if($request->is_from_kill_mode == 1) {
+                              if($device_type == 2) {
+                                   $title = $title_notification;
+                                   $body = $body_notification;
+          
+                                   $click_action = 'dashboard_user_clock_out';
+                                   $extraData = ['id' => (string)$notification->id];
+          
+                                   sendpPushNotification($title, $body, $usersData, $click_action, $extraData);
+                              }
+                         } else {
+                              $title = $title_notification;
+                              $body = $body_notification;
+
+                              $click_action = 'dashboard_user_clock_out';
+                              $extraData = ['id' => (string)$notification->id];
+
+                              sendpPushNotification($title, $body, $usersData, $click_action, $extraData);
+                         } 
+                    }
+                    // Send Push Notification to App
+               }
+               // dd("before commit");
+               DB::commit();
+
+               // Last CLoci In Data
+               $checkLastAttendance = AttendanceEmployee::select("id", "employee_id", "clock_in_date_time", "clock_out_date_time", "clock_in_latitude", "clock_in_longitude", "clock_out_latitude", "clock_out_longitude", "clock_in", "clock_out",  "image", "image as clocked_in_image", "clock_out_image", "clock_out_image as clocked_out_image")->where('employee_id', '=', $employeeDetails->id)
+                    // ->where('geofencing_status', '=', $employeeDetails->geofencing_status)
+                    ->orderBy("id", "DESC")->first();
+               // Last CLoci In Data
+
+               $response = [
+                    'status' => 1,
+                    'message' => ($isCreateClockIn == true ? __("You have successfully clocked in.") : $body_notification),
+                    "isClockIn" => $isCreateClockIn,
+                    "data" => $checkLastAttendance,
+               ];
+          }
+          catch (Exception | Throwable $e)
+          {
+               return ApiResponse(error_msg(showExceptionMessage($e)));
+          }
+
+          $message = "";
+          if ($request->has("webClockInOut"))
+          {
+               $message = ($isCreateClockIn == true ? __("You have successfully clocked in.") : $body_notification);
+               return redirect()->route('home')->with('success', $message);
+          }
+
+          Log::info("CLock In Api Call End Clo in type - $message");
+
+          return $response;
+     }
+
+
+
+     public function syncClockInClockOut_imageOptimize(Request $request)
+     {
+
+          // return $this->upload($request);
+
+          // $saveImageName = null;
+          // if ($request->hasFile('image'))
+          // {
+          //      $reruestImage = $request->file('image');
+          //      $processedImagePath = $this->processImage($reruestImage);
+
+          //      $imageName = time() . rand(100, 10000) . '.' . $reruestImage->getClientOriginalExtension();
+          //      $uploadImageData = uploadFile($processedImagePath, $imageName, "images/clock_in_out/3371010111111111/", true, true);
+          //      dd($uploadImageData);
+          //      if ($uploadImageData['status'] == 1)
+          //      {
+          //           $saveImageName = $imageName;
+          //      }
+          // }
+          // dd(0);
+
+          $body_notification = __("You have clocked out successfully.");
+          $response = [];
+          try
+          {
+               $latitude = $request->latitude ?? "";
+               $longitude = $request->longitude ?? "";
+
+               // $request->merge(['skip_ip' => false]);
+               // $request->merge(['sample_parameter_testing_demo_1' => true]);
+
+               $employeeId = !empty(Auth::user()->employee) ? Auth::user()->employee->id : 0;
+
+               $employeeDetails = Employee::where("id", $employeeId)->first();
+
+               $date = date("Y-m-d");
+               $time = date("H:i:s");
+
+               $currentDateTime = date("Y-m-d H:i:s");
+
+               $checkLastAttendance = AttendanceEmployee::where('employee_id', '=', $employeeId)
+                    // ->where('geofencing_status', '=', $employeeDetails->geofencing_status)
+                    ->orderBy("id", "DESC")->first();
+
+               DB::beginTransaction();
+
+               $isCreateClockIn = false;
+               $clockout_early = false;
+               if ($checkLastAttendance == null) // if null then create new clock in entry
+               {
+                    $isCreateClockIn = true;
+               }
+               else
+               {
+                    if ($checkLastAttendance->clock_out == "00:00:00") // if not clocked out then update the clock out
+                    {
+                         $is_flexi_hour_applied = 0;
+                         $late = "00:00:00";
+                         $earlyLeaving = "00:00:00";
+                         $overtime = '00:00:00';
+
+                         //29-08 told to rmeove geofencing condition --Monali
+                         //if ($employeeDetails->geofencing_status == 0) // calculate attendance data only if geofancing is no enabled for this employee
+                         //{
+                         // Attandence Calculation Late Comming, Early Leaving, Overtime,
+                         $clockInTime = date("H:i", strtotime($checkLastAttendance->clock_in));
+
+                         $clockInDatetime = date("Y-m-d H:i:s", strtotime($checkLastAttendance->clock_in));
+                         $clockOutDatetime = date("Y-m-d H:i:s");
+
+                         $calculateAttendanceData = (object)calculateAttendanceData($employeeId, $date, $clockInDatetime, $clockOutDatetime);
+                         if ($calculateAttendanceData->status == 1)
+                         {
+                              if (!empty($calculateAttendanceData->data))
+                              {
+                                   $calculateAttendanceDataRow = (object)$calculateAttendanceData->data ?? [];
+
+                                   $is_flexi_hour_applied = ($calculateAttendanceDataRow->is_flexi_hour_applied == true ? 1 : 0);
+                                   $late = $calculateAttendanceDataRow->late_comming ?? $late;
+                                   $earlyLeaving = $calculateAttendanceDataRow->early_leaving ?? $earlyLeaving;
+                                   $overtime = $calculateAttendanceDataRow->overtime ?? $overtime;
+                                   $startTime_new = Carbon::parse($calculateAttendanceDataRow->startTime);
+                                   $endTime_new = Carbon::parse($calculateAttendanceDataRow->endTime);
+                                   if ($endTime_new->lt($startTime_new))
+                                   {
+                                        $endTime_new->addDay();
+                                   }
+                                   $companyWorking = $endTime_new->diffInSeconds($startTime_new);
+
+                                   $inParseTime = Carbon::parse($calculateAttendanceDataRow->clockInTime);
+                                   $outParseTime = Carbon::parse($calculateAttendanceDataRow->clockOutTime);
+                                   if ($outParseTime->lt($inParseTime))
+                                   {
+                                        $outParseTime->addDay();
+                                   }
+                                   $totalWorked = $inParseTime->diffInSeconds($outParseTime);
+                                   if($employeeId == 817) {
+                                        Log::info(["totalWorked"=> $totalWorked, "companyWorking"=>$companyWorking]);
+                                   }
+                                   if ($totalWorked < $companyWorking)
+                                   {
+                                        $clockout_early = true;
+                                   }
+                              }
+                         }
+                         // Attandence Calculation Late Comming, Early Leaving, Overtime,
+                         //}
+
+                         AttendanceEmployee::where("id", $checkLastAttendance->id)
+                              ->update([
+                                   "clock_out_date_time" => $currentDateTime,
+                                   "clock_out" => $time,
+                                   "clock_out_latitude" => $latitude,
+                                   "clock_out_longitude" => $longitude,
+
+                                   "early_leaving" => $earlyLeaving,
+                                   "overtime" => $overtime,
+
+                                   "clock_out_ip_address" => ($request->has("webClockInOut") ? $request->ip() : null),
+
+                              ]);
+
+                         $isCreateClockIn = false;
+                    }
+                    // else if ($employeeDetails->geofencing_status == 1) // else if geofancing is enabled and and use user is already clocked out then clocked out for last clock in, create new entry for clock in
+                    else
+                    {
+                         $isCreateClockIn = true;
+                    }
+               }
+
+               if ($isCreateClockIn) // clock in
+               {
+                    $late = "00:00:00";
+                    $is_flexi_hour_applied = 0;
+
+                    //29-08 told to rmeove geofencing condition --Monali
+                    //if ($employeeDetails->geofencing_status == 0) // calculate attendance data only if geofancing is no enabled for this employee
+                    //{
+                    // Attandence Calculation Late Comming, & Flexi hours
+                    $clockInDatetime = date("Y-m-d H:i:s");
+
+                    $calculateAttendanceData = (object)calculateAttendanceData($employeeId, $date, $clockInDatetime, null);
+                    if ($calculateAttendanceData->status == 1)
+                    {
+                         if (!empty($calculateAttendanceData->data))
+                         {
+                              $calculateAttendanceDataRow = (object)$calculateAttendanceData->data ?? [];
+
+                              $late = $calculateAttendanceDataRow->late_comming ?? $late;
+                              $is_flexi_hour_applied = ($calculateAttendanceDataRow->is_flexi_hour_applied == true ? 1 : 0);
+                         }
+                    }
+                    // Attandence Calculation Late Comming, & Flexi hours
+                    //}
+
+
+                    // Test
+
+                    // Process the image
+
+                    // $image = $request->file('image');
+                    // $processedImagePath = $this->processImage($image);
+
+                    // if ($processedImagePath === null)
+                    // {
+                    //      return response()->json(['error' => 'Unsupported image type'], 400);
+                    // }
+
+                    // // Save the rotated image using your existing logic
+                    // $imageName = time() . rand(100, 10000) . '.' . $image->getClientOriginalExtension();
+                    // $employeeId = 1; // Replace with actual employee ID
+                    // $uploadImageData = uploadFile($processedImagePath, $imageName, "images/clock_in_out/$employeeId/", true, true);
+
+                    // if ($uploadImageData['status'] == 1)
+                    // {
+                    //      // Delete the temporary file after saving it
+                    //      unlink($processedImagePath);
+
+                    //      return response()->json(['message' => 'Image uploaded and processed successfully', 'image_name' => $imageName]);
+                    // }
+                    // else
+                    // {
+                    //      // Delete the temporary file if upload failed
+                    //      unlink($processedImagePath);
+
+                    //      return response()->json(['error' => 'Failed to upload image'], 500);
+                    // }
+
+                    // Test
+
+                    $saveImageName = null;
+                    if ($request->hasFile('image'))
+                    {
+                         $reruestImage = $request->file('image');
+                         $processedImagePath = $this->processImage($reruestImage);
+
+                         $imageName = time() . rand(100, 10000) . '.' . $reruestImage->getClientOriginalExtension();
+                         $uploadImageData = uploadFile($processedImagePath, $imageName, "images/clock_in_out/$employeeId/", true, true);
+                         // dd($uploadImageData);
+
+                         if ($uploadImageData['status'] == 1)
+                         {
+                              $saveImageName = $imageName;
+                         }
+                    }
+
+                    $employeeAttendance                = new AttendanceEmployee();
+                    $employeeAttendance->employee_id   = $employeeId;
+                    $employeeAttendance->date          = $date;
+                    $employeeAttendance->status        = 'Present';
+
+                    $employeeAttendance->clock_in_date_time = $currentDateTime;
+                    $employeeAttendance->clock_out_date_time = null;
+
+                    $employeeAttendance->clock_in = $time;
+                    $employeeAttendance->clock_out     = '00:00:00';
+
+                    $employeeAttendance->clock_in_latitude    = $latitude;
+                    $employeeAttendance->clock_in_longitude   = $longitude;
+
+                    $employeeAttendance->late          = $late;
+                    $employeeAttendance->early_leaving = '00:00:00';
+                    $employeeAttendance->overtime      = '00:00:00';
+                    $employeeAttendance->total_rest    = '00:00:00';
+                    $employeeAttendance->is_flexi_hours_used = $is_flexi_hour_applied;
+
+                    $employeeAttendance->image = $saveImageName;
+
+                    $employeeAttendance->created_by = Auth::user()->id;
+                    $employeeAttendance->geofencing_status = $employeeDetails->geofencing_status;
+
+                    if ($request->has("webClockInOut"))
+                    {
+                         $employeeAttendance->clock_in_ip_address = ($request->ip() ?? null);
+                    }
+
+                    $employeeAttendance->save();
+               }
+
+               $body_notification = __("You have clocked out successfully.");
+               if (!$isCreateClockIn)
+               {
+                    if($request->is_from_kill_mode == 1) {
+                         AttendanceEmployee::where('employee_id', '=', $employeeId)->update(['is_clock_by_killapp' => 1]);
+                    }
+                    if ($clockout_early)
+                    {
+                         $title_notification = __("Attendance Alert");
+                         $body_notification = __("You have clocked out successfully. You have not completed your required working hours.");
+                    }
+                    else
+                    {
+                         $title_notification = __("Attendance Notification");
+                         $body_notification = __("You have clocked out successfully.");
+                    }
+
+                    // notification Code
+                    $notification               = new NotificationModel();
+                    $notification->user_id      = Auth::user()->id;
+                    $notification->employee_id  = $employeeId;
+                    $notification->title        = $title_notification;
+                    $notification->details      = $body_notification;
+                    $notification->status       = 0;
+                    $notification->date         = Carbon::now();
+                    $notification->created_by   = Auth::user()->created_by;
+                    $notification->redirect     = 'dashboard_user_clock_out';
+                    $notification->save();
+                    //end notification
+
+                    // Send Push Notification to App
+                    $usersData = User::where('id', Auth::id())->where("device_token", "!=", NULL)->select("id", "device_type", "device_token")->get();
+
+                    if (!$usersData->isEmpty())
+                    {
+                         $device_type = implode(',', $usersData->pluck('device_type')->toArray());
+                         if($request->is_from_kill_mode == 1) {
+                              if($device_type == 2) {
+                                   $title = $title_notification;
+                                   $body = $body_notification;
+          
+                                   $click_action = 'dashboard_user_clock_out';
+                                   $extraData = ['id' => (string)$notification->id];
+          
+                                   sendpPushNotification($title, $body, $usersData, $click_action, $extraData);
+                              }
+                         } else {
+                              $title = $title_notification;
+                              $body = $body_notification;
+
+                              $click_action = 'dashboard_user_clock_out';
+                              $extraData = ['id' => (string)$notification->id];
+
+                              sendpPushNotification($title, $body, $usersData, $click_action, $extraData);
+                         } 
+                    }
+                    // Send Push Notification to App
+               }
+               // dd("before commit");
+               DB::commit();
+
+               // Last CLoci In Data
+               $checkLastAttendance = AttendanceEmployee::select("id", "employee_id", "clock_in_date_time", "clock_out_date_time", "clock_in_latitude", "clock_in_longitude", "clock_out_latitude", "clock_out_longitude", "clock_in", "clock_out")->where('employee_id', '=', $employeeDetails->id)
+                    // ->where('geofencing_status', '=', $employeeDetails->geofencing_status)
+                    ->orderBy("id", "DESC")->first();
+               // Last CLoci In Data
+
+               $response = [
+                    'status' => 1,
+                    'message' => ($isCreateClockIn == true ? __("You have successfully clocked in.") : $body_notification),
+                    "isClockIn" => $isCreateClockIn,
+                    "data" => $checkLastAttendance,
+               ];
+          }
+          catch (Exception | Throwable $e)
+          {
+               return ApiResponse(error_msg(showExceptionMessage($e)));
+          }
+
+          if ($request->has("webClockInOut"))
+          {
+               $message = ($isCreateClockIn == true ? __("You have successfully clocked in.") : $body_notification);
+               return redirect()->route('home')->with('success', $message);
+          }
+
+          return $response;
+     }
+
+     public function processImage($image)
+     {
+          // Get the image's path
+          $imagePath = $image->getPathname();
+
+          // Correct the image orientation
+          $this->correctImageOrientation($imagePath);
+
+          // Get the image size after correction
+          list($width, $height) = getimagesize($imagePath);
+
+          // If the image is already vertical (portrait), no need to process
+          if ($width <= $height)
+          {
+               return $imagePath;
+          }
+
+          // Load the image
+          $img = null;
+          $imageType = $image->getClientOriginalExtension();
+
+          switch (strtolower($imageType))
+          {
+               case 'jpeg':
+               case 'jpg':
+                    $img = imagecreatefromjpeg($imagePath);
+                    break;
+               case 'png':
+                    $img = imagecreatefrompng($imagePath);
+                    break;
+               case 'gif':
+                    $img = imagecreatefromgif($imagePath);
+                    break;
+               default:
+                    return null; // Return null if unsupported image type
+          }
+
+          // Rotate the image by 90 degrees counterclockwise
+          $rotatedImg = imagerotate($img, -90, 0);
+
+          // Create a temporary file to save the processed image
+          $tempFilePath = tempnam(sys_get_temp_dir(), 'processed_image_');
+          switch (strtolower($imageType))
+          {
+               case 'jpeg':
+               case 'jpg':
+                    imagejpeg($rotatedImg, $tempFilePath);
+                    break;
+               case 'png':
+                    imagepng($rotatedImg, $tempFilePath);
+                    break;
+               case 'gif':
+                    imagegif($rotatedImg, $tempFilePath);
+                    break;
+          }
+
+          // Free up memory
+          imagedestroy($img);
+          imagedestroy($rotatedImg);
+
+          return $tempFilePath;
+     }
+
+     private function correctImageOrientation($filename)
+     {
+          if (function_exists('exif_read_data'))
+          {
+               $exif = exif_read_data($filename);
+               if ($exif && isset($exif['Orientation']))
+               {
+                    $orientation = $exif['Orientation'];
+
+                    // Only correct the orientation if it's different from the default
+                    if ($orientation != 1)
+                    {
+                         $image = imagecreatefromjpeg($filename);
+
+                         switch ($orientation)
+                         {
+                              case 3:
+                                   $image = imagerotate($image, 180, 0);
+                                   break;
+                              case 6:
+                                   $image = imagerotate($image, -90, 0);
+                                   break;
+                              case 8:
+                                   $image = imagerotate($image, 90, 0);
+                                   break;
+                         }
+
+                         // Save the corrected image back to the file
+                         imagejpeg($image, $filename, 90);
+
+                         // Free up memory
+                         imagedestroy($image);
+                    }
+               }
+          }
+     }
+
+     public function syncClockInClockOutStatus(Request $request)
+     {
+          $response = [];
+          $isClockIn = false;
+          $isCLockOut = false;
+
+          try
+          {
+               $employeeId = !empty(Auth::user()->employee) ? Auth::user()->employee->id : 0;
+
+               $employeeDetails = Employee::where("id", $employeeId)->first();
+               if ($employeeDetails != null)
+               {
+                    $checkLastAttendance = AttendanceEmployee::where('employee_id', '=', $employeeId)
+                         // ->where('geofencing_status', '=', 1)
+                         ->orderBy("id", "DESC")->first();
+
+                    if ($checkLastAttendance != null)
+                    {
+                         // check if clocked in or not
+                         if ($checkLastAttendance->clock_in != '00:00:00')
+                         {
+                              $isClockIn = true;
+                         }
+                         else
+                         {
+                              $isClockIn = false;
+                         }
+
+                         // check if clocked out or not
+                         if ($checkLastAttendance->clock_out != '00:00:00')
+                         {
+                              $isCLockOut = true;
+                         }
+                         else
+                         {
+                              $isCLockOut = false;
+                         }
+                    }
+               }
+
+               $response = [
+                    'status' => 1,
+                    "is_clock_in" => $isClockIn,
+                    "is_clock_out" => $isCLockOut,
+               ];
+          }
+          catch (Exception | Throwable $ex)
+          {
+               $response = [
+                    'status' => 0,
+                    "is_clock_in" => $isClockIn,
+                    "is_clock_out" => $isCLockOut,
+               ];
+          }
+
+          return $response;
+     }
+
+     public function get_profile(request $request)
+     {
+          try
+          {
+               $userData =  User::find(Auth::id());
+               $employee = Employee::select("*", "employee_profile as employee_profile_image")
+                    ->with(
+                         'employeeDocuments',
+                         'experience',
+                         'education',
+                         'dependent'
+                    )
+                    ->with('branch', 'department', 'designation')->with("playslab")->where('user_id', $userData->id)->first();
+
+               $employee->employee_code = Auth::user()->employeeIdFormat($employee->employee_id);
+               // $employee->avatar = employee(!empty($emp->avatar) ? asset(Storage::url('uploads/avatar')) . '/' . $emp->avatar : "");
+               $employee->office_staff_name = ($employee->office_staff == 1 ? "Office Staff" : "Field Staff");
+               $employee->salary = Auth::user()->priceFormat($employee->salary);
+
+               $employeeUserData = User::where('id', $employee->user_id)->first();
+               $employee->login_status = $employeeUserData->login_status ?? 0;
+
+               $employee->maritalStatusList = [
+                    "Single",
+                    "Married",
+                    "Widowed",
+                    "Separated",
+                    "Divorced"
+               ];
+
+               $employee->relationTypesList = [
+                    "Father",
+                    "Mother",
+                    "Brother",
+                    "Sister",
+                    "Husband",
+                    "Wife",
+                    "Child",
+               ];
+
+               $response = [
+                    'status' => 1,
+                    'message' => __("Profile Data"),
+                    'data' => $employee
+               ];
+
+               return ApiResponse($response);
+          }
+          catch (Exception | Throwable $e)
+          {
+               return ApiResponse(error_msg(showExceptionMessage($e)));
+          }
+     }
+
+     public function get_experience(request $request)
+     {
+          try
+          {
+               $emp =  User::find(Auth::id());
+               $employee     = Employee::where('user_id', $emp->id)->first();
+               $EXPTableData = EXPTable::where('employee_id', $employee->id)->get();
+
+               $response = [
+                    'status' => 1,
+                    'message' => __("Experience Data"),
+                    'data' => $EXPTableData,
+               ];
+               return ApiResponse($response);
+          }
+          catch (Exception | Throwable $e)
+          {
+               return ApiResponse(error_msg(showExceptionMessage($e)));
+          }
+     }
+
+     public function get_education(request $request)
+     {
+          try
+          {
+               $emp        =  User::find(Auth::id());
+               $employee   = Employee::where('user_id', $emp->id)->first();
+               $data       = EdcutionTable::where('employee_id', $employee->id)->get();
+               $response = [
+                    'status'  => 1,
+                    'message' => _("Education Data"),
+                    'data'    => $data,
+               ];
+               return ApiResponse($response);
+          }
+          catch (Exception | Throwable $e)
+          {
+               return ApiResponse(error_msg(showExceptionMessage($e)));
+          }
+     }
+
+     public function get_dependent(request $request)
+     {
+          try
+          {
+               $emp        =  User::find(Auth::id());
+               $employee   = Employee::where('user_id', $emp->id)->first();
+               $data       = DependentData::where('employee_id', $employee->id)->get();
+               $response = [
+                    'status'  => 1,
+                    'message' => __("Dependent Data"),
+                    'data'    => $data,
+               ];
+               return ApiResponse($response);
+          }
+          catch (Exception | Throwable $e)
+          {
+               return ApiResponse(error_msg(showExceptionMessage($e)));
+          }
+     }
+
+     public function get_documents()
+     {
+          try
+          {
+               $data = Document::where('created_by', Auth::user()->creatorId())
+                    ->with(["EmployeeDocument" => function ($query)
+                    {
+                         $query->select("*", "document_value as document_link")
+                              ->where("employee_id", Auth::user()->employee->id);
+                    }])
+                    // ->whereHas(["EmployeeDocument" => function ($query)
+                    // {
+                    //      $query->where("employee_id", Auth::user()->employee->id);
+                    // }])
+                    ->get();
+               $response = [
+                    'status'  => 1,
+                    'message' => __("Documents"),
+                    'data'    => $data,
+               ];
+               return ApiResponse($response);
+          }
+          catch (Exception | Throwable $e)
+          {
+               return ApiResponse(error_msg(showExceptionMessage($e)));
+          }
+     }
+
+     public function testNotification() {
+          try {
+               $login_user = User::find(337);
+               // notification Code
+               $notification               = new NotificationModel();
+               $notification->user_id      = $login_user->id;
+               $notification->employee_id  = $login_user->id;
+               $notification->title        = "You clockout successfully";
+               $notification->details      = "You clockout successfully";
+               $notification->status       = 0;
+               $notification->date         = Carbon::now();
+               $notification->created_by   = $login_user->created_by;
+               $notification->redirect     = 'dashboard_user_clock_out';
+               $notification->save();
+               //end notification
+               
+               // Send Push Notification to App
+               $usersData = User::where('id', 337)->where("device_token", "!=", NULL)->select("id", "device_type", "device_token")->get();
+
+               if (!$usersData->isEmpty())
+               {
+                    $title = __("You successfully clockout");
+                    $body = __("You successfully clockout");
+
+                    $click_action = 'dashboard_user_clock_out';
+                    $extraData = ['id'=> (string)$notification->id];
+
+                    sendpPushNotification($title, $body, $usersData, $click_action, $extraData);
+               }
+               // Send Push Notification to App
+          } catch(Exception | Throwable $e) {
+               dd($e);
+          }
+     }
+     public function set_logout(request $request)
+     {
+          try
+          {
+               $login_user = User::find(Auth::id());
+               $latitude = $request->latitude ?? "";
+               $longitude = $request->longitude ?? "";
+               if (!empty($login_user))
+               {
+                    if($request->latitude != '' && $request->longitude != '') {
+                         $employeeId = !empty(Auth::user()->employee) ? Auth::user()->employee->id : 0;
+                         $date = date("Y-m-d");
+                         $checkLastAttendance = AttendanceEmployee::where('employee_id', '=', $employeeId)->orderBy("id", "DESC")->first();
+                         if ($checkLastAttendance != null && ($checkLastAttendance->clock_out ?? "") == "00:00:00") // if null then create new clock in entry
+                         {
+                              $late = "00:00:00";
+                              $earlyLeaving = "00:00:00";
+                              $overtime = '00:00:00';
+
+                              // Attandence Calculation Late Comming, Early Leaving, Overtime,
+                              $clockInTime = date("H:i", strtotime($checkLastAttendance->clock_in));
+
+                              $clockInDatetime = date("Y-m-d H:i:s", strtotime($checkLastAttendance->clock_in));
+                              $clockOutDatetime = date("Y-m-d H:i:s");
+
+                              $calculateAttendanceData = (object)calculateAttendanceData($employeeId, $date, $clockInDatetime, $clockOutDatetime);
+
+                              if ($calculateAttendanceData->status == 1)
+                              {
+                                   if (!empty($calculateAttendanceData->data))
+                                   {
+                                        $calculateAttendanceDataRow = (object)$calculateAttendanceData->data ?? [];
+
+                                        $late = $calculateAttendanceDataRow->late_comming ?? $late;
+                                        $earlyLeaving = $calculateAttendanceDataRow->early_leaving ?? $earlyLeaving;
+                                        $overtime = $calculateAttendanceDataRow->overtime ?? $overtime;
+                                   }
+                              }
+                              $currentDateTime = date("Y-m-d H:i:s");
+                              $time = date("H:i:s");
+                              AttendanceEmployee::where("id", $checkLastAttendance->id)
+                              ->update([
+                                   "clock_out_date_time" => $currentDateTime,
+                                   "clock_out" => $time,
+                                   "clock_out_latitude" => (string)$latitude,
+                                   "clock_out_longitude" => (string)$longitude,
+                                   "early_leaving" => $earlyLeaving,
+                                   "overtime" => $overtime,
+                                   "clock_out_ip_address" => null,
+                                   "clock_out_image" => '',
+                                   "clock_out_meta_data" => '',
+                                   "is_by_logout" => 1,
+                              ]);
+                         }
+                    }
+                    $request->user()->token()->revoke();
+                    $response = [
+                         'status' => 1,
+                         'message' => __("Logged out successfully."),
+                    ];
+                    return $response;
+               }
+          }
+          catch (Exception | Throwable $e)
+          {
+               return ApiResponse(error_msg(showExceptionMessage($e)));
+          }
+     }
+
+     public function updatePassword(request $request)
+     {
+          try
+          {
+               if (Auth::check())
+               {
+                    $objUser          = Auth::user();
+                    $request_data     = $request->all();
+                    $current_password = $objUser->password;
+                    if (Hash::check($request_data['current_password'], $current_password))
+                    {
+                         $user_id            = Auth::user()->id;
+                         $obj_user           = User::find($user_id);
+                         $obj_user->password = Hash::make($request_data['new_password']);
+                         $obj_user->save();
+
+                         DB::commit();
+                         $response = ['status' => 1, 'message' => __('Password successfully updated.')];
+                    }
+                    else
+                    {
+                         $response = ['status' => 0, 'message' => __('Please enter correct current password.')];
+                    }
+               }
+               else
+               {
+                    $response = ['status' => 0, 'message' => __('Something is wrong.')];
+               }
+          }
+          catch (Exception | Throwable $e)
+          {
+               $response = error_msg(showExceptionMessage($e));
+          }
+          return ApiResponse($response);
+     }
+
+     public function forgotPassword(Request $request)
+     {
+          $request->validate([
+               'email' => 'required|email',
+          ]);
+
+          $response = [];
+          try
+          {
+               $userData = User::where("email", $request->email)->first();
+               if ($userData != null)
+               {
+                    $status = Password::sendResetLink(
+                         $request->only('email')
+                    );
+
+                    if ($status == Password::RESET_LINK_SENT)
+                    {
+                         $response = [
+                              "status" => 1,
+                              "message" => __("We have e-mailed your password reset link!"),
+                              "data" => [],
+                         ];
+                    }
+                    else
+                    {
+                         $response = [
+                              "status" => 0,
+                              "message" => __("Something went wrong, can not send email currently."),
+                              "data" => [],
+                         ];
+                    }
+               }
+               else
+               {
+                    $response = [
+                         "status" => 0,
+                         "message" => __("There is no user exists with this email, please check your email and try again."),
+                         "data" => [],
+                    ];
+               }
+          }
+          catch (Exception | Throwable $e)
+          {
+               $response = error_msg(showExceptionMessage($e));
+          }
+
+          return ApiResponse($response);
+     }
+
+     public function dashboard(request $request)
+     {
+          $response = [];
+
+          try
+          {
+               $emp = User::find(Auth::id());
+               $employee = Employee::select("*", "employee_profile as employee_profile_image")->where('user_id', ($emp->id ?? 0))->first();
+
+               if ($employee != null)
+               {
+                    $employeeId = $employee->id;
+
+                    $lastClockInImageUrl = "";
+                    $checkLastAttendance = AttendanceEmployee::where('employee_id', '=', $employee->id)
+                         ->where('image', '!=', null)
+                         ->orderBy("id", "DESC")->first();
+                    if ($checkLastAttendance != null)
+                    {
+                         if ($checkLastAttendance->image != null || !empty($checkLastAttendance->image))
+                         {
+                              $lastClockInImageUrl = getFilePathPrefix() . 'images/clock_in_out/' . $checkLastAttendance->employee_id . '/' . $checkLastAttendance->image;
+                         }
+                    }
+
+                    $settings = Utility::settings();
+
+                    $site_currency_symbol_position = $settings['site_currency_symbol_position'] ?? "";
+                    $site_currency_symbol = $settings['site_currency_symbol'] ?? "";
+
+                    $payslipDetail = getEmployeeSalaryStructure($employee->id, date("Y") . '-' . date("m"));
+
+
+                    $isTodayWorkAnniversary = false;
+
+                    if ($employee->getRawOriginal("company_doj") == date("Y-m-d"))
+                    {
+                         $isTodayWorkAnniversary = true;
+                    }
+
+                    $isTodayMarriageAnniversary = false;
+                    if ($employee->marital_status == "Married" || $employee->marital_status == "Widowed")
+                    {
+                         if ($employee->marriage_anniversary_date == date("Y-m-d"))
+                         {
+                              $isTodayMarriageAnniversary = true;
+                         }
+                    }
+
+                    // get employee working hours
+
+                    $officeTime['startTime'] = timeFormat(Utility::getValByName('company_start_time'));
+                    $officeTime['endTime']   = timeFormat(Utility::getValByName('company_end_time'));
+
+                    $officeTime['flexiHours'] = Utility::getValByName('company_flexi_hours');
+                    $officeTime['flexiDays'] = Utility::getValByName('company_flexi_days');
+
+
+                    // check if employee is assigned to any shift calculate according that shift
+                    $workingShiftEmployees = WorkingShiftEmployees::where("employee_id", $employeeId)->first();
+                    $employeeShift = null;
+                    if ($workingShiftEmployees != null)
+                    {
+                         $employeeShift = WorkingShifts::where("id", $workingShiftEmployees->working_shifts_id)->first();
+                         if ($employeeShift != null)
+                         {
+                              $officeTime['startTime'] = timeFormat($employeeShift->start_time);
+                              $officeTime['endTime'] = timeFormat($employeeShift->end_time);
+
+                              $officeTime['flexiHours'] = $employeeShift->flexi_hours;
+                              $officeTime['flexiDays'] = $employeeShift->flexi_days;
+                         }
+                    }
+                    // get employee working hours
+
+
+                    $workingData = $officeTime;
+
+                    $documents = Document::where('created_by', Auth::user()->creatorId())
+                         ->with(["EmployeeDocument" => function ($query) use ($employeeId)
+                         {
+                              $query->select("id", "document_id", "document_value", "document_value as document_link")->where("employee_id", $employeeId);
+                         }])
+                         ->get();
+
+
+
+                    // Work anniversary list
+                    $workAnniversaryList = Employee::select("id", "name", "employee_profile", "employee_profile as employee_profile_image")
+                         ->whereDay("company_doj", date("d"))
+                         ->whereMonth("company_doj", date("m"))
+                         ->where("created_by", Auth::user()->creatorId())
+                         ->where("id", "!=", $employeeId)
+                         ->where("employee_exit", 0)
+                         ->orderBy("name", "ASC")
+                         ->get();
+
+                    // Work anniversary list
+
+                    // Marriage anniversary list
+                    $marriageAnniversaryList = Employee::select("id", "name", "employee_profile", "employee_profile as employee_profile_image")
+                         ->whereDay("marriage_anniversary_date", date("d"))
+                         ->whereMonth("marriage_anniversary_date", date("m"))
+                         ->where("created_by", Auth::user()->creatorId())
+                         ->where("id", "!=", $employeeId)
+                         ->where("employee_exit", 0)
+                         ->orderBy("name", "ASC")
+                         ->get();
+
+                    // Marriage anniversary list
+
+                    $is_custom_weekoffs = $employee->is_custom_weekoffs;
+                    $employee_weekoffs_data = $employee->weekoffs_data;
+
+                    $setting = Utility::settings();
+
+                    $company_weekoffs_data = [];
+                    if ($setting['company_office_week_off_monday'] == 'on')
+                    {
+                         $company_weekoffs_data[] = "Monday";
+                    }
+                    if ($setting['company_office_week_off_tuesday'] == 'on')
+                    {
+                         $company_weekoffs_data[] = "Tuesday";
+                    }
+                    if ($setting['company_office_week_off_wednesday'] == 'on')
+                    {
+                         $company_weekoffs_data[] = "Wednesday";
+                    }
+                    if ($setting['company_office_week_off_thusday'] == 'on')
+                    {
+                         $company_weekoffs_data[] = "Thursday";
+                    }
+                    if ($setting['company_office_week_off_friday'] == 'on')
+                    {
+                         $company_weekoffs_data[] = "Friday";
+                    }
+                    if ($setting['company_office_week_off_saturday'] == 'on')
+                    {
+                         $company_weekoffs_data[] = "Saturday";
+                    }
+                    if ($setting['company_office_week_off_sunday'] == 'on')
+                    {
+                         $company_weekoffs_data[] = "Sunday";
+                    }
+
+                    $holidays = Holiday::where('status', 1)
+                         ->where('created_by', Auth::user()->creatorId())
+                         ->where('branch_id', $employee->branch_id)
+                         ->get();
+
+                    $employeeUserData = User::where('id', $employee->user_id)->first();
+
+
+                    // Last CLoci In Data
+
+                    $checkLastAttendance = AttendanceEmployee::select("id", "employee_id", "clock_in_date_time", "clock_out_date_time", "clock_in_latitude", "clock_in_longitude", "clock_out_latitude", "clock_out_longitude", "clock_in", "clock_out", "image", "image as clocked_in_image", "clock_out_image", "clock_out_image as clocked_out_image")->where('employee_id', '=', $employee->id)
+                         // ->where('geofencing_status', '=', $employee->geofencing_status)
+                         ->orderBy("id", "DESC")->first();
+                    // Last CLoci In Data
+
+                    $response = [
+                         'status' => 1,
+                         'message' => 'Dashboard Data',
+                         'data' => [
+                              "site_currency_symbol_position" => $site_currency_symbol_position,
+                              "site_currency_symbol" => $site_currency_symbol,
+                              "salaryStructure" => $payslipDetail,
+                              "geofencing_status" => $employee->geofencing_status,
+                              "remote_geofencing_status" => $employee->remote_geofencing_status,
+                              "latitude" => $employee->latitude,
+                              "longitude" => $employee->longitude,
+                              "multi_clock_in_out_status" => $employee->geofencing_status,
+                              "geofencing_radius" => ($employee->branch->geofencing_radius ?? 0),
+                              "lastClockInImageUrl" => $lastClockInImageUrl,
+
+                              "company_doj" => $employee->getRawOriginal("company_doj"),
+                              "isTodayWorkAnniversary" => $isTodayWorkAnniversary,
+                              "isTodayMarriageAnniversary" => $isTodayMarriageAnniversary,
+                              "employee_id" => $employee->employee_id,
+                              "workingData" => $workingData,
+
+                              "employee_documents" => $documents,
+                              "employee_profile_image" => $employee->employee_profile_image,
+                              "maritalStatusList" => [
+                                   "Single",
+                                   "Married",
+                                   "Widowed",
+                                   "Separated",
+                                   "Divorced"
+                              ],
+                              "relationTypesList" => [
+                                   "Father",
+                                   "Mother",
+                                   "Brother",
+                                   "Sister",
+                                   "Husband",
+                                   "Wife",
+                                   "Child",
+                              ],
+
+                              "workAnniversaryList" => $workAnniversaryList,
+                              "marriageAnniversaryList" => $marriageAnniversaryList,
+
+                              "is_custom_weekoffs" => $is_custom_weekoffs,
+                              "employee_weekoffs_data" => json_decode($employee_weekoffs_data),
+                              "company_weekoffs_data" => $company_weekoffs_data,
+                              "holidays" => $holidays,
+                              "default_image" => asset(Storage::url('uploads/avatar')) . '/avatar.png',
+                              "login_status" => $employeeUserData->login_status ?? 0,
+                              "last_clock_in_out_data" => $checkLastAttendance,
+                         ]
+                    ];
+               }
+               else
+               {
+                    $response = [
+                         'status' => 0,
+                         'message' => 'Employee not found.',
+                         'data' => [],
+                    ];
+               }
+          }
+          catch (Exception | Throwable $e)
+          {
+               $response = error_msg(showExceptionMessage($e));
+          }
+
+          return ApiResponse($response);
+     }
+
+     public function getNotificationList(Request $request)
+     {
+          try
+          {
+               $data = NotificationModel::where('user_id', Auth::id())
+                    // ->where('status', 0)
+                    ->where('created_by', \Auth::user()->creatorId())
+                    ->orderBy('id', 'DESC')
+                    ->get();
+
+               $response = [
+                    'status' => 1,
+                    'message' => "Notification List",
+                    'data' => $data,
+               ];
+          }
+          catch (Exception | Throwable $e)
+          {
+               $response = error_msg(showExceptionMessage($e));
+          }
+
+          return ApiResponse($response);
+     }
+
+     public function clearNotificationList(Request $request)
+     {
+          try
+          {
+               DB::beginTransaction();
+
+               NotificationModel::where('user_id', Auth::id())
+                    ->where('created_by', \Auth::user()->creatorId())
+                    ->delete();
+
+               DB::commit();
+
+               $response = [
+                    'status' => 1,
+                    'message' => "All Notifications are cleared.",
+                    'data' => [],
+               ];
+          }
+          catch (Exception | Throwable $e)
+          {
+               $response = error_msg(showExceptionMessage($e));
+          }
+
+          return ApiResponse($response);
+     }
+
+     public function updateEmployeeProfile(Request $request)
+     {
+
+          $response = [];
+          try
+          {
+               $emp = User::find(Auth::id());
+               $employee = Employee::where('user_id', ($emp->id ?? 0))->first();
+
+
+               // 0 personal details
+               // 1 experience
+               // 2 education
+               // 3 dependent
+               // 4 documents
+               $profile_data_type = $request->profile_data_type ?? 0;
+
+
+               if ($employee != null)
+               {
+                    // $validator = \Validator::make(
+                    //      $request->all(),
+                    //      [
+                    //           'name' => 'required',
+                    //           'phone' => 'required|numeric|digits:10',
+                    //           'email' => 'required|unique:users,email,' . $emp->id,
+                    //           'dob'   => 'required',
+                    //           'marital_status'   => 'required',
+                    //           'address' => 'required',
+                    //           'employee_experience' => 'required',
+                    //           'gender' => 'required',
+
+                    //           // "account_holder_name" => "required",
+                    //           // "account_number" => "required",
+                    //           // "bank_name" => "required",
+                    //           // "bank_identifier_code" => "required",
+                    //           // "branch_location" => "required",
+                    //           // "tax_payer_id" => "required",
+                    //      ],
+                    //      [
+                    //           'name' => __("Name is required."),
+                    //           'phone' => __("Phone is required."),
+                    //           'email.required' => __("Email is required."),
+                    //           'email.unique' => __("Email is already exists."),
+                    //           'dob' => __("Date of birth is required."),
+                    //           'marital_status' => __("Marital_status is required."),
+                    //           'address' => __("Address is required."),
+                    //           'employee_experience' => __("Employee Experience is required."),
+                    //           'gender' => __("Gender Experience is required."),
+
+                    //           // "account_holder_name" => __("Account Holder Name is required."),
+                    //           // "account_number" => __("Account Number is required."),
+                    //           // "bank_name" => __("Bank Name is required."),
+                    //           // "bank_identifier_code" => __("Bank Identifier Code is required."),
+                    //           // "branch_location" => __("Branch location is required."),
+                    //           // "tax_payer_id" => __("Tax payer id is required."),
+                    //      ]
+                    // );
+
+                    // if ($validator->fails())
+                    // {
+                    //      $response = [
+                    //           'status' => 0,
+                    //           'message' => "Employee Not Found",
+                    //           'validationErrors' => $validator->messages()->all(),
+                    //      ];
+                    // }
+
+                    DB::beginTransaction();
+
+                    // 0 personal details
+                    // 1 experience
+                    // 2 education
+                    // 3 dependent
+                    // 4 documents
+
+                    if ($profile_data_type == 0) // 0  = save personal details
+                    {
+                         $validator = \Validator::make(
+                              $request->all(),
+                              [
+                                   'name' => 'required',
+                                   'phone' => 'required|numeric|digits:10',
+                                   'email' => 'required|unique:users,email,' . $emp->id,
+                                   'dob'   => 'required',
+                                   'marital_status'   => 'required',
+                                   'address' => 'required',
+                                   'employee_experience' => 'required',
+                                   'gender' => 'required',
+                              ],
+                              [
+                                   'name' => __("Name is required."),
+                                   'phone' => __("Phone is required."),
+                                   'phone.numeric' => __("Phone number should be numeric."),
+                                   'phone.digits' => __("Phone number should be 10 digit."),
+                                   'email.required' => __("Email is required."),
+                                   'email.unique' => __("Email is already exists."),
+                                   'dob' => __("Date of birth is required."),
+                                   'marital_status' => __("Marital_status is required."),
+                                   'address' => __("Address is required."),
+                                   'employee_experience' => __("Employee Experience is required."),
+                                   'gender' => __("Gender Experience is required."),
+
+                                   // "account_holder_name" => __("Account Holder Name is required."),
+                                   // "account_number" => __("Account Number is required."),
+                                   // "bank_name" => __("Bank Name is required."),
+                                   // "bank_identifier_code" => __("Bank Identifier Code is required."),
+                                   // "branch_location" => __("Branch location is required."),
+                                   // "tax_payer_id" => __("Tax payer id is required."),
+                              ]
+                         );
+
+                         if ($validator->fails())
+                         {
+                              $response = [
+                                   'status' => 0,
+                                   'message' => $validator->messages()->first(),
+                                   // 'validationErrors' => $validator->messages()->all(),
+                              ];
+
+                              return ApiResponse($response);
+                         }
+
+                         $employee->name = $request->name ?? "";
+                         $employee->phone = $request->phone ?? "";
+                         $employee->email = $request->email ?? "";
+                         $employee->dob = $request->dob ?? "";
+                         $employee->marital_status = $request->marital_status ?? "";
+                         $employee->address = $request->address ?? "";
+                         $employee->employee_experience = $request->employee_experience ?? "";
+                         $employee->gender = $request->gender ?? "";
+                         $employee->personal_email = $request->personal_email ?? "";
+
+                         // Bank Account Details
+                         // $employee->account_holder_name = $request->account_holder_name ?? "";
+                         // $employee->account_number = $request->account_number ?? "";
+                         // $employee->bank_name = $request->bank_name ?? "";
+                         // $employee->bank_identifier_code = $request->bank_identifier_code ?? "";
+                         // $employee->branch_location = $request->branch_location ?? "";
+                         // $employee->tax_payer_id = $request->tax_payer_id ?? $employee->tax_payer_id;
+                         // Bank Account Details
+
+                         // Employee Profile Picture
+
+                         if ($request->hasFile("employee_profile"))
+                         {
+                              $extension = $request->file('employee_profile')->getClientOriginalExtension();
+                              $employee_profile_image_name = $employee->id . "_" . rand(1, 100000000) . time() . '.' . $extension;
+                              $dir = 'uploads/employee_profile/';
+                              $path = Utility::upload_file($request, 'employee_profile', $employee_profile_image_name, $dir, []);
+
+
+
+                              if ($path['flag'] == 1)
+                              {
+                                   if ($employee->employee_profile != null || !empty(trim($employee->employee_profile)))
+                                   {
+                                        $image_path = storage_path() . "/" . $dir . $employee->employee_profile;
+                                        Utility::delete_directory($image_path);
+                                   }
+                              }
+                              else
+                              {
+                                   $employee_profile_image_name = "";
+                                   return response()->json(['status' => 0, 'message' => __($path['msg'])]);
+                              }
+
+                              $employee->employee_profile = $employee_profile_image_name;
+                              // User::where("id", $employee->user_id)->update(["avatar" => $employee_profile_image_name]);
+                         }
+                         // Employee Profile Picture
+
+                         User::where("id", $employee->user_id)->update([
+                              'name' => $employee->name,
+                              'email' => $employee->email,
+                              "avatar" => $employee->employee_profile
+                         ]);
+                    }
+                    else if ($profile_data_type == 1) // 1  = save experience only
+                    {
+                         // Experience Data
+                         EXPTable::where("employee_id", $employee->id)->delete();
+                         if (!empty($request->previous_company_name[0]))
+                         {
+                              foreach ($request->previous_company_name as $key => $institute2)
+                              {
+                                   try
+                                   {
+                                        $eduData = new EXPTable();
+                                        $eduData->employee_id                         = $employee->id;
+                                        $eduData->previous_company_name               = $request->previous_company_name[$key] ?? "";
+                                        $eduData->previous_job_title                  = $request->previous_job_title[$key] ?? "";
+                                        $eduData->previous_from_date                  = $request->previous_from_date[$key] ?? "";
+                                        $eduData->previous_to_date                    = $request->previous_to_date[$key] ?? "";
+                                        $eduData->previous_company_designation_id     = $request->previous_company_designation[$key] ?? "";
+                                        $eduData->experiance_Job_description          = $request->experiance_job_description[$key] ?? "";
+                                        $eduData->save();
+                                   }
+                                   catch (Exception | Throwable $ex)
+                                   {
+                                   }
+                              }
+                         }
+                         // Experience Data
+                    }
+                    else if ($profile_data_type == 2) // 2  = save education only
+                    {
+                         // Education Data
+                         EdcutionTable::where("employee_id", $employee->id)->delete();
+                         if (!empty($request->institute_name[0]))
+                         {
+                              foreach ($request->institute_name as $key => $institute2)
+                              {
+                                   try
+                                   {
+                                        $eduData = new EdcutionTable();
+
+                                        $eduData->employee_id         = $employee->id;
+                                        $eduData->institute_name      = $request->institute_name[$key];
+                                        $eduData->education           = $request->education[$key];
+                                        $eduData->specialization      = $request->specialization[$key];
+                                        $eduData->date_of_completion  =  $request->date_of_completion[$key];
+                                        $eduData->notes               = $request->notes[$key];
+                                        $eduData->save();
+                                   }
+                                   catch (Exception | Throwable $ex)
+                                   {
+                                   }
+                              }
+                         }
+                         // Education Data
+                    }
+                    else if ($profile_data_type == 3) // 3  = save dependent only
+                    {
+                         // Dependard Data
+                         DependentData::where("employee_id", $employee->id)->delete();
+                         if (!empty($request->dependent_name[0]))
+                         {
+                              foreach ($request->dependent_name as $key => $institute2)
+                              {
+                                   try
+                                   {
+                                        if (!empty($request->dependent_name[$key]))
+                                        {
+                                             $eduData = new DependentData();
+                                             $eduData->employee_id         = $employee->id;
+                                             $eduData->dependent_name      = $request->dependent_name[$key];
+                                             $eduData->dependent_relation  = $request->dependent_relation[$key];
+                                             $eduData->dependent_dob       = $request->dependent_dob[$key];
+                                             $eduData->emergency_phone_no  = $request->emergency_phone_no[$key];
+                                             $eduData->save();
+                                        }
+                                   }
+                                   catch (Exception | Throwable $ex)
+                                   {
+                                   }
+                              }
+                         }
+                         // Dependard Data
+                    }
+                    else if ($profile_data_type == 4) // 4  = save documents only
+                    {
+                         // Upload Employee Documents
+                         if ($request->hasFile('document'))
+                         {
+
+                              foreach ($request->document as $key => $document)
+                              {
+                                   try
+                                   {
+                                        $extension       = $request->file('document')[$key]->getClientOriginalExtension();
+                                        $fileNameToStore = $employee->id . "_" . rand(1, 100000000) . time() . '.' . $extension;
+                                        $dir             = 'uploads/document/';
+                                        $image_path      = $dir . $fileNameToStore;
+
+                                        $path = Utility::upload_coustom_file($request, 'document', $fileNameToStore, $dir, $key, []);
+                                        if ($path['flag'] == 1)
+                                        {
+                                             $url = $path['url'];
+                                        }
+                                        else
+                                        {
+                                             return response()->json(['status' => 0, 'message' => __($path['msg'])]);
+                                        }
+
+                                        $employee_document = EmployeeDocument::where('employee_id', $employee->id)->where('document_id', $key)->first();
+                                        if ($employee_document != null)
+                                        {
+                                             if (!empty($employee_document->document_value))
+                                             {
+                                                  // \File::delete(storage_path('uploads/document/' . $employee_document->document_value));
+                                                  $image_path = storage_path() . "/" . $dir . $employee_document->document_value;
+                                                  Utility::delete_directory($image_path);
+                                             }
+                                             $employee_document->document_value = $fileNameToStore;
+                                             $employee_document->save();
+                                        }
+                                        else
+                                        {
+                                             $employee_document                 = new EmployeeDocument();
+                                             $employee_document->employee_id    = $employee->id;
+                                             $employee_document->document_id    = $key;
+                                             $employee_document->document_value = $fileNameToStore;
+                                             $employee_document->save();
+                                        }
+                                   }
+                                   catch (Exception | Throwable $ex)
+                                   {
+                                   }
+                              }
+                         }
+                         // Upload Employee Documents
+                    }
+
+                    $employee->save();
+
+                    DB::commit();
+
+
+                    $profileData = Employee::select("*", "employee_profile as employee_profile_image")
+                         ->with(
+                              // 'employeeDocuments',
+                              'experience',
+                              'education',
+                              'dependent'
+                         )
+                         ->with('branch', 'department', 'designation')->with("playslab")->where('id', $employee->id)->first();
+
+                    $employeeId = $employee->id;
+                    $documents = Document::where('created_by', Auth::user()->creatorId())
+                         ->with(["EmployeeDocument" => function ($query) use ($employeeId)
+                         {
+                              $query->select("id", "document_id", "document_value", "document_value as document_link")->where("employee_id", $employeeId);
+                         }])
+                         ->get();
+
+                    $profileData->employee_documents = $documents;
+
+                    $profileData->employee_code = Auth::user()->employeeIdFormat($employee->employee_id);
+                    $profileData->office_staff_name = ($employee->office_staff == 1 ? "Office Staff" : "Field Staff");
+                    $profileData->salary = Auth::user()->priceFormat($employee->salary);
+
+
+                    // 0 personal details
+                    // 1 experience
+                    // 2 education
+                    // 3 dependent
+                    // 4 documents
+                    $messagesArray = [
+                         0 => __("Personal details updated successfully."),
+                         1 => __("Experience details updated successfully."),
+                         2 => __("Education details updated successfully."),
+                         3 => __("Dependent details updated successfully."),
+                         4 => __("Documents updated successfully."),
+                    ];
+
+                    $response = [
+                         'status' => 1,
+                         'message' => $messagesArray[$profile_data_type],
+                         'data' => $profileData,
+                    ];
+               }
+               else
+               {
+                    $response = [
+                         'status' => 0,
+                         'message' => "Employee Not Found",
+                         'data' => [],
+                    ];
+               }
+          }
+          catch (Exception | Throwable $e)
+          {
+               $response = error_msg(showExceptionMessage($e));
+          }
+
+          return ApiResponse($response);
+     }
+
+     public function employeeCalendarData(Request $request)
+     {
+          $response = [];
+          try
+          {
+               $emp = User::find(Auth::id());
+               $employee = Employee::where('user_id', ($emp->id ?? 0))->first();
+
+               if ($employee == null)
+               {
+                    $response = [
+                         'status' => 0,
+                         'message' => "Employee not found.",
+                         'data' => [],
+                    ];
+               }
+               else
+               {
+                    $setting = Utility::settings();
+
+                    $weefOffArray = [];
+                    if ($setting['company_office_week_off_monday'] == 'on')
+                    {
+                         $weefOffArray[] = "Monday";
+                    }
+                    if ($setting['company_office_week_off_tuesday'] == 'on')
+                    {
+                         $weefOffArray[] = "Tuesday";
+                    }
+                    if ($setting['company_office_week_off_wednesday'] == 'on')
+                    {
+                         $weefOffArray[] = "Wednesday";
+                    }
+                    if ($setting['company_office_week_off_thusday'] == 'on')
+                    {
+                         $weefOffArray[] = "Thursday";
+                    }
+                    if ($setting['company_office_week_off_friday'] == 'on')
+                    {
+                         $weefOffArray[] = "Friday";
+                    }
+                    if ($setting['company_office_week_off_saturday'] == 'on')
+                    {
+                         $weefOffArray[] = "Saturday";
+                    }
+                    if ($setting['company_office_week_off_sunday'] == 'on')
+                    {
+                         $weefOffArray[] = "Sunday";
+                    }
+
+                    $calenderDate = $request->calender_date ?? date("Y-m-d");
+                    $month = date('m', strtotime($calenderDate));
+                    $year = date('Y', strtotime($calenderDate));
+
+                    $num_of_days = date('t', mktime(0, 0, 0, $month, 1, $year));
+                    for ($i = 1; $i <= $num_of_days; $i++)
+                    {
+                         $dates[] = str_pad($i, 2, '0', STR_PAD_LEFT);
+                    }
+
+                    $employeesAttendance = [];
+                    $totalPresent        = $totalLeave = $totalEarlyLeave = 0;
+                    $ovetimeHours        = $overtimeMins = $earlyleaveHours = $earlyleaveMins = $lateHours = $lateMins = 0;
+
+                    $is_custom_weekoffs = $employee->is_custom_weekoffs ?? 0;
+                    $employee_weekoffs_data = json_decode($employee->weekoffs_data) ?? [];
+
+                    $calenderData = [];
+
+                    $leaveColorCode = "#3ec9d6";
+                    $presentColorCode = "#6fd943";
+                    $weekOffColorCode = "#000000";
+                    $holidayColorCode = "#ffa21d";
+                    $absentColorCode = "#ff3a6e";
+
+                    foreach ($dates as $date)
+                    {
+                         $dateFormat = $year . '-' . $month . '-' . $date;
+                         $days = date('l', strtotime($dateFormat));
+
+                         $localLeave = Leave::where('employee_id', $employee->id)->where('status', 'Approved')
+                              ->where('start_date', '<=', $dateFormat)->where('end_date', '>=', $dateFormat)
+                              ->where('created_by', Auth::user()->creatorId())
+                              ->first();
+
+                         $holiday = Holiday::where('status', 1)
+                              ->where('created_by', Auth::user()->creatorId())
+                              ->where('start_date', '=', $dateFormat)->orWhere('end_date', '=', $dateFormat)
+                              ->where('created_by', Auth::user()->creatorId())
+                              ->first();
+
+                         if ($holiday != null)
+                         {
+                              $row = $holiday;
+                              $branch_ids = json_decode($row->branch_id) ?? [];
+                              $department_ids = json_decode($row->department_id) ?? [];
+
+                              // $row->branch_id = $branch_ids;
+                              // $row->department_id = $department_ids;
+
+                              $holidayData = [];
+
+
+                              // scenarios
+                              // scenarios 1 : if all branched selected, all departments selected and all employees selected | then show announcement to employee
+                              // scenarios 2 : if not all branches selected, but for all departments are selected | then show announcement to employee
+                              // scenarios 2.1 : if all employees are selected or if specific employee then check logged in employee is added in list or not and its branch is equal to announcement branch
+
+
+                              // if all branchs, all departments
+                              if (in_array(0, $branch_ids) && in_array(0, $department_ids))
+                              {
+                                   $holidayData = $row;
+                              }
+
+                              // if not all branches, but for all departments
+                              else if (!in_array(0, $branch_ids) && in_array(0, $department_ids))
+                              {
+                                   // check if all employees are allowed or if specific employee then check logged in employee is added in list or not and its branch is equal to announcement branch
+                                   if (in_array($employee->branch_id, $branch_ids))
+                                   {
+                                        $holidayData = $row;
+                                   }
+                              }
+
+                              // if not all branched and not all departments
+                              else if (!in_array(0, $branch_ids) && !in_array(0, $department_ids))
+                              {
+                                   if (in_array($employee->branch_id, $branch_ids) && in_array($employee->department_id, $department_ids))
+                                   {
+                                        $holidayData = $row;
+                                   }
+                              }
+                              // if all branched and not all departments
+                              else if (in_array(0, $branch_ids) && !in_array(0, $department_ids))
+                              {
+                                   if (in_array($employee->department_id, $department_ids))
+                                   {
+                                        $holidayData = $row;
+                                   }
+                              }
+
+                              $holiday = $holidayData;
+                         }
+
+                         // check is week off
+                         $isWeekOff = false;
+                         if ($is_custom_weekoffs == 1) // if 1 then check custom week off of employee
+                         {
+                              if (in_array($dateFormat, $employee_weekoffs_data))
+                              {
+                                   $isWeekOff = true;
+                              }
+                         }
+                         else // if 0 then check company week off
+                         {
+                              if (in_array($days, $weefOffArray))
+                              {
+                                   $isWeekOff = true;
+                              }
+                         }
+                         // check is week off
+
+
+                         // check if have applied leave on current date
+                         if (!empty($localLeave))
+                         {
+                              if ($localLeave->total_leave_days == "0.5") // check if leave if for half day
+                              {
+                                   $calenderData[] = [
+                                        "date" => $dateFormat,
+                                        "statusText" => "HD",
+                                        "status" => 0,
+                                        "colorCode" => $leaveColorCode,
+                                   ];
+                              }
+                              else // check if leave if for full or multiple days
+                              {
+
+                                   $period = CarbonPeriod::create($localLeave->getRawOriginal("start_date"), $localLeave->getRawOriginal("end_date"));
+                                   foreach ($period as $rangeDate)
+                                   {
+                                        $calenderData[] = [
+                                             "date" => $rangeDate->format('Y-m-d'),
+                                             "statusText" => "L",
+                                             "status" => 0,
+                                             "colorCode" => $leaveColorCode,
+                                        ];
+                                   }
+                              }
+                         }
+                         else
+                         {
+                              $employeeAttendance = AttendanceEmployee::where('employee_id', $employee->id)->where('date', $dateFormat)->first();
+
+                              if ($employeeAttendance != null && $employeeAttendance->status == 'Present') // check if present or not
+                              {
+                                   $calenderData[] = [
+                                        "date" => $dateFormat,
+                                        "statusText" => "P",
+                                        "status" => 1,
+                                        "colorCode" => $presentColorCode,
+                                   ];
+                              }
+                              else
+                              {
+                                   if ($isWeekOff) // check if is week off
+                                   {
+                                        $attendanceStatus[$date] = 'WO';
+
+                                        $calenderData[] = [
+                                             "date" => $dateFormat,
+                                             "statusText" => "WO",
+                                             "status" => 2,
+                                             "colorCode" => $weekOffColorCode,
+                                        ];
+                                   }
+                                   else
+                                   {
+                                        $holidays_branch_ids = [];
+                                        try
+                                        {
+                                             $holidays_branch_ids = json_decode($holiday->branch_id ?? "") ?? [];
+                                        }
+                                        catch (Exception | Throwable $ex)
+                                        {
+                                        }
+
+                                        if (array_intersect([0, $employee->branch_id], $holidays_branch_ids))
+                                        {
+                                             $period = CarbonPeriod::create($holiday->getRawOriginal("start_date"), $holiday->getRawOriginal("end_date"));
+                                             foreach ($period as $rangeDate)
+                                             {
+                                                  $addHoliday = true;
+                                                  if ($is_custom_weekoffs == 1) // if 1 then check custom week off of employee
+                                                  {
+                                                       if (in_array($rangeDate->format('Y-m-d'), $employee_weekoffs_data))
+                                                       {
+                                                            $addHoliday = false;
+                                                       }
+                                                  }
+                                                  else // if 0 then check company week off
+                                                  {
+                                                       $perios_days = date('l', strtotime($rangeDate->format('Y-m-d')));
+                                                       if (in_array($perios_days, $weefOffArray))
+                                                       {
+                                                            $addHoliday = false;
+                                                       }
+                                                  }
+
+                                                  if ($addHoliday)
+                                                  {
+                                                       $calenderData[] = [
+                                                            "date" => $rangeDate->format('Y-m-d'),
+                                                            "statusText" => "H",
+                                                            "status" => 3,
+                                                            "colorCode" => $holidayColorCode,
+                                                       ];
+                                                  }
+                                             }
+                                        }
+                                        else // else mark as an apsend
+                                        {
+                                             if ($dateFormat <= date('Y-m-d'))
+                                             {
+                                                  $calenderData[] = [
+                                                       "date" => $dateFormat,
+                                                       "statusText" => "A",
+                                                       "status" => 4,
+                                                       "colorCode" => $absentColorCode,
+                                                  ];
+                                             }
+                                        }
+                                   }
+                              }
+                         }
+                    }
+
+                    $response = [
+                         'status' => 1,
+                         'message' => "Employee Calender Data",
+                         'data' => $calenderData,
+                    ];
+               }
+          }
+          catch (Exception | Throwable $e)
+          {
+               $response = error_msg(showExceptionMessage($e));
+          }
+
+          return ApiResponse($response);
+     }
+}

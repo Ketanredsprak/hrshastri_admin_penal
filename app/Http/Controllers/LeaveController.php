@@ -1,0 +1,1885 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use DateTime;
+use App\Models\User;
+use App\Models\Utility;
+use App\Models\Employee;
+use App\Models\LeaveType;
+use App\Exports\LeaveExport;
+use Illuminate\Http\Request;
+use App\Mail\LeaveActionSend;
+use App\Models\ExtraLeaveModel;
+use App\Imports\EmployeesImport;
+use App\Models\NotificationModel;
+use App\Models\LeaveApprovalModel;
+use App\Models\Leave as LocalLeave;
+use App\Models\UserLeaveBalance;
+use App\Models\UserLeaveBalanceYear;
+use Carbon\Carbon;
+use Exception;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
+use Maatwebsite\Excel\Facades\Excel;
+use Illuminate\Support\Facades\Validator;
+use Spatie\GoogleCalendar\Event as GoogleEvent;
+use Throwable;
+use Illuminate\Support\Facades\Response;
+use App\Models\PayslipType;
+use DataTables;
+use Form;
+use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\Log;
+
+class LeaveController extends Controller
+{
+     public function my_leave_balance(request $request)
+     {
+          try
+          {
+               $user     = Auth::user();
+               $employee = Employee::where('user_id', '=', $user->id)->first();
+
+               $leave_counts =  LeaveType::where('play_slab_id', $employee->play_slab_id)->where('created_by', Auth::user()->creatorId())->get();
+
+               $monthAndYear = $request->monthAndYear ?? date("Y-m");
+
+               $month = date("m", strtotime($monthAndYear));
+               $year = date("Y", strtotime($monthAndYear));
+
+
+               if (!empty($leave_counts))
+               {
+                    foreach ($leave_counts as $row)
+                    {
+                         $userLeaveBalance = UserLeaveBalanceYear::where("leave_type_id", $row->id)->where("leaves_year", $year)->where("user_id", $employee->id)->sum("pending_leaves");
+                         $row->used_leaved = $userLeaveBalance;
+
+                         $applied_leaves = LocalLeave::where('leave_type_id', $row->id)
+                              ->where('employee_id', $employee->id)
+                              ->whereYear("start_date", $year)
+                              ->whereMonth("start_date", $month)
+                              ->where('status', 'Approved')
+                              ->sum('total_leave_days');
+                         $row->applied_leaves = $applied_leaves;
+                    }
+               }
+
+               return view('leave.my_leave_balance', compact('leave_counts', 'monthAndYear'));
+          }
+          catch (Exception $ex)
+          {
+               return view('leave.my_leave_balance')->with('error', showExceptionMessage($ex));
+          }
+          catch (Throwable $ex)
+          {
+               return view('leave.my_leave_balance')->with('error', showExceptionMessage($ex));
+          }
+     }
+
+     public function my_leave_balance_old(request $request)
+     {
+          $filterYear['type']          = __('Monthly');
+          $filterYear['dateYearRange'] = date('M-Y');
+
+          $user     = Auth::user();
+          $employee = Employee::where('user_id', '=', $user->id)->first();
+          $leave_counts =  LeaveType::where('play_slab_id', $employee->play_slab_id)->where('created_by', Auth::user()->creatorId())->get();
+
+          if (!empty($leave_counts))
+          {
+               foreach ($leave_counts as $row)
+               {
+                    $userLeaveBalance = UserLeaveBalance::where("leave_type_id", $row->id)->where("user_id", $employee->id)->sum("pending_leaves");
+                    $row->used_leaved = $userLeaveBalance;
+
+                    $applied_leaves = LocalLeave::where('leave_type_id', $row->id)->where('employee_id', $employee->id)->where('status', 'Approved')->sum('total_leave_days');
+                    $row->applied_leaves = $applied_leaves;
+
+
+                    // old
+                    // $leave = LocalLeave::where('leave_type_id', $row->id)->where('employee_id', $employee->id)->where('status', 'Approved')->sum('total_leave_days');
+                    // $row->total_leave_daysdata = $leave;
+               }
+          }
+
+          $filter['startDateRange'] = date('M-Y', strtotime($request->start_month));
+          $filter['endDateRange']   = date('M-Y', strtotime($request->end_month));
+          $starting_year = date('Y', strtotime('-5 year'));
+          $ending_year   = date('Y', strtotime('+5 year'));
+          $filterYear['starting_year'] = $starting_year;
+          $filterYear['ending_year']   = $ending_year;
+
+          // 
+
+          return view('leave.my_leave_balance', compact('leave_counts', 'filterYear', 'filter'));
+     }
+
+     public function index()
+     {
+          $authUser = Auth::user();
+          if ($authUser->can('Manage Leave'))
+          {
+               $creatorId = $authUser->creatorId();
+               $leavesRequest = 0;
+               $lastThreeMonths = Carbon::now()->subMonths(3)->startOfDay();
+               if ($creatorId == 308)
+               {
+                    $lastThreeMonths = Carbon::now()->startOfMonth();
+               }
+
+               $leave_setting = LeaveApprovalModel::where('created_by', '=', $creatorId)->orderBy('id', 'DESC')->first();
+
+               $baseLeaveQuery = LocalLeave::where('created_by', '=', $creatorId)
+                    ->where('created_at', '>=', $lastThreeMonths);
+
+               $leaves = (clone $baseLeaveQuery)
+                    ->orderBy('id', 'DESC')
+                    ->get();
+
+               if ($authUser->type == 'company')
+               {  //HR
+                    // Same dataset for company users; reuse to avoid duplicate query.
+                    $leavesRequest = $leaves;
+               }
+               else
+               {
+                    $employeeId = Employee::where('user_id', '=', $authUser->id)->value('id');
+
+                    $leaves = (clone $baseLeaveQuery)
+                         ->where('employee_id', '=', $employeeId)
+                         ->orderBy('id', 'DESC')
+                         ->get();
+               }
+               return view('leave.index', compact('leavesRequest', 'leaves', 'leave_setting'));
+          }
+          else
+          {
+               return redirect()->back()->with('error', __('Permission denied.'));
+          }
+     }
+
+     public function leave_request_create()
+     {
+          $users = '';
+          $employees       = Employee::whereIn('id', selectedEmployee())->where('created_by', '=', Auth::user()->creatorId())->where("employee_exit", 0)->get();
+          $leavetypes      = LeaveType::where('created_by', '=', Auth::user()->creatorId())->get();
+          $leavetypes_days = LeaveType::where('created_by', '=', Auth::user()->creatorId())->get();
+          $users           = User::where('type', '!=', 'employee')->where('created_by', '=', Auth::user()->creatorId())->get()->pluck('name', 'id');
+          return view('leave.leave_request_create', compact('employees', 'leavetypes', 'leavetypes_days', 'users'));
+     }
+
+     public function leaverequest(Request $request)
+     {
+          $leave_setting = LeaveApprovalModel::where('created_by', '=', Auth::user()->creatorId())->first();
+          //$leavesRequest      = LocalLeave::whereIn('employee_id', selectedEmployee())->where('created_by', '=', Auth::user()->creatorId())->orderBy('id', 'DESC')->get();
+          $employees = Employee::whereIn('id', selectedEmployee())->where('created_by', '=', Auth::user()->creatorId())->where("employee_exit", 0)->orderBy('id', 'DESC')->get();
+          $leavesRequest = LocalLeave::with('employees')->whereIn('employee_id', selectedEmployee())->where('created_by', Auth::user()->creatorId())->where('created_at', '>=', Carbon::now()->subMonths(14)->startOfDay())->orderBy('id', 'DESC');
+          if ($request->ajax())
+          {
+               $data = $leavesRequest;
+               return Datatables::of($data)
+                    ->addIndexColumn()
+
+                    ->addColumn('employee_id', function ($row)
+                    {
+                         $employeeDatabaseId = $row->employees->id;
+                         $employeeId = $row->employees->employee_id;
+                         return ((Auth::user()->hasPermissionTo('Show Employee')) ? '<a class="btn btn-outline-primary" href=" ' . route('employee.show', Crypt::encrypt($employeeDatabaseId)) . '">' . $employeeId . '</a>' : $employeeId);
+                    })
+
+                    ->addColumn('employee', function ($row)
+                    {
+                         return $row->employees->name;
+                    })
+
+                    ->filterColumn('employee', function ($query, $keyword)
+                    {
+                         $query->whereHas('employees', function ($q) use ($keyword)
+                         {
+                              $q->where('name', 'like', "%{$keyword}%");
+                         });
+                    })
+                    ->filterColumn('employee_id', function ($query, $keyword)
+                    {
+                         $query->whereHas('employees', function ($q) use ($keyword)
+                         {
+                              $q->where('employee_id', 'like', "%{$keyword}%");
+                         });
+                    })
+                    ->addColumn('leave_type', function ($row)
+                    {
+                         return !empty(Auth::user()->getLeaveType($row->leave_type_id)) ? \Auth::user()->getLeaveType($row->leave_type_id)->title : '';
+                    })
+
+                    ->addColumn('applied_on', function ($row)
+                    {
+                         return Auth::user()->dateFormat($row->applied_on);
+                    })
+
+                    ->addColumn('start_date', function ($row)
+                    {
+                         return Auth::user()->dateFormat($row->start_date);
+                    })
+
+                    ->addColumn('end_date', function ($row)
+                    {
+                         return Auth::user()->dateFormat($row->end_date);
+                    })
+
+                    ->addColumn('total_days', function ($row)
+                    {
+                         return $row->total_leave_days;
+                    })
+
+                    ->addColumn('status', function ($row)
+                    {
+                         $status = ucfirst($row->status);
+                         if ($status == 'Pending')
+                         {
+                              $class = 'warning';
+                         }
+                         elseif ($status == 'Approved')
+                         {
+                              $class = 'success';
+                         }
+                         elseif ($status == 'Resubmitted')
+                         {
+                              $class = 'info';
+                         }
+                         else
+                         {
+                              $class = 'danger';
+                         }
+                         return '<span class="badge bg-' . $class . '">' . $status . '</span>';
+                    })
+                    ->addColumn('action', function ($row)
+                    {
+                         // Manage Leave
+                         $html = '
+                              <div class="action-btn bg-success">
+                                   <a href="#" class="mx-3 btn btn-sm align-items-center"
+                                        data-size="lg"
+                                        data-url="' . url('leave/' . $row->id . '/action') . '"
+                                        data-ajax-popup="true" data-size="md" data-bs-toggle="tooltip"
+                                        title=""
+                                        data-title="' . __("Leave Action") . '"
+                                        data-bs-original-title="' . __("Manage Leave") . '">
+                                        <i class="ti ti-caret-right text-white"></i>
+                                   </a>
+                              </div>';
+
+                         // Edit Leave
+                         $html .= '  <div class="action-btn bg-info ms-2">
+                                   <a href="#" class="mx-3 btn btn-sm align-items-center"
+                                        data-size="lg"
+                                        data-url="' . url('leave/' . $row->id . '/edit') . '?redirect=leaverequest"
+                                        data-ajax-popup="true" data-size="md" data-bs-toggle="tooltip"
+                                        title=""
+                                        data-title="' . __("Edit Leave") . '"
+                                        data-bs-original-title="' . __("Edit") . '">
+                                        <i class="ti ti-pencil text-white"></i>
+                                   </a>
+                              </div>';
+                         // Delete Leave
+                         /*  $formId = 'delete-form-' . $row->id;
+                         $route = route('leave.destroy', $row->id);
+
+                         $html .= '
+                              <div class="action-btn bg-danger ms-2">
+                                   <form method="POST" action="' . $route . '" id="' . $formId . '" style="display:inline;">
+                                        ' . csrf_field() . '
+                                        ' . method_field('DELETE') . '
+                                        <a href="#" class="mx-3 btn btn-sm align-items-center bs-pass-para"
+                                             data-bs-toggle="tooltip" title=""
+                                             data-bs-original-title="Delete" aria-label="Delete">
+                                             <i class="ti ti-trash text-white"></i>
+                                        </a>
+                                   </form>
+                              </div>'; */
+
+                         return $html;
+                    })
+
+                    ->rawColumns(['employee_id', 'employee', 'leave_type', 'applied_on', 'start_date', 'end_date', 'total_days', 'status', 'action'])
+                    ->make(true);
+          }
+          else
+          {
+               return view('leave.leaverequest', compact('leavesRequest', 'leave_setting', 'employees'));
+          }
+
+          // return view('leave.leaverequest', compact('leavesRequest', 'leave_setting', 'employees'));
+     }
+
+     public function create()
+     {
+          if (Auth::user()->can('Create Leave'))
+          {
+               $users = '';
+               if (Auth::user()->type == 'employee')
+               {
+                    $employees = Employee::where('user_id', '=', Auth::user()->id)->get();
+                    $employeesData = Employee::where('user_id', '=', Auth::user()->id)->get()->first();
+                    $leavetypes      = LeaveType::where('play_slab_id', $employeesData->play_slab_id)->where('created_by', '=', Auth::user()->creatorId())->get();
+                    $leavetypes_days = LeaveType::where('play_slab_id', $employeesData->play_slab_id)->where('created_by', '=', Auth::user()->creatorId())->get();
+               }
+               else
+               {
+                    $employees = Employee::where('user_id', '=', Auth::user()->id)->get();
+                    $employeesData = Employee::where('user_id', '=', Auth::user()->id)->get()->first();
+                    // $leavetypes      = LeaveType::where('created_by', '=', Auth::user()->creatorId())->get();
+                    // $leavetypes_days = LeaveType::where('created_by', '=', Auth::user()->creatorId())->get();
+                    $leavetypes      = LeaveType::where('play_slab_id', $employeesData->play_slab_id)->where('created_by', '=', Auth::user()->creatorId())->get();
+                    $leavetypes_days = LeaveType::where('play_slab_id', $employeesData->play_slab_id)->where('created_by', '=', Auth::user()->creatorId())->get();
+                    $users           = User::where('type', '!=', 'employee')->where('created_by', '=', Auth::user()->creatorId())->get()->pluck('name', 'id',);
+               }
+
+               $year = date("Y");
+               foreach ($leavetypes as $row)
+               {
+                    $userLeaveBalance = UserLeaveBalanceYear::where("leave_type_id", $row->id)->where("leaves_year", $year)->where("user_id", $employeesData->id)->sum("pending_leaves");
+                    $row->used_leaved = $userLeaveBalance;
+               }
+               return view('leave.create', compact('employees', 'leavetypes', 'leavetypes_days', 'users'));
+          }
+          else
+          {
+               return response()->json(['error' => __('Permission denied.')], 401);
+          }
+     }
+
+
+     public function store(Request $request)
+     {
+          $superior_user = null;
+
+          if (Auth::user()->type == 'employee')
+          {
+               $employee = Employee::where('user_id', '=', Auth::user()->id)->first();
+               $superior_user = $employee->users_types_id;
+          }
+          else
+          {
+               $users = User::where('type', '!=', 'employee')->where('created_by', '=', Auth::user()->creatorId())->find(Auth::id());
+               if (!empty($users->assign_user))
+               {
+                    $superior_user = $users->assign_user;
+               }
+          }
+          if (Auth::user()->can('Create Leave'))
+          {
+               if ($request->leave_type_day == 0.5)
+               {
+                    $validator = Validator::make(
+                         $request->all(),
+                         [
+                              'leave_type_id' => 'required',
+                              'leave_type_day' => 'required',
+                              // 'start_date' => 'required|date_format:Y-m-d|after_or_equal:today',
+                              'start_date' => 'required|date_format:Y-m-d',
+                              'leave_reason'  => 'required',
+                              'remark'        => 'required',
+                         ]
+                    );
+               }
+               else
+               {
+                    $validator = Validator::make(
+                         $request->all(),
+                         [
+                              'leave_type_id' => 'required',
+                              'leave_type_day' => 'required',
+                              // 'start_date' => 'required|date_format:Y-m-d|before_or_equal:end_date',
+                              'start_date' => 'required|date_format:Y-m-d|before_or_equal:end_date',
+                              'end_date' => 'required_if:leave_type_day,1|date_format:Y-m-d|after_or_equal:start_date',
+                              'leave_reason'  => 'required',
+                              'remark'        => 'required',
+                         ]
+                    );
+               }
+               if ($validator->fails())
+               {
+                    $messages = $validator->messages();
+                    return redirect()->back()->with('error', $messages->first());
+               }
+
+
+               if (Auth::user()->type != 'employee' && $request->has("employee_id") && !empty($request->employee_id))
+               {
+                    $employee = Employee::where('id', $request->employee_id)->first();
+               }
+               else
+               {
+                    $employee = Employee::where('user_id', '=', Auth::user()->id)->first();
+               }
+
+
+               // dd($employee);
+
+               $leave_type         = LeaveType::find($request->leave_type_id);
+
+               if ($leave_type == null)
+               {
+                    return redirect()->back()->with('error', __('Invalid Leave Type'));
+               }
+
+
+
+
+               $startDate          = new DateTime($request->start_date);
+               $endDate            = new DateTime($request->end_date);
+               $endDate->add(new \DateInterval('P1D'));
+               $total_leave_days = !empty($startDate->diff($endDate)) ? $startDate->diff($endDate)->days : 0;
+               $starting_date = $request->start_date;
+               $enddate = $request->end_date;
+               $start_month = date('m', strtotime($starting_date));
+               $end_month = date('m', strtotime($enddate));
+
+               // $employee = Employee::where('user_id', '=', Auth::user()->id)->first();
+
+               // //select users
+               $employeeIdselect = $employee->id;
+
+               if (!empty($request->employee_id))
+               {
+                    $employeeIdselect = $request->employee_id;
+               }
+
+               if (Auth::user()->type != 'company')
+               {
+                    $appliedLeaveDays = getAppliedLeaveDays($request->leave_type_day, $request->start_date, $request->end_date);
+                    $leaveBalanceValidation = validateEmployeeLeaveBalance($employee->id, $request->leave_type_id, $appliedLeaveDays, $request->start_date);
+
+                    if ((int) $leaveBalanceValidation['status'] !== 1)
+                    {
+                         return redirect()->back()->with('error', $leaveBalanceValidation['message']);
+                    }
+
+                    // if ((int) $employee->id == 156)
+                    // {
+                    //      return redirect()->back()->with('success', "You can apply for leave. Your leave balance is " . $leaveBalanceValidation['leave_balance'] . " and you applied for " . $leaveBalanceValidation['applied_leave_days'] . " day(s).");
+                    // }
+               }
+
+               if ($leave_type->no_leave || ($leave_type->days >= $total_leave_days || $request->leave_type_day == 0.5))
+               {
+                    if ($start_month == $end_month)
+                    {
+                         $leave    = new LocalLeave();
+                         if (Auth::user()->type == "employee")
+                         {
+                              $leave->employee_id = $employee->id;
+                         }
+                         else
+                         {
+                              $leave->employee_id = $employeeIdselect;
+                         }
+
+                         $leave->leave_type_id    = $request->leave_type_id;
+                         $leave->applied_on       = date('Y-m-d');
+                         $leave->start_date       = $request->start_date;
+                         if ($request->leave_type_day == 0.5)
+                         {
+                              $leave->end_date         = $request->start_date;
+                              $leave->total_leave_days = 0.5;
+                         }
+                         else
+                         {
+                              $leave->end_date         = $request->end_date;
+                              $leave->total_leave_days = $total_leave_days;
+                         }
+
+                         $leave->leave_reason     = $request->leave_reason;
+                         $leave->remark           = $request->remark;
+                         $leave->status           = 'Pending';
+                         $leave->secound_leave_status = 'Pending';
+                         $leave->superior_user    = $superior_user;
+                         $leave->leave_day        = $request->leave_type_day;
+                         $leave->created_by       = Auth::user()->creatorId();
+
+                         $userLeaveBalance = UserLeaveBalanceYear::where("leave_type_id", $request->leave_type_id)->where("leaves_year", date("Y"))->where("user_id", $leave->employee_id)->sum("pending_leaves");
+                         $update_logs[] = [
+                              "updated_by" => Auth::user()->id,
+                              "updated_at" => Carbon::now()->format("d-m-Y h:i A"),
+                              "userLeaveBalance" => $userLeaveBalance,
+                         ];
+                         $leave->update_logs       = json_encode($update_logs);
+
+                         $leave->save();
+                         Log::channel('leave_log')->info("leave store same month userLeaveBalance: ", [$userLeaveBalance]);
+                         Log::channel('leave_log')->info("leave store same month employee_id: ", [$leave->employee_id]);
+                    }
+                    else
+                    {
+                         $for_starting_start_date = $starting_date;
+                         $for_starting_end_date = date("Y-m-t", strtotime($for_starting_start_date));
+                         $datediff = strtotime($for_starting_end_date) - strtotime($for_starting_start_date);
+                         $count_start_days = round($datediff / (60 * 60 * 24)) + 1;
+
+                         //next month leave 0
+                         $leave    = new LocalLeave();
+
+                         if (Auth::user()->type == "employee")
+                         {
+                              $leave->employee_id = $employee->id;
+                         }
+                         else
+                         {
+                              $leave->employee_id = $employeeIdselect;
+                         }
+
+                         $leave->leave_type_id    = $request->leave_type_id;
+                         $leave->applied_on       = date('Y-m-d');
+                         $leave->start_date       = $for_starting_start_date;
+                         $leave->end_date         = $for_starting_end_date;
+                         $leave->total_leave_days = $count_start_days;
+                         $leave->leave_reason     = $request->leave_reason;
+                         $leave->remark           = $request->remark;
+                         $leave->status           = 'Pending';
+                         $leave->secound_leave_status           = 'Pending';
+                         $leave->leave_day        = $request->leave_type_day;
+                         $leave->superior_user    = $superior_user;
+                         $leave->created_by       = Auth::user()->creatorId();
+
+                         $userLeaveBalance = UserLeaveBalanceYear::where("leave_type_id", $request->leave_type_id)->where("leaves_year", date("Y"))->where("user_id", $leave->employee_id)->sum("pending_leaves");
+                         $update_logs[] = [
+                              "updated_by" => Auth::user()->id,
+                              "updated_at" => Carbon::now()->format("d-m-Y h:i A"),
+                              "userLeaveBalance" => $userLeaveBalance,
+                         ];
+                         $leave->update_logs       = json_encode($update_logs);
+
+                         $leave->save();
+                         Log::channel('leave_log')->info("leave store diff month userLeaveBalance: ", [$userLeaveBalance]);
+                         Log::channel('leave_log')->info("leave store diff month employee_id: ", [$leave->employee_id]);
+
+                         // Google celander
+                         if ($request->get('synchronize_type')  == 'google_calender')
+                         {
+                              $type = 'leave';
+                              $request1 = new GoogleEvent();
+                              $request1->title = !empty(Auth::user()->getLeaveType($leave->leave_type_id)) ? Auth::user()->getLeaveType($leave->leave_type_id)->title : '';
+                              $request1->start_date = $for_starting_start_date;
+                              $request1->end_date = $for_starting_end_date;
+                              Utility::addCalendarData($request1, $type);
+                         }
+
+                         //next month leave 1
+                         $end_start_date = date("Y-m-01", strtotime($enddate));
+                         $end_end_date = $enddate;
+
+                         $datediffend = strtotime($end_end_date) - strtotime($end_start_date);
+                         $count_end_days = round($datediffend / (60 * 60 * 24)) + 1;
+                         $leave    = new LocalLeave();
+                         if (Auth::user()->type == "employee")
+                         {
+                              $leave->employee_id = $employee->id;
+                         }
+                         else
+                         {
+                              $leave->employee_id = $employeeIdselect;
+                         }
+
+                         $leave->leave_type_id    = $request->leave_type_id;
+                         $leave->applied_on       = date('Y-m-d');
+                         $leave->start_date       = $end_start_date;
+                         $leave->end_date         = $end_end_date;
+                         $leave->total_leave_days = $count_end_days;
+                         $leave->leave_reason     = $request->leave_reason;
+                         $leave->remark           = $request->remark;
+                         $leave->status           = 'Pending';
+                         $leave->secound_leave_status = 'Pending';
+                         $leave->leave_day        = $request->leave_type_day;
+                         $leave->superior_user    = $superior_user;
+                         $leave->created_by       = Auth::user()->creatorId();
+
+                         $userLeaveBalance = UserLeaveBalanceYear::where("leave_type_id", $request->leave_type_id)->where("leaves_year", date("Y"))->where("user_id", $leave->employee_id)->sum("pending_leaves");
+                         $update_logs[] = [
+                              "updated_by" => Auth::user()->id,
+                              "updated_at" => Carbon::now()->format("d-m-Y h:i A"),
+                              "userLeaveBalance" => $userLeaveBalance,
+                         ];
+                         $leave->update_logs       = json_encode($update_logs);
+
+                         $leave->save();
+                         Log::channel('leave_log')->info("leave store diff month 2 userLeaveBalance: ", [$userLeaveBalance]);
+                         Log::channel('leave_log')->info("leave store diff month 2 employee_id: ", [$leave->employee_id]);
+                    }
+
+
+                    $leave_setting = LeaveApprovalModel::where('created_by', '=', Auth::user()->creatorId())->first();
+                    $companyHR = User::where('roles_types', 1)->where('created_by', '=', Auth::user()->creatorId())->first();
+                    if (!empty($companyHR))
+                    {
+                         if (!empty($leave_setting))
+                         { //Hr email send only
+                              $message = "<h2>Hello Viral test</h2>
+                        <br>Password Reset Link <br>
+                        <a href='activation_link'> Reset Password </a>";
+                              $search = ['activation_link'];
+                              $replace = "@#4234";
+                              $content = str_replace($search, $replace, $message);
+                              $email = $companyHR->email;
+
+                              Mail::send(
+                                   ['html' => 'CompanyLeaveTemplate.employee_createleave'],
+                                   array(
+                                        'content'       => $content,
+                                        'form_date'     => $request->start_date,
+                                        'to_date'       => $request->end_date,
+                                        'leave_reason'  => $request->leave_reason,
+                                        'remark'        => $request->remark,
+                                        'total_leave_days'   => $total_leave_days
+                                   ),
+                                   function ($message) use ($email)
+                                   {
+                                        $message->from(env('MAIL_USERNAME'), 'test');
+                                        $message->to($email)->subject("Employee Assign leave");
+                                   }
+                              );
+                         }
+                         else
+                         {  //Email Fire HR with up users
+
+                              $message = "<h2>Hello Viral test</h2>
+                        <br>Password Reset Link <br>
+                        <a href='activation_link'> Reset Password </a>";
+                              $search = ['activation_link'];
+                              $replace = "@#4234";
+                              $content = str_replace($search, $replace, $message);
+                              $email = $companyHR->email;
+
+                              $users =  User::where('created_by', '=', Auth::user()->creatorId())->find($superior_user);
+                              if (!empty($users))
+                              {
+                                   $usersemail = $users->email;
+                                   Mail::send(
+                                        ['html' => 'CompanyLeaveTemplate.employee_createleave'],
+                                        array(
+                                             'content'       => $content,
+                                             'form_date'     => $request->start_date,
+                                             'to_date'       => $request->end_date,
+                                             'leave_reason'  => $request->leave_reason,
+                                             'remark'        => $request->remark,
+                                             'total_leave_days'   => $total_leave_days
+                                        ),
+                                        function ($message) use ($email, $usersemail)
+                                        {
+                                             $message->from(env('MAIL_USERNAME'), 'test');
+                                             $message->to([$email, $usersemail])->subject("Employee Assign leave");
+                                        }
+                                   );
+                              }
+                         }
+                    }
+
+                    //notification Code
+                    // $employee = Employee::where('user_id', '=', Auth::id())->first();
+                    $upUser = User::where('assign_employees', '!=', null)->where('created_by', '=', Auth::user()->creatorId())->select('assign_employees', 'id')->get();
+                    foreach ($upUser as $row)
+                    {
+                         foreach (json_decode($row['assign_employees']) ?? [] as $key => $user)
+                         {
+                              if (!empty($user))
+                              {
+                                   if ($user == $employee->id)
+                                   {
+                                        $notification               = new NotificationModel();
+                                        $notification->user_id      = $row->id;
+                                        $notification->employee_id  = $employee->id;
+                                        $notification->title        = "Leave request added by " . $employee->name . " ";
+                                        $notification->details      = "Leave request added by " . $employee->name . " ";
+                                        $notification->status       = 0;
+                                        $notification->date         = Carbon::now();
+                                        $notification->created_by   = $employee->created_by;
+                                        $notification->redirect   = 'leave';
+                                        $notification->save();
+                                   }
+                              }
+                         }
+                    }
+                    //end notification
+                    if (!empty($request->employee_id))
+                    {
+                         return redirect()->route('leaverequest')->with('success', __('Leave successfully created.'));
+                    }
+                    return redirect()->route('leave.index')->with('success', __('Leave successfully created.'));
+               }
+               else
+               {
+                    return redirect()->back()->with('error', __('Leave type ' . $leave_type->title . ' is provide maximum ' . $leave_type->days . "  days please make sure your selected days is under " . $leave_type->days . ' days.'));
+               }
+          }
+          else
+          {
+               return redirect()->back()->with('error', __('Permission denied.'));
+          }
+     }
+
+     public function show(LocalLeave $leave)
+     {
+          return redirect()->route('leave.index');
+     }
+
+     public function edit(Request $request, LocalLeave $leave)
+     {
+          $redirect = $request->redirect ?? "";
+          if (Auth::user()->can('Edit Leave'))
+          {
+               if (Auth::user()->type != 'company')
+               {
+                    $employees  = Employee::where('created_by', '=', Auth::user()->creatorId())->get()->pluck('name', 'id');
+                    $employeesData = Employee::where('id', '=', $leave->employee_id)->get()->first();
+
+                    $leavetypes = LeaveType::where('play_slab_id', $employeesData->play_slab_id)->where('created_by', '=', Auth::user()->creatorId())->get()->pluck('title', 'id');
+
+                    return view('leave.edit', compact('leave', 'employees', 'leavetypes', 'redirect'));
+               }
+               else
+               {
+                    return response()->json(['error' => __('Permission denied.')], 401);
+               }
+          }
+          else
+          {
+               return response()->json(['error' => __('Permission denied.')], 401);
+          }
+     }
+
+     public function update(Request $request, $leave)
+     {
+          $leave = LocalLeave::find($leave);
+          $oldLeaveStatus = $leave->status;
+          if (Auth::user()->can('Edit Leave'))
+          {
+               if ($leave->created_by == Auth::user()->creatorId())
+               {
+                    $validator = Validator::make(
+                         $request->all(),
+                         [
+                              'leave_type_id' => 'required',
+                              // 'start_date'    => 'required',
+                              // 'end_date'      => 'required',
+                              'start_date' => 'required|date_format:Y-m-d|before_or_equal:end_date',
+                              'end_date' => 'required_if:leave_type_day,1|date_format:Y-m-d|after_or_equal:start_date',
+                              // 'end_date' => 'required|date_format:Y-m-d|after_or_equal:start_date',
+                              'leave_reason'  => 'required',
+                              'remark'        => 'required',
+                         ]
+                    );
+                    if ($validator->fails())
+                    {
+                         // $messages = $validator->getMessageBag();
+                         $messages = $validator->messages();
+                         return redirect()->back()->with('error', $messages->first());
+                         // return response()->json(['status' => 0,'message' => $messages]);
+                    }
+                    $leave_type = LeaveType::find($request->leave_type_id);
+                    if ($leave_type == null)
+                    {
+                         return redirect()->back()->with('error', __('Invalid Leave Type'));
+                    }
+
+                    $startDate = new DateTime($request->start_date);
+                    $endDate = new DateTime($request->end_date);
+                    $endDate->add(new \DateInterval('P1D'));
+                    $total_leave_days = !empty($startDate->diff($endDate)) ? $startDate->diff($endDate)->days : 0;
+
+                    $employeeId = null;
+                    $employee = [];
+
+                    if (Auth::user()->type == 'employee')
+                    {
+                         $employee = Employee::where('user_id', '=', Auth::user()->id)->first();
+                         $employeeId = $employee->id;
+                    }
+                    else
+                    {
+                         $employeeId = $request->employee_id;
+                    }
+
+                    if (Auth::user()->type != 'company')
+                    {
+                         $appliedLeaveDays = getAppliedLeaveDays($request->leave_type_day, $request->start_date, $request->end_date);
+                         $leaveBalanceValidation = validateEmployeeLeaveBalance($employeeId, $request->leave_type_id, $appliedLeaveDays, $request->start_date);
+
+                         if ((int) $leaveBalanceValidation['status'] !== 1)
+                         {
+                              return redirect()->back()->with('error', $leaveBalanceValidation['message']);
+                         }
+                    }
+
+                    if ($leave_type->days >= $total_leave_days || $request->leave_type_day == 0.5)
+                    {
+                         $starting_date = $request->start_date;
+                         $enddate = $request->end_date;
+                         $start_month = date('m', strtotime($starting_date));
+                         $end_month = date('m', strtotime($enddate));
+
+                         if ($start_month == $end_month)
+                         {
+                              DB::beginTransaction();
+
+                              try
+                              {
+
+                                   $leave->leave_type_id    = $request->leave_type_id;
+                                   $leave->start_date       = $request->start_date;
+                                   if ($request->leave_type_day == 0.5)
+                                   {
+                                        $leave->end_date         = $request->start_date;
+                                        $leave->total_leave_days = 0.5;
+                                   }
+                                   else
+                                   {
+                                        $leave->end_date         = $request->end_date;
+                                        $leave->total_leave_days = $total_leave_days;
+                                   }
+                                   $leave->leave_day        = $request->leave_type_day;
+                                   $leave->leave_reason     = $request->leave_reason;
+                                   $leave->remark           = $request->remark;
+
+                                   $update_logs = json_decode($leave->update_logs ?? "", true) ?? [];
+
+                                   $userLeaveBalance = UserLeaveBalanceYear::where("leave_type_id", $request->leave_type_id)->where("leaves_year", date("Y"))->where("user_id", $employeeId)->sum("pending_leaves");
+
+                                   $update_logs[] = [
+                                        "updated_by" => Auth::user()->id,
+                                        "updated_at" => Carbon::now()->format("d-m-Y h:i A"),
+                                        "userLeaveBalance" => $userLeaveBalance,
+                                   ];
+
+                                   $leave->update_logs = json_encode($update_logs);
+
+                                   if (Auth::user()->type != 'employee')
+                                   {
+                                        $leave->status = $request->status ?? "Pending";
+                                   }
+
+                                   $leave->save();
+                                   Log::channel('leave_log')->info("leave update same month userLeaveBalance: ", [$userLeaveBalance]);
+                                   Log::channel('leave_log')->info("leave update same month employee_id: ", [$leave->employee_id]);
+
+                                   if (Auth::user()->type != 'employee' && date("Y-m", strtotime($leave->start_date)) == date("Y-m"))
+                                   {
+                                        // leave balance operations
+                                        if ($leave->deducted_leave_balance > 0) // add this leave balance to
+                                        {
+                                             $incrementLeaveBalance = number_format($leave->deducted_leave_balance, 2);
+
+                                             UserLeaveBalance::where("leave_type_id", $leave->leave_type_id)
+                                                  ->where("user_id", $leave->employee_id)
+                                                  ->increment('pending_leaves', $incrementLeaveBalance);
+
+                                             UserLeaveBalanceYear::where("leave_type_id", $leave->leave_type_id)
+                                                  ->where("user_id", $leave->employee_id)
+                                                  ->where("leaves_year", date("Y", strtotime($leave->start_date)))
+                                                  ->increment('pending_leaves', $incrementLeaveBalance);
+                                        }
+                                        $leave->deducted_leave_balance = 0;
+                                        $leave->extra_leave_days = 0;
+                                        $leave->save();
+
+                                        employeeLeaveBalanceOperations($leave->id, $leave->status, $oldLeaveStatus);
+
+                                        // if this leave is rejected or pending then deducted leave balance of this leave will be added back in leave balance from above function ,
+                                        // so check if there is any other leave are approved then calculate its leave balance which should deduct and add extra days it there is extra days.
+                                        if ($leave->status == "Reject" || $leave->status == "Pending")
+                                        {
+                                             reCalculateLeaveBalanceData($leave->employee_id, [$leave->id], date("Y-m-d"));
+                                        }
+                                        // leave balance operations
+
+                                   }
+                              }
+                              catch (Exception | Throwable $ex)
+                              {
+                                   DB::rollBack();
+                                   return redirect()->back()->with('error', showExceptionMessage($ex));
+                              }
+                              DB::commit();
+                         }
+                         else
+                         {
+
+                              DB::beginTransaction();
+
+                              try
+                              {
+                                   // leave bvalance operations
+                                   if ($leave->deducted_leave_balance > 0) // add this leave balance to
+                                   {
+                                        $incrementLeaveBalance = number_format($leave->deducted_leave_balance, 2);
+
+                                        UserLeaveBalance::where("leave_type_id", $leave->leave_type_id)
+                                             ->where("user_id", $leave->employee_id)
+                                             ->increment('pending_leaves', $incrementLeaveBalance);
+
+                                        UserLeaveBalanceYear::where("leave_type_id", $leave->leave_type_id)
+                                             ->where("user_id", $leave->employee_id)
+                                             ->where("leaves_year", date("Y", strtotime($leave->start_date)))
+                                             ->increment('pending_leaves', $incrementLeaveBalance);
+                                   }
+                                   // leave bvalance operations
+                              }
+                              catch (Exception | Throwable $ex)
+                              {
+                                   DB::rollBack();
+                                   return redirect()->back()->with('error', showExceptionMessage($ex));
+                              }
+
+                              $employeeId = $leave->employee_id;
+
+                              $leave->delete();
+
+                              $oldLeaveStatus = "";
+
+                              $for_starting_start_date = $starting_date;
+                              $for_starting_end_date = date("Y-m-t", strtotime($for_starting_start_date));
+                              $datediff = strtotime($for_starting_end_date) - strtotime($for_starting_start_date);
+                              $count_start_days = round($datediff / (60 * 60 * 24)) + 1;
+
+                              $superior_user = null;
+
+                              if (Auth::user()->type == 'employee')
+                              {
+                                   $employee = Employee::where('user_id', '=', Auth::user()->id)->first();
+                                   $superior_user = $employee->users_types_id;
+                              }
+                              else
+                              {
+                                   $users = User::where('type', '!=', 'employee')->where('created_by', '=', Auth::user()->creatorId())->find(Auth::id());
+                                   if (!empty($users->assign_user))
+                                   {
+                                        $superior_user = $users->assign_user;
+                                   }
+                              }
+
+                              //next month leave 0
+                              try
+                              {
+                                   $leave_1    = new LocalLeave();
+                                   $leave_1->employee_id = $employeeId;
+
+                                   $leave_1->leave_type_id    = $request->leave_type_id;
+                                   $leave_1->applied_on       = date('Y-m-d');
+                                   $leave_1->start_date       = $for_starting_start_date;
+                                   $leave_1->end_date         = $for_starting_end_date;
+                                   $leave_1->total_leave_days = $count_start_days;
+                                   $leave_1->leave_reason     = $request->leave_reason;
+                                   $leave_1->remark           = $request->remark;
+                                   // $leave_1->status           = 'Pending';
+                                   $leave_1->secound_leave_status           = 'Pending';
+                                   $leave_1->leave_day        = $request->leave_type_day;
+                                   $leave_1->superior_user    = $superior_user;
+                                   $leave_1->created_by       = Auth::user()->creatorId();
+
+                                   $userLeaveBalance = UserLeaveBalanceYear::where("leave_type_id", $request->leave_type_id)->where("leaves_year", date("Y"))->where("user_id", $employeeId)->sum("pending_leaves");
+
+                                   $update_logs[] = [
+                                        "updated_by" => Auth::user()->id,
+                                        "updated_at" => Carbon::now()->format("d-m-Y h:i A"),
+                                        "userLeaveBalance" => $userLeaveBalance,
+                                   ];
+
+                                   $leave_1->update_logs = json_encode($update_logs);
+
+                                   if (Auth::user()->type != 'employee')
+                                   {
+                                        $leave_1->status = $request->status ?? "Pending";
+                                   }
+
+                                   $leave_1->save();
+                                   Log::channel('leave_log')->info("leave update diff month userLeaveBalance: ", [$userLeaveBalance]);
+                                   Log::channel('leave_log')->info("leave update diff month employee_id: ", [$leave_1->employee_id]);
+                              }
+                              catch (Exception | Throwable $ex)
+                              {
+                                   DB::rollBack();
+                                   return redirect()->back()->with('error', showExceptionMessage($ex));
+                              }
+
+                              // leave bvalance operations
+                              if ($leave_1->status == "Approved" && date("Y-m", strtotime($leave_1->start_date)) == date("Y-m"))
+                              {
+                                   employeeLeaveBalanceOperations($leave_1->id, $leave_1->status, $oldLeaveStatus);
+                              }
+                              // leave bvalance operations
+
+
+
+
+
+                              // Google celander
+                              // if ($request->get('synchronize_type')  == 'google_calender')
+                              // {
+                              //      $type = 'leave';
+                              //      $request1 = new GoogleEvent();
+                              //      $request1->title = !empty(Auth::user()->getLeaveType($leave->leave_type_id)) ? Auth::user()->getLeaveType($leave->leave_type_id)->title : '';
+                              //      $request1->start_date = $for_starting_start_date;
+                              //      $request1->end_date = $for_starting_end_date;
+                              //      Utility::addCalendarData($request1, $type);
+                              // }
+
+                              //next month leave 1
+                              $end_start_date = date("Y-m-01", strtotime($enddate));
+                              $end_end_date = $enddate;
+
+                              $datediffend = strtotime($end_end_date) - strtotime($end_start_date);
+                              $count_end_days = round($datediffend / (60 * 60 * 24)) + 1;
+
+                              try
+                              {
+                                   $leave_2    = new LocalLeave();
+
+                                   $leave_2->employee_id = $employeeId;
+
+                                   $leave_2->leave_type_id    = $request->leave_type_id;
+                                   $leave_2->applied_on       = date('Y-m-d');
+                                   $leave_2->start_date       = $end_start_date;
+                                   $leave_2->end_date         = $end_end_date;
+                                   $leave_2->total_leave_days = $count_end_days;
+                                   $leave_2->leave_reason     = $request->leave_reason;
+                                   $leave_2->remark           = $request->remark;
+                                   // $leave_2->status           = 'Pending';
+                                   $leave_2->secound_leave_status = 'Pending';
+                                   $leave_2->leave_day        = $request->leave_type_day;
+                                   $leave_2->superior_user    = $superior_user;
+                                   $leave_2->created_by       = Auth::user()->creatorId();
+
+                                   $leave_2->update_logs = json_encode($update_logs);
+
+                                   if (Auth::user()->type != 'employee')
+                                   {
+                                        $leave_2->status = $request->status ?? "Pending";
+                                   }
+
+                                   $leave_2->save();
+                                   Log::channel('leave_log')->info("leave update diff month 2 userLeaveBalance: ", [$userLeaveBalance]);
+                                   Log::channel('leave_log')->info("leave update diff month 2 employee_id: ", [$leave_2->employee_id]);
+                                   // leave bvalance operations
+                                   if ($leave_2->status == "Approved" && date("Y-m", strtotime($leave_2->start_date)) == date("Y-m"))
+                                   {
+                                        employeeLeaveBalanceOperations($leave_2->id, $leave_2->status, $oldLeaveStatus);
+                                   }
+                                   // leave bvalance operations
+                              }
+                              catch (Exception | Throwable $ex)
+                              {
+                                   DB::rollBack();
+                                   return redirect()->back()->with('error', showExceptionMessage($ex));
+                              }
+
+                              DB::commit();
+                         }
+
+                         $employee = Employee::where('user_id', '=', Auth::id())->first();
+                         // Send Push Notification to App
+                         if (Auth::user()->type != 'employee')
+                         {
+                              if (in_array($leave->status, ["Approved", "Approve", "Reject"]))
+                              {
+                                   $usersData = User::where("id", $employee->user_id)->where("device_token", "!=", NULL)->select("id", "device_type", "device_token")->get();
+
+                                   if (!$usersData->isEmpty())
+                                   {
+                                        $title = __("Your Leave has been $leave->status");
+                                        $body = __("Your Leave has been $leave->status");
+
+                                        $click_action = "leave_status_changed";
+                                        $extraData = ["id" => $leave->id];
+
+                                        sendpPushNotification($title, $body, $usersData, $click_action, $extraData);
+                                   }
+                              }
+                         }
+                         // Send Push Notification to App
+
+                         //notification Code
+                         $upUser = User::where('assign_employees', '!=', null)->where('created_by', '=', Auth::user()->creatorId())->select('assign_employees', 'id')->get();
+                         foreach ($upUser as $row)
+                         {
+                              foreach (json_decode($row['assign_employees']) ?? [] as $key => $user)
+                              {
+                                   if (!empty($user))
+                                   {
+                                        if ($user == $employee->id)
+                                        {
+                                             $notification               = new NotificationModel();
+                                             $notification->user_id      = $row->id;
+                                             $notification->employee_id  = $employee->id;
+                                             $notification->title        = "Leave request updated by " . $employee->name . " ";
+                                             $notification->details      = "Leave request updated by " . $employee->name . " ";
+                                             $notification->status       = 0;
+                                             $notification->date         = Carbon::now();
+                                             $notification->created_by   = $employee->created_by;
+                                             $notification->redirect     = 'leave';
+                                             $notification->save();
+                                        }
+                                   }
+                              }
+                         }
+                         //end notification
+
+                         $requestRedirect = $request->redirect ?? "";
+                         $redirect = empty($requestRedirect) ? 'leave.index' : $requestRedirect;
+                         return redirect()->route($redirect)->with('success', __('Leave successfully updated.'));
+                         // return response()->json(['status' => 1,'message' => __('Leave successfully updated.')]);
+
+                    }
+                    else
+                    {
+                         return redirect()->back()->with('error', __('Leave type ' . $leave_type->name . ' is provide maximum ' . $leave_type->days . "  days please make sure your selected days is under " . $leave_type->days . ' days.'));
+                         // return response()->json(['status' => 0,'message' => __('Leave type ' . $leave_type->name . ' is provide maximum ' . $leave_type->days . "  days please make sure your selected days is under " . $leave_type->days . ' days.')]);
+                    }
+               }
+               else
+               {
+                    return redirect()->back()->with('error', __('Permission denied.'));
+                    // return response()->json(['status' => 0,'message' => __('Permission denied.')]);
+               }
+          }
+          else
+          {
+               return redirect()->back()->with('error', __('Permission denied.'));
+               // return response()->json(['status' => 0,'message' => __('Permission denied.')]);
+          }
+     }
+
+     public function destroy(LocalLeave $leave)
+     {
+          if (Auth::user()->can('Delete Leave'))
+          {
+               if ($leave->created_by == Auth::user()->creatorId())
+               {
+                    $leave->delete();
+
+                    return redirect()->route('leave.index')->with('success', __('Leave successfully deleted.'));
+               }
+               else
+               {
+                    return redirect()->back()->with('error', __('Permission denied.'));
+               }
+          }
+          else
+          {
+               return redirect()->back()->with('error', __('Permission denied.'));
+          }
+     }
+
+     public function export()
+     {
+          $name = 'leave_' . date('Y-m-d i:h:s');
+          $data = Excel::download(new LeaveExport(), $name . '.xlsx');
+
+          return $data;
+     }
+
+     public function action($id)
+     {
+          try
+          {
+               $leave = LocalLeave::with('leaveType', 'employees')->find($id);
+
+               $logsData = [];
+               if ($leave->update_logs != null && !empty($leave->update_logs))
+               {
+                    $update_logs = json_decode($leave->update_logs);
+                    // dd($update_logs);
+                    foreach ($update_logs as $log)
+                    {
+                         // dd($log);
+                         $userId = $log->updated_by;
+                         $updatedAt = Carbon::parse($log->updated_at);
+
+                         $userData = User::where("id", $userId)->first();
+                         if ($userData != null)
+                         {
+                              $name = (Auth::user()->id == $userId) ? "You" : $userData->name;
+                              $logsData[] = [
+                                   "name" => $name,
+                                   "dateTime" => $updatedAt->format('d-m-Y h:i A'),
+                              ];
+                         }
+                    }
+               }
+
+               return view('leave.action', compact('leave', 'logsData'));
+          }
+          catch (Exception | Throwable $e)
+          {
+               dd($e);
+          }
+     }
+
+     public function action_hr($id)
+     {
+          $leave     = LocalLeave::find($id);
+          return view('leave.action_hr', compact('leave'));
+     }
+
+     public function changeaction(Request $request)
+     {
+
+          if (Auth::user()->type == 'employee')
+          {
+               return redirect()->back()->with('error', __('User is not allowed to perform this action.'));
+          }
+          DB::beginTransaction();
+          $leave = LocalLeave::find($request->leave_id);
+
+          $oldLeaveStatus = $leave->status;
+
+          $leave->status = $request->status;
+          $total_leave_days = 0;
+
+          if ($leave->status == 'Approved')
+          {
+               $startDate               = new DateTime($leave->start_date);
+               $endDate                 = new DateTime($leave->end_date);
+
+               if ($leave->leave_day == '0.5')
+               {
+                    $total_leave_days        = 0.5;
+               }
+               else
+               {
+                    $total_leave_days = $startDate->diff($endDate)->days + 1;
+               }
+
+               $leave->total_leave_days = $total_leave_days;
+               $leave->status           = 'Approved';
+
+               $data =  new ExtraLeaveModel();
+               $data->start_date   = $leave->start_date;
+               $data->leave_id     = $leave->id;
+               $data->end_date     = $leave->end_date;
+               $data->total_day    = $total_leave_days;  //total Day
+               $data->leave_type   = $leave->leave_type_id;  //leave drop-dwon
+               $data->leave_type_day = $leave->leave_day;    //half day = 0.5 ; full-day = 1
+               $data->used_leave     = $leave->employee_id;
+               $data->leave_balance  = 0;
+               $data->created_by     = Auth::user()->creatorId();
+               $data->save();
+          }
+
+          $update_logs = json_decode($leave->update_logs ?? "", true);
+          $userLeaveBalance = UserLeaveBalanceYear::where("leave_type_id", $leave->leave_type_id)->where("leaves_year", date("Y"))->where("user_id", $leave->employee_id)->sum("pending_leaves");
+
+          $update_logs[] = [
+               "updated_by" => Auth::user()->id,
+               "updated_at" => Carbon::now()->format("d-m-Y h:i A"),
+               "userLeaveBalance" => $userLeaveBalance,
+          ];
+
+          $leave->update_logs = $update_logs;
+
+          $leave->save();
+          Log::channel('leave_log')->info("leave changeaction userLeaveBalance: ", [$userLeaveBalance]);
+          Log::channel('leave_log')->info("leave changeaction employee_id: ", [$leave->employee_id]);
+
+          if (date("Y-m", strtotime($leave->start_date)) == date("Y-m"))
+          {
+               // leave balance operations
+               employeeLeaveBalanceOperations($leave->id, $leave->status, $oldLeaveStatus); // this will add or deduct leave balance base on leave status
+
+               // if this leave is rejected or pending then deducted leave balance of this leave will be added back in leave balance from above function ,
+               // so check if there is any other leave are approved then calculate its leave balance which should deduct and add extra days it there is extra days.
+               if ($leave->status == "Reject" || $leave->status == "Pending")
+               {
+                    reCalculateLeaveBalanceData($leave->employee_id, [$leave->id], date("Y-m-d"));
+               }
+
+               // leave balance operations
+          }
+
+          DB::commit();
+
+          //notification Code
+          $employee = Employee::where('id', $leave->employee_id)->first();
+          $upUser = User::where('assign_employees', '!=', null)->where('created_by', '=', Auth::user()->creatorId())->select('assign_employees', 'id')->get();
+          foreach ($upUser as $row)
+          {
+               foreach (json_decode($row['assign_employees']) ?? [] as $key => $user)
+               {
+                    if (!empty($user))
+                    {
+                         if ($user == $employee->id)
+                         {
+                              $notification   = new NotificationModel();
+                              if ($row->id != Auth::id())
+                              {
+                                   $notification->user_id = $row->id;
+                                   $notification->redirect     = 'leave';
+                              }
+                              else
+                              {
+                                   $notification->user_id      = $employee->user_id;
+                                   $notification->redirect     = 'leave_employee';
+                              }
+                              $notification->action_status = $request->status;
+                              $notification->employee_id  = $employee->id;
+                              $notification->title        = $employee->name  . " Leave "  .  $request->status . ' by : ' . User::find(auth::id())->name  .  " ";
+                              $notification->details      = $employee->name  . " Leave "  .  $request->status . ' by : ' . User::find(auth::id())->name  .  " ";
+                              $notification->status       = 0;
+                              $notification->date         = Carbon::now();
+                              $notification->created_by   = $employee->created_by;
+                              $notification->save();
+                         }
+                    }
+               }
+          }
+          //end notification
+
+
+
+          // Send Push Notification to App
+          if (in_array($leave->status, ["Approved", "Approve", "Reject"]))
+          {
+               $usersData = User::where("id", $employee->user_id)->where("device_token", "!=", NULL)->select("id", "device_type", "device_token")->get();
+
+               if (!$usersData->isEmpty())
+               {
+                    $title = __("Your Leave has been $leave->status");
+                    $body = __("Your Leave has been $leave->status");
+
+                    $click_action = "leave_status_changed";
+                    $extraData = ["id" => $leave->id];
+
+                    sendpPushNotification($title, $body, $usersData, $click_action, $extraData);
+                    // dd($data);
+               }
+          }
+          // Send Push Notification to App
+
+          // twilio
+          //   $setting = Utility::settings(Auth::user()->creatorId());
+          //   $emp = Employee::find($leave->employee_id);
+          //   if (isset($setting['twilio_leave_approve_notification']) && $setting['twilio_leave_approve_notification'] == 1)
+          //   {
+          //       $msg = __("Your leave has been") . ' ' . $leave->status . '.';
+          //       Utility::send_twilio_msg($emp->phone, $msg);
+          //   }
+
+          $setings = Utility::settings();
+
+          if ($setings['leave_status'] == 100)
+          {
+               $employee     = Employee::where('id', $leave->employee_id)->where('created_by', '=', Auth::user()->creatorId())->first();
+
+               $leaveStatus = $request->status;
+               if ($request->status == "Reject")
+               {
+                    $leaveStatus = "Rejected";
+               }
+               else if ($request->status == "Approve")
+               {
+                    $leaveStatus = "Approved";
+               }
+
+               $uArr = [
+                    'name' => $employee->name,
+                    'leave_status'      => $leaveStatus,
+                    'total_leave_days'  => $leave->total_leave_days,
+                    'leave_start_date'  => $leave->start_date,
+                    'leave_end_date'    => $leave->end_date,
+                    'email'       => $employee->email,
+                    'leave_reason'      => $leave->leave_reason,
+               ];
+
+               try
+               {
+                    $resp = Utility::sendEmailTemplate('leave_status', [$employee->email], $uArr);
+               }
+               catch (\Throwable $th)
+               {
+                    throw $th;
+               }
+
+               return redirect()->route('leaverequest')->with('success', __('Leave status successfully updated.') . ((!empty($resp) && $resp['is_success'] == false && !empty($resp['error'])) ? '<br> <span class="text-danger">' . $resp['error'] . '</span>' : ''));
+          }
+
+          return redirect()->route('leaverequest')->with('success', __('Leave status successfully updated.'));
+     }
+
+     public function changeaction_hr(Request $request)
+     {
+
+          // dd("hereeee");
+          $leave = LocalLeave::find($request->leave_id);
+
+          $leave->secound_leave_status = $request->secound_leave_status;
+          $total_leave_days = 0;
+          if ($leave->secound_leave_status == 'Approved')
+          {
+
+               $startDate               = new DateTime($leave->start_date);
+               $endDate                 = new DateTime($leave->end_date);
+               if ($leave->leave_day == '0.5')
+               {
+                    $total_leave_days        = 0.5;
+               }
+               else
+               {
+                    $total_leave_days        = $startDate->diff($endDate)->days + 1;
+               }
+
+               $leave->total_leave_days = $total_leave_days;
+               $data =  new ExtraLeaveModel();
+               $data->start_date = $leave->start_date;
+               $data->leave_id   = $leave->id;
+               $data->end_date   = $leave->end_date;
+               $data->total_day  = $total_leave_days;  //total Day
+               $data->leave_type = $leave->leave_type_id;  //leave drop-dwon
+               $data->leave_type_day = $leave->leave_day;    //half day = 0.5 ; full-day = 1
+               $data->used_leave     = $leave->employee_id;
+               $data->leave_balance  = 0;
+               $data->created_by     = Auth::user()->creatorId();
+               $data->save();
+          }
+
+          $leave->save();
+
+          $setting = Utility::settings(Auth::user()->creatorId());
+          $emp = Employee::find($leave->employee_id);
+          if (isset($setting['twilio_leave_approve_notification']) && $setting['twilio_leave_approve_notification'] == 1)
+          {
+               $msg = __("Your leave has been") . ' ' . $leave->secound_leave_status . '.';
+               Utility::send_twilio_msg($emp->phone, $msg);
+          }
+
+          $setings = Utility::settings();
+
+          if ($setings['leave_status'] == 1)
+          {
+               $user     = Employee::where('id', $leave->employee_id)->where('created_by', '=', Auth::user()->creatorId())->first();
+               if (empty($user))
+               {
+                    $user = User::where('id', $leave->employee_id)->where('created_by', '=', Auth::user()->creatorId())->first();
+               }
+               $uArr = [
+                    'leave_email'       => $user->email,
+                    'leave_status_name' => $user->name,
+                    'leave_status'      => $request->secound_leave_status,
+                    'leave_reason'      => $leave->leave_reason,
+                    'leave_start_date'  => $leave->start_date,
+                    'leave_end_date'    => $leave->end_date,
+                    'total_leave_days'  => $leave->total_leave_days,
+                    'secound_leave_status'  => $leave->secound_leave_status
+               ];
+               $resp = Utility::sendEmailTemplate('leave_status', [$user->email], $uArr);
+               return redirect()->route('leaverequest')->with('success', __('Leave status successfully updated.') . ((!empty($resp) && $resp['is_success'] == false && !empty($resp['error'])) ? '<br> <span class="text-danger">' . $resp['error'] . '</span>' : ''));
+          }
+
+          return redirect()->route('leaverequest')->with('success', __('Leave status successfully updated.'));
+     }
+
+     public function jsoncount(Request $request)
+     {
+          $emp = Employee::find($request->employee_id);
+          // $leave_counts = LeaveType::select(\DB::raw('COALESCE(SUM(leaves.total_leave_days),0) AS total_leave, leave_types.created_by,leave_types.play_slab_id,leave_types.title,leave_types.days,leave_types.id'))
+          //     ->leftjoin(
+          //         'leaves',
+          //         function ($join) use ($request) {
+          //             $join->on('leaves.leave_type_id', '=', 'leave_types.id');
+          //             $join->where('leaves.employee_id', '=', $request->employee_id);
+          //         }
+          //     )->groupBy('leaves.leave_type_id')
+          //     ->where('leave_types.play_slab_id', '=',$emp->play_slab_id)
+          //     ->where('leave_types.created_by', Auth::user()->creatorId())->get();
+          $leave_counts = LeaveType::where('play_slab_id', $emp->play_slab_id)->where('created_by', Auth::user()->creatorId())->get();
+          return $leave_counts;
+     }
+
+     public function calender(Request $request)
+     {
+          // $created_by = Auth::user()->creatorId();
+          // $Meetings = LocalLeave::where('created_by', $created_by)->get();
+          // // dd($Meetings);
+          // $today_date = date('m');
+          // $current_month_event = LocalLeave::select('id', 'start_date', 'employee_id', 'created_at')->whereRaw('MONTH(start_date)=' . $today_date)->get();
+
+          // $arrMeeting = [];
+
+          // foreach ($Meetings as $meeting)
+          // {
+          //      $arr['id']        = $meeting['id'];
+          //      $arr['employee_id']     = $meeting['employee_id'];
+          //      // $arr['leave_type_id']     = date('Y-m-d', strtotime($meeting['start_date']));
+          // }
+          $employee = Employee::where('user_id', '=', Auth::id())->first();
+
+          // if (Auth::user()->type == 'employee') {
+          //      $leaves   = LocalLeave::where('employee_id', '=', $employee->id)->where('status',"Approved")->where('created_by', '=', Auth::user()->creatorId())->get();
+          // } else {
+          $leaves = LocalLeave::where('employee_id', '=', $employee->id)->where('status', "Approved")->where('created_by', '=', Auth::user()->creatorId())->get();
+          // }
+          // dd($leaves);
+
+          return view('leave.calender', compact('leaves'));
+     }
+
+     public function get_leave_data(Request $request)
+     {
+
+          $arrayJson = [];
+          if ($request->get('calender_type') == 'google_calender')
+          {
+               $type = 'leave';
+               $arrayJson =  Utility::getCalendarData($type);
+          }
+          else
+          {
+               $employee = Employee::where('user_id', '=', Auth::id())->first();
+
+               $data = LocalLeave::where('employee_id', '=', $employee->id)->where('status', "Approved")->where('created_by', '=', Auth::user()->creatorId())->get();
+
+               foreach ($data as $val)
+               {
+                    $end_date = date_create($val->end_date);
+                    date_add($end_date, date_interval_create_from_date_string("1 days"));
+                    $arrayJson[] = [
+                         "id" => $val->id,
+                         "title" => !empty(Auth::user()->getLeaveType($val->leave_type_id)) ? Auth::user()->getLeaveType($val->leave_type_id)->title : '',
+                         "start" => $val->start_date,
+                         "end" => date_format($end_date, "Y-m-d H:i:s"),
+                         "className" => $val->color,
+                         "textColor" => '#FFF',
+                         "allDay" => true,
+                         "url" => route('leave.action', $val['id']),
+                    ];
+               }
+          }
+
+          return $arrayJson;
+     }
+
+
+     public function allowToEditLeave(Request $request)
+     {
+          try
+          {
+               try
+               {
+                    DB::beginTransaction();
+
+                    $leave = LocalLeave::find($request->leaveId);
+
+                    $leave->status = "Pending";
+                    // $leave->allow_to_edit = 1;
+                    $leave->save();
+
+                    DB::commit();
+
+                    // dd($leave);
+               }
+               catch (Throwable $ex)
+               {
+                    DB::rollBack();
+               }
+
+               //notification Code
+               $employee = Employee::where('user_id', '=', Auth::id())->first();
+
+               $upUser = User::where('assign_employees', 'LIKE', "%$employee->id%")->where('assign_employees', '!=', null)->where('created_by', '=', Auth::user()->creatorId())->select('assign_employees', 'id')
+                    ->get();
+
+               foreach ($upUser as $user)
+               {
+                    $notification               = new NotificationModel();
+                    $notification->user_id      = $user->id;
+                    $notification->employee_id  = $employee->id;
+                    $notification->title        = $employee->name . " requested to update Leave.";
+                    $notification->details      = $employee->name . " requested to update Leave.";
+                    $notification->status       = 0;
+                    $notification->date         = Carbon::now();
+                    $notification->created_by   = $employee->created_by;
+                    $notification->redirect   = 'leave';
+                    $notification->save();
+               }
+               //end notification
+
+               return ApiResponse(["status" => 1, "message" => __("Leave Updated Successfully."), "leaveStatus" => $leave->status]);
+          }
+          catch (Throwable $ex)
+          {
+               // dd($ex, showExceptionMessage($ex));
+               return ApiResponse(["status" => 1, "message" => showExceptionMessage($ex)]);
+          }
+     }
+     public function export_import_file()
+     {
+          return view('leave.export_import_leave');
+     }
+
+     public function exportImportLeave(Request $request)
+     {
+          try
+          {
+               $rules = [
+                    'file' => 'required|mimes:csv,txt',
+               ];
+               $validator = Validator::make($request->all(), $rules);
+
+               if ($validator->fails())
+               {
+                    $messages = $validator->getMessageBag();
+                    return redirect()->back()->with('error', $messages->first());
+               }
+
+               $employees = (new EmployeesImport())->toArray(request()->file('file'))[0];
+
+               $totalCustomer = count($employees) - 1;
+               $errorArray = [];
+
+               // $columns = [
+               //      "employee_id" => 0,
+               //      "name" => 0,
+               //      "email" => 0,
+               //      "pay_slab" => 0,
+               // ];
+
+               $sequenceNo = 0;
+               foreach ($employees[0] as $key => $value)
+               {
+                    $columns[$value] = $sequenceNo;
+                    $sequenceNo++;
+               }
+               // foreach ($columns as $key => $value)
+               // {
+               //      $columns[$key] = $sequenceNo;
+               //      $sequenceNo++;
+               // }
+
+               $columns = (object)$columns;
+               //dd($columns);
+
+               // $requiredColumns = [
+               //      $columns->employee_id,
+               //      $columns->name,
+               //      $columns->email,
+               // ];
+               $columnsWithValue = [];
+               for ($i = 1; $i <= count($employees) - 1; $i++)
+               {
+                    DB::beginTransaction();
+                    try
+                    {
+
+                         $employee = $employees[$i];
+                         $employeeByEmail = Employee::where('email', $employee[$columns->email])->where('employee_id', $employee[$columns->employee_id])->first();
+                         $play_slab_data = PayslipType::where('name', $employee[$columns->pay_slab])->where('created_by', Auth::user()->creatorId())->first();
+
+                         $paySlabId = 0;
+                         if ($play_slab_data != null)
+                         {
+                              $paySlabId = $play_slab_data->id;
+                         }
+
+                         $leaveBalanceData = [];
+                         $leaveBalanceData = array_values(array_slice($employee, ($columns->pay_slab + 1), count($employee) + 1, true));
+                         $leaveTypes = LeaveType::where('created_by', '=', Auth::user()->creatorId())->orderBy("play_slab_id", "Asc")->get();
+
+                         // $paySlabTypes = PayslipType::where('created_by', '=', Auth::user()->creatorId())->orderBy("id", "Asc")->get();
+
+                         $incrementValue = 0;
+
+                         // $addedLeaveTypeIds = [];
+                         $leaveBalanceAdded = [];
+                         if ($paySlabId >= 1)
+                         {
+                              foreach ($leaveTypes as $leaveTypeRow)
+                              {
+                                   // dd($leaveTypeRow->play_slab_id == $paySlabId);
+                                   if ($leaveTypeRow->play_slab_id == $paySlabId)
+                                   // if ($leaveTypeRow->play_slab_id == $paySlabId && !in_array($leaveTypeRow->id, $addedLeaveTypeIds))
+                                   {
+                                        // $addedLeaveTypeIds[] = $leaveTypeRow->id;
+
+                                        $leaveDays = ($leaveBalanceData[$incrementValue] ?? 0);
+                                        if ($leaveDays > 0)
+                                        {
+                                             // dd($leaveDays, $employeeByEmail->id);
+                                             // add leave balance
+                                             $userLeaveBalance = UserLeaveBalance::where([
+                                                  ["user_id", "=", $employeeByEmail->id],
+                                                  ["leave_type_id", "=", $leaveTypeRow->id],
+                                             ])
+                                                  ->whereYear("created_at", date('Y'))
+                                                  ->first();
+
+                                             if (empty($userLeaveBalance))
+                                             {
+                                                  $userLeaveBalance = new UserLeaveBalance();
+
+                                                  $userLeaveBalance->user_id = $employeeByEmail->id;
+                                                  $userLeaveBalance->leave_type_id = $leaveTypeRow->id;
+                                                  $userLeaveBalance->pending_leaves = $leaveDays;
+                                                  $userLeaveBalance->created_by = Auth::user()->creatorId();
+                                             }
+                                             else
+                                             {
+                                                  $userLeaveBalance->pending_leaves = $leaveDays;
+                                             }
+
+                                             $userLeaveBalance->save();
+                                             // add leave balance
+
+                                             // dd($leaveDays, $employeeByEmail->id, $userLeaveBalance);
+
+                                             $leaveBalanceAdded[] = $userLeaveBalance;
+
+                                             // Add Leave Balance Year
+                                             $currentYear = date('Y');
+                                             $userLeaveBalanceYear = UserLeaveBalanceYear::where([
+                                                  ["user_id", "=", $employeeByEmail->id],
+                                                  ["leave_type_id", "=", $leaveTypeRow->id],
+                                                  ["leaves_year", "=", $currentYear],
+                                             ])->first();
+
+                                             if (empty($userLeaveBalanceYear))
+                                             {
+                                                  $userLeaveBalanceYear = new UserLeaveBalanceYear();
+
+                                                  $userLeaveBalanceYear->user_id = $employeeByEmail->id;
+                                                  $userLeaveBalanceYear->leave_type_id = $leaveTypeRow->id;
+                                                  $userLeaveBalanceYear->pending_leaves = $leaveDays;
+                                                  $userLeaveBalanceYear->created_by = Auth::user()->creatorId();
+                                                  $userLeaveBalanceYear->leaves_year = $currentYear;
+                                             }
+                                             else
+                                             {
+                                                  $userLeaveBalanceYear->pending_leaves = $leaveDays;
+                                             }
+
+                                             $userLeaveBalanceYear->save();
+                                             // Add Leave Balance
+                                        }
+                                   }
+                                   $incrementValue++;
+                              }
+                         }
+                         DB::commit();
+                    }
+                    catch (Exception | Throwable $ex)
+                    {
+                         DB::rollBack();
+                    }
+               }
+               if (empty($errorArray))
+               {
+                    $data['status'] = 'success';
+                    $data['msg'] = __('Record successfully imported');
+               }
+               else
+               {
+                    $data['status'] = 'error';
+                    $data['msg']    = count($errorArray) . ' ' . __('Record imported fail out of' . ' ' . $totalCustomer . ' ' . 'record');
+
+                    foreach ($errorArray as $errorData)
+                    {
+                         $errorRecord[] = implode(',', $errorData);
+                    }
+
+                    Session::put('errorArray', $errorRecord);
+               }
+               return redirect()->back()->with($data['status'], $data['msg']);
+          }
+          catch (Exception $e)
+          {
+               return redirect()->back()->with('error', __("Something is wrong"));
+          }
+          catch (Throwable $e)
+          {
+               return redirect()->back()->with('error', __("Something is wrong"));
+          }
+     }
+
+     public function downloadImportLeaveSampleFile(Request $request)
+     {
+          // Set headers for file download
+          $headers = [
+               'Content-Type' => 'text/csv',
+               'Content-Disposition' => 'attachment; filename="example.csv"',
+          ];
+
+          $csvContent = '';
+
+          // $PaySlabTypes = PayslipType::where('created_by', '=', Auth::user()->creatorId())->orderBy("id", "Asc")->get();
+          $employees = Employee::with('playslab', 'selectUsers')->where('user_id', '=', Auth::user()->id)->orderBy('id', 'DESC')->get();
+          if (Auth::user()->type == 'employee')
+          {
+               $employees = Employee::with('playslab', 'selectUsers')->where('user_id', '=', Auth::user()->id)->orderBy('id', 'DESC')->get();
+          }
+          else
+          {
+               if (Auth::user()->type == 'company')
+               {
+                    $employees = Employee::with('login_sts', 'playslab', 'selectUsers')->where('created_by', Auth::user()->creatorId())->orderBy('id', 'DESC')->get();
+               }
+               else
+               {
+                    $employeesList = Employee::where("created_by", Auth::user()->creatorId())->get()->pluck("id")->toArray();
+                    $selectedEmployee = selectedEmployee() ?? [];
+                    $selectedEmployee = array_merge($selectedEmployee, $employeesList);
+
+                    // dd(selectedEmployee(), Auth::user()->id);
+                    $employees = Employee::whereIn('id', selectedEmployee() ?? [])->with('login_sts', 'playslab', 'selectUsers')
+                         ->where("created_by", Auth::user()->creatorId())
+                         ->orderBy('id', 'DESC')
+                         ->get();
+
+                    // $employees = Employee::whereIn('id', $selectedEmployee)->with('login_sts', 'playslab', 'selectUsers')
+                    //      ->orderBy('id', 'DESC')
+                    //      ->get();
+               }
+          }
+          $leaveTypes = LeaveType::select("*", "title as title_with_pay_slab_name")->where('created_by', '=', Auth::user()->creatorId())->orderBy("play_slab_id", "Asc")->get()->pluck("title_with_pay_slab_name")->toArray();
+          $final_emp = [];
+          foreach ($employees as $employee)
+          {
+               $emp = [];
+               $emp[] = $employee->employee_id ?? '';
+               $emp[] = $employee->name ?? '';
+               $emp[] = $employee->email ?? '';
+               $emp[] = $employee->playslab->name ?? '';
+               $final_emp[] = $emp;
+          }
+
+          try
+          {
+               // Define CSV data
+               // $data = array('Please leave blank if you don\'t want to update');
+               // $heade_data = array_merge([
+               //           "employee id",
+               //           "name",
+               //           "email",
+               //           "pay slab",
+               //      ], $leaveTypes);
+               // $new_data = array_merge($data,$heade_data);
+               // $final_data = array_merge($new_data, $final_emp);
+               $data[] = array_merge([
+                    "employee_id",
+                    "name",
+                    "email",
+                    "pay_slab",
+               ], $leaveTypes);
+               $new_data = array_merge($data, $final_emp);
+
+               // Generate CSV content
+               foreach ($new_data as $row)
+               {
+                    $csvContent .= implode(',', $row) . "\n";
+               }
+          }
+          catch (Exception | Throwable $ex)
+          {
+          }
+
+          // Return CSV as a download response
+          return Response::make($csvContent, 200, $headers);
+     }
+}

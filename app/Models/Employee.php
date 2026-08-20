@@ -1,0 +1,2501 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use SebastianBergmann\CodeCoverage\Percentage;
+use App\Models\Leave;
+use App\Models\StatutoryDeductionsProfessionalTaxRange;
+use App\Models\StatutoryDeductionsEpf;
+use AWS\CRT\HTTP\Request;
+use DB;
+use Carbon\Carbon;
+use Exception;
+use Illuminate\Support\Facades\Auth;
+use Throwable;
+
+class Employee extends Model
+{
+     protected $table = 'employees';
+     protected $fillable = [
+          'user_id',
+          'name',
+          'dob',
+          'gender',
+          'phone',
+          'address',
+          'email',
+          'personal_email',
+          'password',
+          'employee_id',
+          'branch_id',
+          'department_id',
+          'designation_id',
+          'designation_description',
+          'company_doj',
+          'documents',
+          'account_holder_name',
+          'account_number',
+          'bank_name',
+          'bank_identifier_code',
+          'branch_location',
+          'tax_payer_id',
+          'salary_type',
+          'salary',
+          'marital_status',
+          'employe_status',
+          'employe_types',
+          'employee_experience',
+          'date_of_exit',
+          'Job_description',
+          'previous_company_name',
+          'previous_job_title',
+          'previous_from_date',
+          'previous_to_date',
+          'previous_company_designation_id',
+          'experiance_Job_description',
+          'institute_name',
+          'education',
+          'specialization',
+          'date_of_completion',
+          'notes',
+          'dependent_name',
+          'dependent_relation',
+          'dependent_dob',
+          'created_by',
+          'play_slab_id',
+          'users_types_id',
+          'grade_type_id',
+          'office_staff',
+          'employee_exit',
+          'probation_period_date',
+          'confirm_probation_period',
+          'app_login',
+          'web_login',
+
+          "uan_no",
+
+
+          "esic_no",
+
+          "ctc_annual",
+          "ctc_percentage",
+
+          "epf_status",
+          "epf_number",
+          "employee_contribution_rate",
+          "employer_contribution_rate",
+
+          "esi_status",
+          "esi_number",
+          "esi_employee_contribution_rate",
+          "esi_employer_contribution_rate",
+
+          "ept_status",
+          "ept_number",
+
+          "statutory_bonus_status",
+          "statutory_bonus",
+
+          "tax_deducted_at_source_status",
+          "tax_deducted_at_source",
+          "geofencing_status",
+          "remote_geofencing_status",
+          "latitude",
+          "longitude",
+          "remote_geofencing_status",
+
+          "marriage_anniversary_date",
+          "employee_profile",
+
+          "is_custom_weekoffs",
+          "weekoffs_data",
+     ];
+
+     public function hasExited(): bool
+     {
+          return (int) ($this->employee_exit ?? 0) === 1;
+     }
+
+     public function isWebLoginAllowed(): bool
+     {
+          return !$this->hasExited() && (int) ($this->web_login ?? 1) === 1;
+     }
+
+     public function isAppLoginAllowed(): bool
+     {
+          return !$this->hasExited() && (int) ($this->app_login ?? 1) === 1;
+     }
+
+     public function locations()
+     {
+          return $this->hasMany(EmployeeLocation::class, 'employee_id');
+     }
+
+     public function attendances()
+     {
+          return $this->hasMany(AttendanceEmployee::class, 'employee_id');
+     }
+
+     public function playslab()
+     {
+          return $this->belongsTo(PayslipType::class, 'play_slab_id');
+     }
+
+     public function selectUsers()
+     {
+          return $this->belongsTo('App\Models\User', 'users_types_id', 'id');
+     }
+
+     public function documents()
+     {
+          return $this->hasMany('App\Models\EmployeeDocument', 'employee_id')->get();
+     }
+
+     public function employeeDocuments()
+     {
+          return $this->hasMany(EmployeeDocument::class, 'employee_id')->select("*", "document_value as document_link");
+     }
+
+     public function experience()
+     {
+          return $this->hasMany(EXPTable::class, 'employee_id');
+     }
+
+     public function education()
+     {
+          return $this->hasMany(EdcutionTable::class, 'employee_id');
+     }
+
+     public function dependent()
+     {
+          return $this->hasMany(DependentData::class, 'employee_id');
+     }
+
+     public function salary_type()
+     {
+          return $this->hasOne('App\Models\PayslipType', 'id', 'salary_type')->pluck('name')->first();
+     }
+
+     public function login_sts()
+     {
+          return $this->belongsTo('App\Models\User', 'user_id', 'id');
+     }
+
+
+     public function getEmployeeProfileImageAttribute($value)
+     {
+          if (!empty($this->employee_profile))
+          {
+               return Utility::get_file('uploads/employee_profile') . "/" . $this->employee_profile;
+          }
+          return "";
+     }
+
+     public function get_allowance_value($id, $parent_id, $employess)
+     {
+
+          $get_parentData = \App\Models\AllowanceOption::find($parent_id);
+          if (!empty($get_parentData))
+          {
+
+               if ($get_parentData->allowance_types == 0 || $get_parentData->allowance_types == null)
+               {
+                    if ($get_parentData->type == 'percentage')
+                    {
+                         $empBasicSalary = ($get_parentData->amount * $employess->salary) / 100;
+                         return $empBasicSalary;
+                    }
+                    else
+                    {
+                         return $get_parentData->amount;
+                    }
+               }
+               else
+               {
+                    get_allowance_value($id, $get_parentData->id, $employess);
+               }
+          }
+     }
+
+     function get_commission_value($id, $parent_id, $employess)
+     {
+          $get_parentData = \App\Models\Commission_option::find($parent_id);
+          $get_CurruntData = \App\Models\Commission_option::find($id);
+
+          if (!empty($get_parentData))
+          {
+
+               if ($get_parentData->commision_types == 0 || $get_parentData->commision_types == null)
+               {
+                    if ($get_parentData->type == 'percentage')
+                    {
+                         $empBasicSalary = ($get_parentData->amount * $employess->salary) / 100;
+                         return $empBasicSalary;
+                    }
+                    else
+                    {
+                         return $get_parentData->amount;
+                    }
+               }
+               else
+               {
+                    get_commission_value($id, $get_parentData->id, $employess);
+               }
+          }
+     }
+
+     public function get_net_salary($formate_month_year)
+     {
+          $startDate = date($formate_month_year . '-d');
+
+          $data = Employee::where('id', $this->id)->first();
+
+          //allowance
+          $allowances      = AllowanceOption::where('is_display', 'Yes')->where('created_by', \Auth::user()->creatorId())->where('play_slab_id', $data->play_slab_id)->get();
+          $total_allowance = 0;
+          foreach ($allowances as $allowance)
+          {
+               if ($allowance->type == 'percentage')
+               {
+                    if ($allowance->allowance_types == 0 || $allowance->allowance_types == null)
+                    {
+                         $total_allowance += ($allowance->amount * $data->salary) / 100;
+                    }
+                    else
+                    {
+                         $getvalue = self::get_allowance_value($allowance->id, $allowance->allowance_types, $data);
+                         $total_allowance += ($getvalue * $allowance->amount) / 100;
+                    }
+               }
+               else
+               {
+                    $total_allowance += $allowance->amount;
+               }
+          }
+
+          //commission
+          $commissions = Commission_option::whereIn('employees_id', [0, $this->id])->where('created_by', \Auth::user()->creatorId())->where('play_slab_id', $data->play_slab_id)->get();
+
+          $total_commission = 0;
+          foreach ($commissions as $commission)
+          {
+               if ($commission->type == 'percentage')
+               {
+                    if ($commission->commision_types == 0 || $commission->commision_types == null)
+                    {
+                         $total_commission += ($commission->amount * $data->salary) / 100;
+                    }
+                    else
+                    {
+                         $getvalue = self::get_commission_value($commission->id, $commission->commision_types, $data);
+                         $total_commission += ($getvalue * $commission->amount) / 100;
+                    }
+               }
+               else
+               {
+                    $total_commission += $commission->amount;
+               }
+          }
+
+          $loans = Loan::whereDate('start_date', '<=', $startDate)->whereDate('end_date', '>=', $startDate)->where('created_by', \Auth::user()->creatorId())->where('employee_id', '=', $this->id)->get();
+          $total_loan = 0;
+          foreach ($loans as $loan)
+          {
+               if ($loan->type == 'percentage')
+               {
+                    $employee = Employee::find($loan->employee_id);
+                    $total_loan  = $loan->amount * $employee->salary / 100   + $total_loan;
+               }
+               else
+               {
+                    $total_loan = $loan->amount + $total_loan;
+               }
+          }
+
+
+          //Saturation Deduction
+          $saturation_deductions      = DeductionOption::whereIn('employees_id', [0, $this->id])->where('is_display', 'Yes')->where('created_by', \Auth::user()->creatorId())->where('play_slab_id', '=', $data->play_slab_id)->get();
+          $total_saturation_deduction = 0;
+          $total_saturation_deductionvalue = 0;
+
+          foreach ($saturation_deductions as $saturation_deduction)
+          {
+               if (!empty($saturation_deduction->amount) != '0')
+               {
+                    if ($saturation_deduction->type == 'percentage')
+                    {
+                         $total_saturation_deductionvalue  += $saturation_deduction->amount * $data->salary / 100 + $total_saturation_deduction;
+                    }
+                    if ($saturation_deduction->type == 'fixed')
+                    {
+                         $total_saturation_deduction += $saturation_deduction->amount;
+                    }
+               }
+          }
+          //Saturation Deduction
+
+          //OtherPayment
+          $other_payments      = OtherPaymentotion::where('created_by', \Auth::user()->creatorId())->where('play_slab_id', '=', $data->play_slab_id)->get();
+          $total_other_payment = 0;
+          foreach ($other_payments as $other_payment)
+          {
+               if ($other_payment->type == 'percentage')
+               {
+                    // $employee          = Employee::find($other_payment->employee_id);
+                    $total_other_payment  += $other_payment->amount * $data->salary / 100  + $total_other_payment;
+               }
+               else
+               {
+                    $total_other_payment += $other_payment->amount + $total_other_payment;
+               }
+          }
+          //OtherPayment
+
+          //Overtime
+          $over_times      = Overtime::where('employee_id', '=', $this->id)->get();
+          $total_over_time = 0;
+          foreach ($over_times as $over_time)
+          {
+               $total_work      = $over_time->number_of_days * $over_time->hours;
+               $amount          = $total_work * $over_time->rate;
+               $total_over_time = $amount + $total_over_time;
+          }
+          //Overtime
+
+          $advance_salary = (($total_allowance + $total_commission + $total_other_payment + $total_over_time) - ($total_loan + $total_saturation_deduction + $total_saturation_deductionvalue));
+          $employee       = Employee::where('id', '=', $this->id)->first();
+
+          $net_salary     = (!empty($data->salary) ? $data->salary : 0) + $advance_salary;
+          return $net_salary;
+     }
+
+     public static function allowance($id)
+     {
+          $data = Employee::where('id', $id)->first();
+          $allowances      = AllowanceOption::where('is_display', 'Yes')->where('created_by', Auth::user()->creatorId())->where('play_slab_id', $data->play_slab_id)->get();
+          $total_allowance = 0;
+          foreach ($allowances as $allowance)
+          {
+               $total_allowance = $allowance->amount + $total_allowance;
+          }
+          $allowance_json = json_encode($allowances);
+          return $allowance_json;
+     }
+
+     //leave deduction
+     public static function leave_deduction($id, $month_year)
+     {
+          $years  = date("Y", strtotime($month_year));
+          $month  = date("m", strtotime($month_year));
+
+          $leaveData = Leave::where('created_by', Auth::user()->creatorId())
+               ->where('employee_id', '=', $id)
+               ->select(
+                    DB::raw('sum(total_leave_days) as total_leave_days_count'),
+                    'leave_type_id',
+                    'total_leave_days',
+                    'employee_id',
+                    'start_date',
+                    'end_date'
+               )
+               ->whereYear('start_date', $years)
+               ->whereMonth('start_date', $month)
+               ->where('status', 'Approved')
+               ->groupBy('leave_type_id')
+               ->get();
+
+          $leavedeductionarray = [];
+
+          $employee = Employee::where('id', $id)->first();
+          $basic_salary = $employee->salary;
+          $oneDaysalary = $basic_salary / getCompanyWorkingDays();
+
+          if (!empty($leaveData))
+          {
+               foreach ($leaveData as $data)
+               {
+                    $total_leave_days = $data->total_leave_days_count;
+
+                    // update leave balance
+                    $userLeaveBalance = UserLeaveBalance::where("leave_type_id", $data->leave_type_id)->where("user_id", $employee->id)->first();
+                    if (!empty($userLeaveBalance))
+                    {
+                         $pending_leaves = $userLeaveBalance->pending_leaves;
+
+                         // code
+                         $remainingLeaveBalance = 0;
+                         $pendingLeavesDays = explode('.', $pending_leaves);
+                         $pending_leaves_update = 0;
+
+                         if (isset($pendingLeavesDays[1]))
+                         {
+                              if (strlen($pendingLeavesDays[1]) == 1)
+                              {
+                                   $pendingLeavesDays[1] = "0." . ($pendingLeavesDays[1]) . "0";
+                              }
+                              else
+                              {
+                                   $pendingLeavesDays[1] = "0." . ($pendingLeavesDays[1]);
+                              }
+
+                              if ($pendingLeavesDays[1] >= 0.50)
+                              {
+
+                                   $remainingLeaveBalance = ($pendingLeavesDays[1] - 0.50);
+
+                                   $pending_leaves = $pending_leaves - $remainingLeaveBalance;
+                                   $extradays = ($pending_leaves - $total_leave_days);
+
+                                   $pending_leaves_update = ($extradays < 0 ? $remainingLeaveBalance : ($extradays + $remainingLeaveBalance));
+
+                                   if ($extradays >= 0)
+                                   {
+                                        $extradays = 0;
+                                   }
+                              }
+                              else
+                              {
+                                   $remainingLeaveBalance = $pendingLeavesDays[1];
+                                   $pending_leaves = $pendingLeavesDays[0];
+                                   $extradays = ($pending_leaves - $total_leave_days);
+
+                                   $pending_leaves_update = ($extradays < 0 ? $remainingLeaveBalance : ($extradays + $remainingLeaveBalance));
+                                   if ($extradays >= 0)
+                                   {
+                                        $extradays = 0;
+                                   }
+                              }
+                         }
+                         else
+                         {
+                              $extradays = ($pending_leaves - $total_leave_days);
+                              if ($extradays >= 0)
+                              {
+                                   $pending_leaves_update = $extradays;
+                                   $extradays = 0;
+                              }
+                              else
+                              {
+                                   $pending_leaves_update = 0;
+                              }
+                         }
+                         // code
+
+                         $leaveType = LeaveType::find($data->leave_type_id);
+
+                         if ($extradays != 0)
+                         {
+                              $leavedeductionarray[] = [
+                                   'employee_id'    => $id,
+                                   'number_of_days' => $data->total_leave_days_count,
+                                   'leave_title'    => $leaveType->title,
+                                   'leave_type_id'    => $leaveType->id,
+                                   'extradays'      => abs($extradays),
+                                   'amountdeduct'   => ($oneDaysalary * abs($extradays)),
+                                   // 'amountdeduct'   => number_format($oneDaysalary * abs($extradays), 2),
+                              ];
+                         }
+
+
+                         // update leave balance
+                         UserLeaveBalance::where("id", $userLeaveBalance->id)->update(['pending_leaves' => number_format($pending_leaves_update, 2)]);
+
+                         UserLeaveBalanceYear::where("leave_type_id", $data->leave_type_id)
+                              ->where("user_id", $employee->id)
+                              ->where("leaves_year", date('Y'))
+                              ->update(['pending_leaves' => number_format($pending_leaves_update, 2)]);
+                    }
+                    else
+                    {
+                         $leaveType = LeaveType::find($data->leave_type_id);
+
+                         if (!empty($leaveType))
+                         {
+                              $leavedeductionarray[] = [
+                                   'employee_id'    => $id,
+                                   'number_of_days' => $data->total_leave_days_count,
+                                   'leave_title'    => $leaveType->title,
+                                   'leave_type_id'    => $leaveType->id,
+                                   'extradays'      => abs($total_leave_days),
+                                   'amountdeduct'   => ($oneDaysalary * abs($total_leave_days)),
+                              ];
+                         }
+                    }
+                    // update leave balance
+               }
+          }
+
+          $allowance_json = json_encode($leavedeductionarray);
+          return $allowance_json;
+     }
+
+     public static function commission($id)
+     {
+          $data = Employee::where('id', $id)->first();
+          $commissions  = Commission_option::whereIn('employees_id', [0, $data->id])->where('created_by', \Auth::user()->creatorId())->where('play_slab_id', $data->play_slab_id)->get();
+          $total_commission = 0;
+          foreach ($commissions as $commission)
+          {
+               $total_commission = $commission->amount + $total_commission;
+          }
+          $commission_json = json_encode($commissions);
+          return $commission_json;
+     }
+
+     public static function loan($id, $formate_month_year)
+     {
+          $startDate = date($formate_month_year . '-d');
+          $loans =  Loan::whereDate('start_date', '<=', $startDate)->whereDate('end_date', '>=', $startDate)->where('created_by', \Auth::user()->creatorId())->where('employee_id', '=', $id)->get();
+          $total_loan = 0;
+          foreach ($loans as $loan)
+          {
+               $total_loan = $loan->amount + $total_loan;
+          }
+          $loan_json = json_encode($loans);
+
+          return $loan_json;
+     }
+
+     public static function loan_new($id, $formate_month_year)
+     {
+          $startDate = date($formate_month_year . '-d');
+
+          $loans =  Loan::whereDate('start_date', '<=', $startDate)->whereDate('end_date', '>=', $startDate)
+               ->where('created_by', \Auth::user()->creatorId())
+               ->where('employee_id', '=', $id)
+               ->where('loan_status', '!=', 1) // 0 = loan not started, 1 = loan started, 2 completed
+               ->get();
+
+          $loanData = [];
+
+          foreach ($loans as $loanRow)
+          {
+               // check is all lone installments are completed
+               $loanInstallments = LoanInstallments::where("loans_id", $loanRow->id)->get();
+
+               if (!empty($loanInstallments))
+               {
+                    $pendingInstallments = $loanInstallments->where("installment_status", 0); // 0 = not paid
+                    $paidInstallments = $loanInstallments->where("installment_status", 1); // 1 = paid
+
+                    if ($pendingInstallments == $paidInstallments) // if all installments are paid update loan status to paid
+                    {
+                         // Loan::where("id", $loanRow->id)->udpate(["loan_status" => 2]); // mark load as completed
+                    }
+                    else
+                    {
+                         // Loan::where("id", $loanRow->id)->udpate(["loan_status" => 1]); // mark loan as started
+
+                         // get Loan Installment amoutn of payrole month and adjust settlement
+                         $loanInstallments = LoanInstallments::where("loans_id", $loanRow->id)
+                              ->where("installment_status", 0) // 0 = not paid, 1 = paid
+                              ->whereYear("installment_date", date("Y", strtotime($startDate)))
+                              ->whereMonth("installment_date", date("m", strtotime($startDate)))
+                              ->get();
+
+                         foreach ($loanInstallments as $loanInstallmentsRow)
+                         {
+                              $installmentAmount = $loanInstallmentsRow->installment_amount;
+
+                              $loanData[] = [
+                                   "id" => $loanRow->id,
+                                   "name" => $loanRow->title,
+                                   "loan_object" => json_encode($loanRow),
+                                   "employee_id" => $loanRow->employee_id,
+                                   "installment_id" => $loanInstallmentsRow->id,
+                                   "installment_amount" => $installmentAmount,
+                                   "installment_object" => json_encode($loanInstallmentsRow),
+                              ];
+
+                              LoanInstallments::where("id", $loanInstallmentsRow->id)->update(["installment_status", 1]);
+
+                              // check if its last installment and all installmnets are paid then updare the loan status as completed
+
+                              $loanInstallmentsCheck = LoanInstallments::where("loans_id", $loanRow->id)->get();
+
+                              $pendingInstallmentsCheck = $loanInstallmentsCheck->where("installment_status", 0); // 0 = not paid
+                              $paidInstallmentsCheck = $loanInstallmentsCheck->where("installment_status", 1); // paid
+
+                              if ($pendingInstallmentsCheck == $paidInstallmentsCheck) // if all installments are paid update loan status to paid
+                              {
+                                   // Loan::where("id", $loanRow->id)->udpate(["loan_status" => 2]); // mark load as completed
+                              }
+
+                              // check if its last installment and all installmnets are paid then updare the loan status as completed
+                         }
+                    }
+               }
+          }
+
+
+          dd($loanData);
+          $total_loan = 0;
+          foreach ($loans as $loan)
+          {
+               $total_loan = $loan->amount + $total_loan;
+          }
+
+          $loan_json = json_encode($loans);
+
+          return $loan_json;
+     }
+
+     public static function saturation_deduction($id)
+     {
+          $data = Employee::where('id', $id)->first();
+
+          $saturation_deductions      = DeductionOption::whereIn('employees_id', [0, $id])->where('is_display', 'Yes')->where('created_by', \Auth::user()->creatorId())->where('play_slab_id', '=', $data->play_slab_id)->get();
+          $total_saturation_deduction = 0;
+          foreach ($saturation_deductions as $saturation_deduction)
+          {
+
+               $total_saturation_deduction = $saturation_deduction->amount + $total_saturation_deduction;
+          }
+          $saturation_deduction_json = json_encode($saturation_deductions);
+          return $saturation_deduction_json;
+     }
+
+     public static function other_payment($id)
+     {
+          $data = Employee::where('id', $id)->first();
+          $other_payments      = OtherPaymentotion::where('created_by', \Auth::user()->creatorId())->where('play_slab_id', '=', $data->play_slab_id)->get();
+          $total_other_payment = 0;
+          foreach ($other_payments as $other_payment)
+          {
+               $total_other_payment = $other_payment->amount + $total_other_payment;
+          }
+          $other_payment_json = json_encode($other_payments);
+          return $other_payment_json;
+     }
+
+     public static function overtime($id)
+     {
+          //Overtime
+          $over_times      = Overtime::where('employee_id', '=', $id)->get();
+          $total_over_time = 0;
+          foreach ($over_times as $over_time)
+          {
+               $total_work      = $over_time->number_of_days * $over_time->hours;
+               $amount          = $total_work * $over_time->rate;
+               $total_over_time = $amount + $total_over_time;
+          }
+          $over_time_json = json_encode($over_times);
+
+          return $over_time_json;
+     }
+
+
+     //  Employee Other Payments Deductions like PF, ESIC and others... 
+     //  Not in Use
+     public static function otherPaymentsDeductions($employeeId, $isGetTotalOnly = false)
+     {
+          $data = [];
+          $totalDeduction = 0;
+
+          try
+          {
+               $employeeData = Employee::select("id", "pf_amount", "pf_amount_percentage", "esic_amount", "esic_amount_percentage")->where('id', '=', $employeeId)->first();
+
+
+               if ($employeeData != null)
+               {
+                    $pf_amount = $employeeData->pf_amount;
+                    $pf_amount_percentage = $employeeData->pf_amount_percentage;
+
+                    $esic_amount = $employeeData->esic_amount;
+                    $esic_amount_percentage = $employeeData->esic_amount_percentage;
+
+                    // Add Pf Amount Deduction
+                    if ($pf_amount > 0)
+                    {
+                         $data[] = [
+                              "id" => 0,
+                              "name" => "PF",
+                              "amount" => $pf_amount,
+                              "amount_percentage" => $pf_amount_percentage,
+                              "type" => 0,
+                         ];
+
+                         $totalDeduction += $pf_amount;
+                    }
+
+                    // Add Esic Amount Deduction
+                    if ($esic_amount > 0)
+                    {
+                         $data[] = [
+                              "id" => 0,
+                              "name" => "ESIC",
+                              "amount" => $esic_amount,
+                              "amount_percentage" => $esic_amount_percentage,
+                              "type" => 1,
+                         ];
+
+                         $totalDeduction += $esic_amount;
+                    }
+               }
+          }
+          catch (Exception $ex)
+          {
+          }
+          catch (Throwable $ex)
+          {
+          }
+
+          if ($isGetTotalOnly)
+          {
+               return $totalDeduction;
+          }
+
+          return json_encode($data);
+     }
+
+     public static function employee_id()
+     {
+          $employee = Employee::latest()->first();
+
+          return !empty($employee) ? $employee->employee_id + 1 : 1;
+     }
+
+     public function branch()
+     {
+          return $this->hasOne('App\Models\Branch', 'id', 'branch_id');
+     }
+
+     public function phone()
+     {
+          return $this->hasOne('App\Models\Employee', 'id', 'phone');
+     }
+
+     public function department()
+     {
+          return $this->hasOne('App\Models\Department', 'id', 'department_id');
+     }
+
+     public function designation()
+     {
+          return $this->hasOne('App\Models\Designation', 'id', 'designation_id');
+     }
+
+     public function salaryType()
+     {
+          return $this->hasOne('App\Models\PayslipType', 'id', 'salary_type');
+     }
+
+     public function user()
+     {
+          return $this->hasOne('App\Models\User', 'id', 'user_id');
+     }
+
+     public function paySlip()
+     {
+          return $this->hasOne('App\Models\PaySlip', 'id', 'employee_id');
+     }
+
+     public function present_status($employee_id, $data)
+     {
+          return AttendanceEmployee::where('employee_id', $employee_id)->where('date', $data)->first();
+     }
+     public static function employee_name($name)
+     {
+          $employee = Employee::where('id', $name)->first();
+          if (!empty($employee))
+          {
+               return $employee->name;
+          }
+     }
+
+     public static function login_user($name)
+     {
+          $user = User::where('id', $name)->first();
+          return $user->name;
+     }
+
+     public static function employee_salary($salary)
+     {
+          $employee = Employee::where("salary", $salary)->first();
+          if ($employee->salary == '0' || $employee->salary == '0.0')
+          {
+               return "-";
+          }
+          else
+          {
+               return $employee->salary;
+          }
+     }
+
+     public function getDobAttribute($value)
+     {
+          if (Auth::user() != null)
+          {
+               return Auth::user()->dateFormat($value);
+          }
+          return $value;
+     }
+
+
+     public function getCompanyDojAttribute($value)
+     {
+          if (Auth::user() != null)
+          {
+               return Auth::user()->dateFormat($value);
+          }
+          return $value;
+     }
+
+
+     public function getProbationPeriodDateAttribute($value)
+     {
+          if (Auth::user() != null)
+          {
+               return Auth::user()->dateFormat($value);
+          }
+          return $value;
+     }
+
+
+
+     // New Payslip Structure Functions
+
+     // Payslip Earnings Functions Start
+
+     public static function payslipAllowanceEmployeeWise($employeeId, array $extraData = [], $allowancesIds = [], $calculateByEmployeeWorkingDays = true)
+     {
+          try
+          {
+               $employeeDetails = Employee::where('id', $employeeId)->first();
+
+               // earning_type  | 0 = Allowances, 1 = Commission, 2 = other payment earnings,
+               $employeeEarningsDetails = EmployeeEarningsDetails::where("employees_id", $employeeDetails->id)->where("earning_type", 0)
+                    ->when((!empty($allowancesIds) && count($allowancesIds) >= 1), function ($query) use ($allowancesIds)
+                    {
+                         $query->whereIn("earning_id", $allowancesIds);
+                    })
+                    ->get();
+
+               $total_allowance = 0;
+
+               $allowancesData = [];
+
+               $companyWorkingDays = $extraData["companyWorkingDays"];
+               $employeeWorkingDays = $extraData["employeeWorkingDays"];
+
+               // getting basic salary
+               $salary = $employeeDetails->salary;
+               foreach ($employeeEarningsDetails as $employeeEarningsRow)
+               {
+                    $allowance = AllowanceOption::where('id', $employeeEarningsRow->earning_id)->first();
+
+                    $allowanceAmount = 0;
+                    $allowancePercentage = 0;
+
+                    if ($allowance != null)
+                    {
+                         // dd($allowance->name, $allowance->type, $employeeEarningsRow->amount);
+                         if ($allowance->type == "fixed") // if fixed amount nthen add it directly.
+                         {
+                              if ($calculateByEmployeeWorkingDays)
+                              {
+                                   $allowanceAmount = ($employeeEarningsRow->amount / $companyWorkingDays * $employeeWorkingDays);
+                              }
+                              else
+                              {
+                                   $allowanceAmount = $employeeEarningsRow->amount;
+                              }
+                              $allowancePercentage = 0;
+                         }
+                         else // else consioder it as a percentage amount, and get allowance amount from basic salary of percentage of allowance then add it.
+                         {
+                              $allowancePercentage = $employeeEarningsRow->amount;
+
+                              $percentageAmount = (($salary * $employeeEarningsRow->amount) / 100);
+
+                              if ($calculateByEmployeeWorkingDays)
+                              {
+                                   $allowanceAmount = ($percentageAmount / $companyWorkingDays * $employeeWorkingDays);
+                              }
+                              else
+                              {
+                                   $allowanceAmount = $percentageAmount;
+                              }
+                         }
+
+                         // $allowance->employeeAllowance = $employeeEarningsRow->toArray();
+                         $allowancesData[] = [
+                              "id" => $allowance->id,
+                              "employee_table_id" => $employeeEarningsRow->id,
+                              "name" => $allowance->name,
+                              "shortName" => $allowance->short_name,
+                              "type" => $allowance->type,
+                              "percentage" => $allowancePercentage,
+                              "amount" => numberFormat(round($allowanceAmount), 0),
+                              "raw_amount" => $allowanceAmount,
+                              "displayInSalarySlip" => ($allowance->is_display_slary_slip == 1 ? true : false),
+                              // "dbObject" => $allowance->toArray(),
+                         ];
+
+                         $total_allowance += numberFormat(round($allowanceAmount), 0);
+                    }
+               }
+               return ["total" => $total_allowance, 'data' => $allowancesData];
+          }
+          catch (Exception | Throwable $ex)
+          {
+               // dd($ex);
+               return ["total" => 0, 'data' => []];
+          }
+     }
+
+     public static function paySlipCommissionEmployeeWise($employeeId, array $extraData = [], $calculateByEmployeeWorkingDays = true)
+     {
+          try
+          {
+               $companyWorkingDays = $extraData["companyWorkingDays"];
+               $employeeWorkingDays = $extraData["employeeWorkingDays"];
+
+               $employeeDetails = Employee::where('id', $employeeId)->first();
+               $commissionData = [];
+
+               // earning_type  | 0 = Allowances, 1 = Commission, 2 = other payment earnings,
+               $employeeEarningsDetails = EmployeeEarningsDetails::where("employees_id", $employeeDetails->id)->where("earning_type", 1)->get();
+
+               $total_commission = 0;
+
+               // getting basic salary
+               $salary = $employeeDetails->salary;
+
+               foreach ($employeeEarningsDetails as $employeeEarningsRow)
+               {
+                    $commissionAmount = 0;
+                    $commissionPercentage = 0;
+
+                    $commission = Commission_option::where('id', $employeeEarningsRow->earning_id)->first();
+                    if ($commission != null)
+                    {
+                         if ($commission->type == "fixed") // if fixed amount nthen add it directly.
+                         {
+                              if ($calculateByEmployeeWorkingDays)
+                              {
+                                   $commissionAmount = ($employeeEarningsRow->amount / $companyWorkingDays * $employeeWorkingDays);
+                              }
+                              else
+                              {
+                                   $commissionAmount = $employeeEarningsRow->amount;
+                              }
+                              $commissionPercentage = 0;
+                         }
+                         else // else consioder it as a percentage amount, and get commission amount from basic salary of percentage of commission then add it.
+                         {
+                              $commissionPercentage = $employeeEarningsRow->amount;
+
+                              $percentageAmount = (($salary * $employeeEarningsRow->amount) / 100);
+
+                              if ($calculateByEmployeeWorkingDays)
+                              {
+                                   $commissionAmount = ($percentageAmount / $companyWorkingDays * $employeeWorkingDays);
+                              }
+                              else
+                              {
+                                   $commissionAmount = $percentageAmount;
+                              }
+                         }
+
+                         // $commission->employeeCommission = $employeeEarningsRow->toArray();
+                         $commissionData[] = [
+                              "id" => $commission->id,
+                              "employee_table_id" => $employeeEarningsRow->id,
+                              "name" => $commission->name,
+                              "shortName" => $commission->short_name,
+                              "type" => $commission->type,
+                              "percentage" => $commissionPercentage,
+                              "amount" => numberFormat(round($commissionAmount), 0),
+                              "raw_amount" => $commissionAmount,
+                              "displayInSalarySlip" => true,
+                              // "dbObject" => $commission->toArray(),
+                         ];
+
+                         $total_commission += numberFormat(round($commissionAmount), 0);
+                    }
+               }
+
+               return ["total" => $total_commission, 'data' => $commissionData];
+          }
+          catch (Exception | Throwable $ex)
+          {
+               return ["total" => 0, 'data' => []];
+          }
+     }
+
+     // this calculations is pending, need to discuss and then calculate accordingly
+     public static function paySlipOvertime($id)
+     {
+          try
+          {
+               //Overtime
+               $over_times      = Overtime::where('employee_id', '=', $id)->get();
+               $total_over_time = 0;
+               foreach ($over_times as $over_time)
+               {
+                    $total_work      = $over_time->number_of_days * $over_time->hours;
+                    $amount          = $total_work * $over_time->rate;
+                    $total_over_time = $amount + $total_over_time;
+               }
+               // $over_time_json = json_encode($over_times);
+
+               return ["total" => $total_over_time, 'data' => $over_times->toArray()];
+          }
+          catch (Exception | Throwable $ex)
+          {
+               return ["total" => 0, 'data' => []];
+          }
+     }
+
+     public static function paySlipOtherPaymentEarningsEmployeeWise($employeeId, array $extraData = [], $calculateByEmployeeWorkingDays = true)
+     {
+          try
+          {
+               $companyWorkingDays = $extraData["companyWorkingDays"];
+               $employeeWorkingDays = $extraData["employeeWorkingDays"];
+
+               $employeeDetails = Employee::where('id', $employeeId)->first();
+
+               // earning_type  | 0 = Allowances, 1 = Commission, 2 = other payment earnings,
+               $employeeEarningsDetails = EmployeeEarningsDetails::where("employees_id", $employeeDetails->id)->where("earning_type", 2)->get();
+
+               $total_other_payment = 0;
+               $otherPaymentData = [];
+
+               // getting basic salary
+               $salary = $employeeDetails->salary;
+
+               foreach ($employeeEarningsDetails as $employeeEarningsRow)
+               {
+                    $other_payment = OtherPaymentotion::where('id', $employeeEarningsRow->earning_id)->first();
+
+                    if ($other_payment != null)
+                    {
+                         $otherPaymentAmount = 0;
+                         $otherPaymentPercentage = 0;
+
+                         if ($other_payment->type == "fixed") // if fixed amount nthen add it directly.
+                         {
+                              if ($calculateByEmployeeWorkingDays)
+                              {
+                                   $otherPaymentAmount = ($employeeEarningsRow->amount / $companyWorkingDays * $employeeWorkingDays);
+                              }
+                              else
+                              {
+                                   $otherPaymentAmount = $employeeEarningsRow->amount;
+                              }
+                              $otherPaymentPercentage = 0;
+                         }
+                         else // else consioder it as a percentage amount, and get other_payment amount from basic salary of percentage of other_payment then add it.
+                         {
+                              $otherPaymentPercentage = $employeeEarningsRow->amount;
+
+                              $percentageAmount = (($salary * $employeeEarningsRow->amount) / 100);
+
+                              if ($calculateByEmployeeWorkingDays)
+                              {
+                                   $otherPaymentAmount = ($percentageAmount / $companyWorkingDays * $employeeWorkingDays);
+                              }
+                              else
+                              {
+                                   $otherPaymentAmount = $percentageAmount;
+                              }
+                         }
+
+                         $total_other_payment += numberFormat(round($otherPaymentAmount), 0);
+
+                         // $other_payment->employeeCommission = $employeeEarningsRow->toArray();
+
+                         $otherPaymentData[] = [
+                              "id" => $other_payment->id,
+                              "employee_table_id" => $employeeEarningsRow->id,
+                              "name" => $other_payment->name,
+                              "shortName" => $other_payment->name,
+                              "type" => $other_payment->type,
+                              "percentage" => $otherPaymentPercentage,
+                              "raw_amount" => $otherPaymentAmount,
+                              "amount" => numberFormat(round($otherPaymentAmount), 0),
+                              "displayInSalarySlip" => true,
+                              // "dbObject" => $other_payment->toArray(),
+                         ];
+                    }
+               }
+
+               return ["total" => $total_other_payment, 'data' => $otherPaymentData];
+          }
+          catch (Exception | Throwable $ex)
+          {
+               return ["total" => 0, 'data' => []];
+          }
+     }
+
+     public static function statutoryBonusEarningsEmployeeWise($employeeId, array $extraData = [], $calculateByEmployeeWorkingDays = true)
+     {
+          try
+          {
+               $companyWorkingDays = $extraData["companyWorkingDays"];
+               $employeeWorkingDays = $extraData["employeeWorkingDays"];
+
+               $employeeDetails = Employee::where('id', $employeeId)->first();
+
+               $totalAmount = 0;
+               $statutoryBonusPaymentData = [];
+
+               if ($employeeDetails->statutory_bonus_status == 1 && $employeeDetails->statutory_bonus > 0)
+               {
+                    $salary = $employeeDetails->salary;
+
+                    if ($calculateByEmployeeWorkingDays)
+                    {
+                         $statutoryBonusAmount = ($employeeDetails->statutory_bonus / $companyWorkingDays * $employeeWorkingDays);
+                    }
+                    else
+                    {
+                         $statutoryBonusAmount = $employeeDetails->statutory_bonus;
+                    }
+                    $statutoryBonusPercentage = 0;
+
+                    $statutoryBonusPaymentData = [
+                         "name" => "Statutory Bonus",
+                         "type" => "fixed",
+                         "percentage" => $statutoryBonusPercentage,
+                         "raw_amount" => $statutoryBonusAmount,
+                         "amount" => numberFormat(round($statutoryBonusAmount), 0),
+                         "displayInSalarySlip" => true,
+                    ];
+
+                    $totalAmount += numberFormat(round($statutoryBonusAmount), 0);
+               }
+
+
+               return ["total" => $totalAmount, 'data' => $statutoryBonusPaymentData];
+          }
+          catch (Exception | Throwable $ex)
+          {
+               return ["total" => 0, 'data' => []];
+          }
+     }
+
+     // Payslip Earnings Functions End
+
+     /**
+      * Pay Slip Saturation Deduction Calculations Employees (Took Deductions Data which is generalised we have stored it as individual employee wise, so getting data from those tables adn calculating it ).
+      *
+      * @param  mixed $employeeId
+      * @return void
+      */
+     public static function paySlipSaturationDeductionEmployeeWise($employeeId, array $extraData = [], $calculateByEmployeeWorkingDays = true)
+     {
+          try
+          {
+               $companyWorkingDays = $extraData["companyWorkingDays"];
+               $employeeWorkingDays = $extraData["employeeWorkingDays"];
+
+               $employeeDetails = Employee::where('id', $employeeId)->first();
+
+               // deduction_type  | 0 = Deductions Options
+               $employeeDeductionDetails = EmployeeDeductionsDetails::where("employees_id", $employeeDetails->id)->where("deduction_type", 0)->get();
+
+               $total_saturation_deduction = 0;
+               $saturationDeductionData = [];
+
+               // getting basic salary
+               $salary = $employeeDetails->salary;
+
+               foreach ($employeeDeductionDetails as $employeeDeductionRow)
+               {
+                    $saturationDeduction = DeductionOption::where('id', $employeeDeductionRow->deduction_id)->first();
+
+                    $saturationDeductionAmount = 0;
+                    $saturationDeductionPercentage = 0;
+
+                    if ($saturationDeduction->type == "fixed") // if fixed amount nthen add it directly.
+                    {
+                         if ($calculateByEmployeeWorkingDays)
+                         {
+                              $saturationDeductionAmount = ($employeeDeductionRow->amount / $companyWorkingDays * $employeeWorkingDays);
+                         }
+                         else
+                         {
+                              $saturationDeductionAmount = $employeeDeductionRow->amount;
+                         }
+                         $saturationDeductionPercentage = 0;
+                    }
+                    else // else consioder it as a percentage amount, and get saturationDeduction amount from basic salary of percentage of saturationDeduction then add it.
+                    {
+                         $saturationDeductionPercentage = $employeeDeductionRow->amount;
+
+                         $percentageAmount = (($salary * $employeeDeductionRow->amount) / 100);
+
+                         if ($calculateByEmployeeWorkingDays)
+                         {
+                              $saturationDeductionAmount = ($percentageAmount / $companyWorkingDays * $employeeWorkingDays);
+                         }
+                         else
+                         {
+                              $saturationDeductionAmount = $percentageAmount;
+                         }
+                    }
+
+                    $total_saturation_deduction += numberFormat(round($saturationDeductionAmount), 0);
+
+                    $saturationDeduction->employeeDeductionOption = $employeeDeductionRow->toArray();
+
+                    $saturationDeductionData[] = [
+                         "id" => $saturationDeduction->id,
+                         "name" => $saturationDeduction->name,
+                         "shortName" => $saturationDeduction->short_name,
+                         "type" => $saturationDeduction->type,
+                         "percentage" => $saturationDeductionPercentage,
+                         "amount" => numberFormat(round($saturationDeductionAmount), 0),
+                         "raw_amount" => $saturationDeductionAmount,
+                         "displayInSalarySlip" => ($saturationDeduction->is_display_slary_slip == 1 ? true : false),
+                    ];
+               }
+
+               return ["total" => $total_saturation_deduction, 'data' => $saturationDeductionData];
+          }
+          catch (Exception | Throwable $ex)
+          {
+               return ["total" => 0, 'data' => []];
+          }
+     }
+
+     /**
+      * Pay Slip Loan Deductions Calculations
+      *
+      * @param  mixed $employeeId
+      * @param  mixed $formate_month_year
+      * @return void
+      */
+     public static function paySlipLoanDeduction($employeeId, $formate_month_year, $updateLoanStatus = true)
+     {
+          try
+          {
+               $employeeDetails = Employee::where('id', $employeeId)->first();
+
+               $total_loan_deduction = 0;
+               $loanDeductionData = [];
+
+               $startDate = date($formate_month_year . '-d');
+               $year = date("Y", strtotime($startDate));
+               $month = date("m", strtotime($startDate));
+
+               // getting basic salary
+               $salary = $employeeDetails->salary;
+
+               // get all lones for current months
+               $loansIds =  Loan::whereIn('loan_status', [0, 1])
+                    ->where('created_by', $employeeDetails->created_by)
+                    ->where('employee_id', '=', $employeeId)
+                    ->where('start_date', '>=', date("Y-m-d"))
+                    // ->where('end_date', '<=', date("Y-m-d"))
+                    ->get()
+                    ->pluck("id")
+                    ->toArray();
+
+               $loanInstallments = LoanInstallments::whereIn("loans_id", $loansIds)->whereYear("installment_date", $year)->whereMonth("installment_date", $month)->where("installment_status", 0)->get();
+
+               // DB::beginTransaction();
+               foreach ($loanInstallments as $loanInstallment)
+               {
+                    $loanDeductionAmount = $loanInstallment->installment_amount;
+                    $loanDeductionPercentage = 0;
+
+                    $loan = $loanInstallment->loan();
+                    $loan->loanInstallment = $loanInstallment->toArray();
+
+                    $loanDeductionData[] = [
+                         "id" => $loan->id,
+                         "name" => $loan->title,
+                         "shortName" => $loan->title,
+                         "type" => "fixed", // static fixed 
+                         "percentage" => $loanDeductionPercentage,
+                         "amount" => numberFormat(round($loanDeductionAmount), 0),
+                         "raw_amount" => $loanDeductionAmount,
+                         "displayInSalarySlip" => true,
+                         // "dbObject" => $loan->toArray(),
+                    ];
+
+                    if ($updateLoanStatus)
+                    {
+                         // update current loan installment as paid
+                         LoanInstallments::where("id", $loanInstallment->id)->update(["installment_status" => 1]);
+
+                         // check if all loan installments are paid then update loan status as paid
+                         $paidLoanInstallmentCounts = LoanInstallments::where("loans_id", $loan->id)->where("installment_status", 1)->get()->count();
+                         if ($loan->loan_installments == $paidLoanInstallmentCounts)
+                         {
+                              Loan::where("id", $loan->id)->update(["loan_status" => 2]); // mark loan is completed
+                         }
+                         else
+                         {
+                              if ($loan->loan_status == 0) // check if loan is not started then mark loan as started | if loan status is 1 means loan is already started then ignore this do not peform any operation
+                              {
+                                   Loan::where("id", $loan->id)->update(["loan_status" => 1]); // mark lone as loan started
+                              }
+                         }
+                    }
+
+                    $total_loan_deduction += numberFormat(round($loanDeductionAmount), 0);
+               }
+
+               // DB::commit();
+
+               return ["total" => $total_loan_deduction, 'data' => $loanDeductionData];
+          }
+          catch (Exception | Throwable $ex)
+          {
+               return ["total" => 0, 'data' => []];
+          }
+     }
+
+
+     /**
+      * Pay SLip Leave Deduction Calculations
+      *
+      * @param  mixed $id
+      * @param  mixed $month_year
+      * @return void
+      */
+     public static function paySlipLeaveDeduction($id, $month_year, $updateLeaveBalance = true, $leaveId = 0, $created_by = 0)
+     {
+          try
+          {
+               if ($created_by == 0)
+               {
+                    $created_by = Auth::user()->creatorId();
+               }
+               $years  = date("Y", strtotime($month_year));
+               $month  = date("m", strtotime($month_year));
+
+               // dd(
+               //      [
+               //           "years" => $years,
+               //           "month" => $month,
+               //           "created_by" => $created_by,
+               //           "id" => $id,
+               //           "leaveId" => $leaveId,
+               //      ]
+               // );
+
+               $leaveData = Leave::where('created_by', $created_by)
+                    ->where('employee_id', '=', $id)
+                    ->select(
+                         DB::raw('sum(total_leave_days) as total_leave_days_count'),
+                         'leave_type_id',
+                         'total_leave_days',
+                         'employee_id',
+                         'start_date',
+                         'end_date'
+                    )
+                    ->whereYear('start_date', $years)
+                    ->whereMonth('start_date', $month)
+                    ->when($leaveId > 0, function ($query) use ($leaveId)
+                    {
+                         $query->where("id", $leaveId);
+                    })
+                    ->where("status", "Approved")
+                    ->groupBy('leave_type_id')
+                    ->get();
+
+               $leavedeductionarray = [];
+
+               $employee = Employee::where('id', $id)->first();
+               $basic_salary = $employee->salary;
+
+               $extraLeaveDays = 0;
+
+               $companyWorkingDays = getCompanyWorkingDays();
+
+               $oneDaysalary = 0;
+               if ($companyWorkingDays > 0)
+               {
+                    $oneDaysalary = $basic_salary / $companyWorkingDays;
+               }
+
+               // dd($basic_salary, $oneDaysalary, $employee);
+
+               $pending_leaves_update = 0;
+
+               $leaveDeductionAmountTotal = 0;
+
+               $deducted_leave_balance_total = 0;
+               $extra_leave_days_total = 0;
+
+               if (!empty($leaveData))
+               {
+                    foreach ($leaveData as $data)
+                    {
+                         $deducted_leave_balance = 0;
+                         $extra_leave_days = 0;
+
+                         $total_leave_days = $data->total_leave_days_count;
+
+                         // New leave days calculations
+                         $appliedLeaveDays = explode('.', $total_leave_days);
+                         $appliedLeaveDaysFirstElement = abs(isset($appliedLeaveDays[0]) ? $appliedLeaveDays[0] : 0);
+                         $appliedLeaveDaysSecondElement = abs(isset($appliedLeaveDays[1]) ? $appliedLeaveDays[1] : 0);
+
+                         if ($appliedLeaveDaysSecondElement == 5)
+                         {
+                              $appliedLeaveDaysSecondElement = 50;
+                         }
+
+                         // dd(
+                         //      [
+                         //           "appliedLeaveDaysFirstElement" => $appliedLeaveDaysFirstElement,
+                         //           "appliedLeaveDaysSecondElement" => $appliedLeaveDaysSecondElement,
+                         //           "appliedLeaveDaysSecondElement round" => numberFormat($appliedLeaveDaysSecondElement),
+                         //      ]
+                         // );
+
+                         $allowLeaveDaysCount = 0;
+                         if ($appliedLeaveDaysFirstElement != 0)
+                         {
+                              $allowLeaveDaysCount += $appliedLeaveDaysFirstElement;
+                         }
+
+                         if ($appliedLeaveDaysSecondElement != 0)
+                         {
+                              if ($appliedLeaveDaysSecondElement == 50 || ($appliedLeaveDaysSecondElement > 50 && $appliedLeaveDaysSecondElement <= 99))
+                              {
+                                   $allowLeaveDaysCount += 0.50;
+                              }
+                         }
+
+                         // dd("allowLeaveDaysCount", $allowLeaveDaysCount, "total_leave_days", $total_leave_days);
+
+                         $total_leave_days = $allowLeaveDaysCount;
+                         // New leave days calculations
+
+
+                         // update leave balance
+                         $userLeaveBalance = UserLeaveBalance::where("leave_type_id", $data->leave_type_id)->where("user_id", $employee->id)->orderby("id", "DESC")->first();
+                         // dd($userLeaveBalance);
+
+                         if ($userLeaveBalance != null)
+                         {
+                              $pending_leaves = $userLeaveBalance->pending_leaves;
+
+                              // code
+                              $remainingLeaveBalance = 0;
+                              $pendingLeavesDays = explode('.', $pending_leaves);
+                              $pending_leaves_update = 0;
+
+
+                              if (isset($pendingLeavesDays[1]))
+                              {
+                                   if (strlen($pendingLeavesDays[1]) == 1)
+                                   {
+                                        $pendingLeavesDays[1] = "0." . ($pendingLeavesDays[1]) . "0";
+                                   }
+                                   else
+                                   {
+                                        $pendingLeavesDays[1] = "0." . ($pendingLeavesDays[1]);
+                                   }
+
+
+
+                                   if ($pendingLeavesDays[1] >= 0.50)
+                                   {
+                                        $remainingLeaveBalance = ($pendingLeavesDays[1] - 0.50);
+
+                                        // dd("out", $remainingLeaveBalance);
+
+                                        $pending_leaves = $pending_leaves - $remainingLeaveBalance;
+                                        $extradays = ($pending_leaves - $total_leave_days);
+
+                                        $pending_leaves_update = ($extradays < 0 ? $remainingLeaveBalance : ($extradays + $remainingLeaveBalance));
+
+                                        if ($extradays >= 0)
+                                        {
+                                             $extradays = 0;
+                                        }
+                                   }
+                                   else
+                                   {
+                                        $remainingLeaveBalance = $pendingLeavesDays[1];
+                                        $pending_leaves = $pendingLeavesDays[0];
+                                        $extradays = ($pending_leaves - $total_leave_days);
+
+                                        $pending_leaves_update = ($extradays < 0 ? $remainingLeaveBalance : ($extradays + $remainingLeaveBalance));
+                                        if ($extradays >= 0)
+                                        {
+                                             $extradays = 0;
+                                        }
+                                   }
+                              }
+                              else
+                              {
+                                   $extradays = ($pending_leaves - $total_leave_days);
+                                   if ($extradays >= 0)
+                                   {
+                                        $pending_leaves_update = $extradays;
+                                        $extradays = 0;
+                                   }
+                                   else
+                                   {
+                                        $pending_leaves_update = 0;
+                                   }
+                              }
+                              // code
+
+                              $leaveType = LeaveType::find($data->leave_type_id);
+
+                              if ($extradays != 0)
+                              {
+                                   $leaveDeductionAmount = ($oneDaysalary * abs($extradays));
+                                   $leavedeductionarray[] = [
+                                        'employee_id'    => $id,
+                                        'number_of_days' => $data->total_leave_days_count,
+                                        'leave_title'    => $leaveType->title,
+                                        'leave_type_id'    => $leaveType->id,
+                                        'extradays'      => abs($extradays),
+                                        'amountdeduct'   => $leaveDeductionAmount,
+                                        'name' => $leaveType->title,
+                                        'shortName' => $leaveType->title,
+                                        'type' => "fixed",
+                                        'pencentage' => 0,
+                                        'amount' => $leaveDeductionAmount,
+                                        'dbObject' => $data->toArray()
+                                   ];
+
+                                   $leaveDeductionAmountTotal += $leaveDeductionAmount;
+
+                                   $extraLeaveDays += abs($extradays);
+
+                                   $extra_leave_days = abs($extradays);
+                              }
+
+                              // update leave balance
+
+                              // dd([
+                              //      "user Leave Balance" => $pending_leaves,
+                              //      "total leave days" => $total_leave_days,
+                              //      "extra days" => $extradays,
+                              //      "pending leaves update" => $pending_leaves_update,
+                              //      "update Leave Balance" => $updateLeaveBalance,
+                              // ]);
+
+                              if ($pending_leaves_update == $userLeaveBalance->pending_leaves)
+                              {
+                                   $deducted_leave_balance = $pending_leaves_update;
+                              }
+                              else
+                              {
+                                   $deducted_leave_balance = ($userLeaveBalance->pending_leaves - $pending_leaves_update);
+                              }
+
+                              if ($updateLeaveBalance)
+                              {
+                                   UserLeaveBalance::where("id", $userLeaveBalance->id)->update(['pending_leaves' => number_format($pending_leaves_update, 2)]);
+
+                                   UserLeaveBalanceYear::where("leave_type_id", $data->leave_type_id)
+                                        ->where("user_id", $employee->id)
+                                        ->where("leaves_year", date('Y'))
+                                        ->update(['pending_leaves' => number_format($pending_leaves_update, 2)]);
+                              }
+                         }
+                         else
+                         {
+                              $leaveType = LeaveType::find($data->leave_type_id);
+
+                              if (!empty($leaveType))
+                              {
+                                   $leavedeductionarray[] = [
+                                        'employee_id'    => $id,
+                                        'leave_id'    => $data->id,
+                                        'number_of_days' => $data->total_leave_days_count,
+                                        'leave_title'    => $leaveType->title,
+                                        'leave_type_id'    => $leaveType->id,
+                                        'extradays'      => abs($total_leave_days),
+                                        'amountdeduct'   => ($oneDaysalary * abs($total_leave_days)),
+                                        'dbObject' => $data->toArray(),
+
+                                        'name' => $leaveType->title,
+                                        'shortName' => $leaveType->title,
+                                        'type' => "fixed",
+                                        'pencentage' => 0,
+                                        'amount'   => ($oneDaysalary * abs($total_leave_days)),
+                                   ];
+
+                                   $extraLeaveDays += abs($total_leave_days);
+
+                                   $extra_leave_days = abs($total_leave_days);
+                              }
+                         }
+                         // update leave balance
+
+                         // dd([
+                         //      "deducted_leave_balance" => $deducted_leave_balance,
+                         //      "extra_leave_days" => $extra_leave_days,
+                         //      "updateLeaveBalance" => $updateLeaveBalance
+                         // ]);
+
+                         // if ($updateLeaveBalance)
+                         // {
+                         //      $leaveData = Leave::where('id', '=', $data->id)
+                         //           ->where('employee_id', '=', $data->employee_id)
+                         //           ->update([
+                         //                "deducted_leave_balance" => $deducted_leave_balance,
+                         //                "extra_leave_days" => $extra_leave_days,
+                         //           ]);
+                         // }
+
+                         $deducted_leave_balance_total += $deducted_leave_balance;
+                         $extra_leave_days_total += $extra_leave_days;
+                    }
+               }
+
+               return [
+                    "total" => $leaveDeductionAmountTotal,
+                    'data' => $leavedeductionarray,
+                    'extraLeaveDays' => $extraLeaveDays,
+
+                    "deducted_leave_balance_total" => $deducted_leave_balance_total,
+                    "extra_leave_days_total" => $extra_leave_days_total,
+               ];
+          }
+          catch (Exception | Throwable $ex)
+          {
+               dd("error", $ex);
+               return ["total" => 0, 'data' => [], 'extraLeaveDays' => 0];
+          }
+     }
+
+     public static function paySlipLeaveDeduction_Test($pending_leaves, $total_leave_days)
+     {
+          // code
+          $remainingLeaveBalance = 0;
+          $pendingLeavesDays = explode('.', $pending_leaves);
+          $leaveBalance = explode('.', $pending_leaves);
+
+          $pending_leaves_update = 0;
+          $extradays = 0;
+
+          // New Logic
+          $appliedLeaveDays = explode('.', $total_leave_days);
+          $appliedLeaveDaysFirstElement = abs(isset($appliedLeaveDays[0]) ? $appliedLeaveDays[0] : 0);
+          $appliedLeaveDaysSecondElement = abs(isset($appliedLeaveDays[1]) ? $appliedLeaveDays[1] : 0);
+
+          $allowLeaveDaysCount = 0;
+          if ($appliedLeaveDaysFirstElement != 0)
+          {
+               $allowLeaveDaysCount += $appliedLeaveDaysFirstElement;
+          }
+
+          if ($appliedLeaveDaysSecondElement != 0)
+          {
+               if ($appliedLeaveDaysSecondElement == 50 || ($appliedLeaveDaysSecondElement > 50 && $appliedLeaveDaysSecondElement <= 99))
+               {
+                    $allowLeaveDaysCount += 0.50;
+               }
+          }
+
+          $total_leave_days = $allowLeaveDaysCount;
+          // New Logic
+
+          if (isset($pendingLeavesDays[1]))
+          {
+               if (strlen($pendingLeavesDays[1]) == 1)
+               {
+                    $pendingLeavesDays[1] = "0." . ($pendingLeavesDays[1]) . "0";
+               }
+               else
+               {
+                    $pendingLeavesDays[1] = "0." . ($pendingLeavesDays[1]);
+               }
+
+               if ($pendingLeavesDays[1] >= 0.50 && preg_match('/\.50$/', $pending_leaves))
+               {
+                    $remainingLeaveBalance = ($pendingLeavesDays[1] - 0.50);
+
+                    $pending_leaves = $pending_leaves - $remainingLeaveBalance;
+                    $extradays = ($pending_leaves - $total_leave_days);
+
+                    $pending_leaves_update = ($extradays < 0 ? $remainingLeaveBalance : ($extradays + $remainingLeaveBalance));
+
+                    if ($extradays >= 0)
+                    {
+                         $extradays = 0;
+                    }
+               }
+               else
+               {
+                    $remainingLeaveBalance = $pendingLeavesDays[1];
+                    $pending_leaves = $pendingLeavesDays[0];
+                    $extradays = ($pending_leaves - $total_leave_days);
+
+                    $pending_leaves_update = ($extradays < 0 ? $remainingLeaveBalance : ($extradays + $remainingLeaveBalance));
+                    if ($extradays >= 0)
+                    {
+                         $extradays = 0;
+                    }
+               }
+          }
+          else
+          {
+               $extradays = ($pending_leaves - $total_leave_days);
+               if ($extradays >= 0)
+               {
+                    $pending_leaves_update = $extradays;
+                    $extradays = 0;
+               }
+               else
+               {
+                    $pending_leaves_update = 0;
+               }
+          }
+          // code
+     }
+
+     public static function settleLeave($leaveBalance, $requestedLeave)
+     {
+          $settledLeave = min($leaveBalance, 0.50);
+          $extraDays = max(0, $requestedLeave - $settledLeave); // Extra days can't be negative
+          return [$settledLeave, $extraDays];
+     }
+
+     public static function checkLeave($value, $rules)
+     {
+          foreach ($rules as $rule)
+          {
+               $min = $rule['min'];
+               $max = $rule['max'];
+               $allowance = $rule['allowance'];
+
+               if ($value >= $min && $value <= $max)
+               {
+                    return "Allowed: " . $allowance;
+               }
+          }
+          return "Not allowed";
+     }
+
+
+
+
+     /**
+      * Employee Other Payments Deductions like PF, ESIC and others...
+      *
+      * @param  mixed $employeeId
+      * @param  mixed $salary
+      * @return void
+      */
+     public static function paySlipOtherPaymentsDeductions($employeeId, $salaryWithGrossEarninig, array $extraData = [])
+     {
+          // EPF | Employee Provident Fund
+          // ESI | Employees State Insurance
+          // EPT | Employees Professional Tax
+
+          $data = [];
+          $totalDeduction = 0;
+
+          $companyWorkingDays = $extraData["companyWorkingDays"];
+          $employeeWorkingDays = $extraData["employeeWorkingDays"];
+
+          try
+          {
+               $employeeData = Employee::where('id', '=', $employeeId)->first();
+
+               // Employee Provident Fund Deduction
+               $EpfDeduction = StatutoryDeductionsEpf::where("created_by", $employeeData->created_by)->first();
+
+               if ($EpfDeduction != null)
+               {
+                    if ($EpfDeduction->status == 1 && $employeeData->epf_status == 1)
+                    {
+                         $employee_contribution_rate = $EpfDeduction->employee_contribution_rate;
+                         $employer_contribution_rate = $EpfDeduction->employer_contribution_rate;
+                         $override_employee_pf = $EpfDeduction->override_employee_pf;
+
+                         // override_employee_pf == 1 means get epf deduction percentage data from employee
+                         $employee_epf_status = 1;
+
+                         $epf_number = $EpfDeduction->epf_number;
+                         if ($override_employee_pf == 1)
+                         {
+                              $employee_contribution_rate = $employeeData->epf_employee_contribution_rate;
+                              $employer_contribution_rate = $employeeData->epf_employer_contribution_rate;
+
+                              $employee_epf_status = $employeeData->epf_status;
+
+                              $epf_number = $employeeData->epf_number;
+                         }
+
+                         $employeeContributionAmount = 0;
+                         $employeerContributionAmount = 0;
+
+                         // 
+
+                         $allowancesIds = (json_decode($EpfDeduction->epf_deductions_allowances_ids ?? '') ?? []);
+                         $epfDeductionsAllowancesTotalAmount = 0;
+                         $epfDeductionsAllowancesData = [];
+
+                         $epfDeductionsAllowancesTotalAmountDataRow = Employee::payslipAllowanceEmployeeWise($employeeId, $extraData, $allowancesIds);
+                         if (!empty($epfDeductionsAllowancesTotalAmountDataRow))
+                         {
+                              $epfDeductionsAllowancesTotalAmount = $epfDeductionsAllowancesTotalAmountDataRow["total"]; //6865
+                              $epfDeductionsAllowancesData = $epfDeductionsAllowancesTotalAmountDataRow["data"];
+                         }
+
+                         $EpfDeduction->epfDeductionsAllowancesData = $epfDeductionsAllowancesData ?? [];
+
+                         $epf_limit_threshold = $EpfDeduction->epf_limit;
+                         $epf_limit = numberFormat(round($epf_limit_threshold / $companyWorkingDays * $employeeWorkingDays));
+
+                         $epfWagesAmount = ($salaryWithGrossEarninig - $epfDeductionsAllowancesTotalAmount);
+
+                         if ($epf_limit > 0) // check if epf_limit is grater than 0
+                         {
+                              // check epfWagesAmount amount is less then epf_limit then calculate 
+                              // employee contribution and employer contribution percentage of epfWagesAmount
+                              if ($epfWagesAmount < $epf_limit)
+                              {
+                                   if ($employee_contribution_rate > 0)
+                                   {
+                                        $employeeContributionAmount = (($epfWagesAmount * $employee_contribution_rate) / 100);
+                                   }
+
+                                   if ($employer_contribution_rate > 0)
+                                   {
+                                        $employeerContributionAmount = (($epfWagesAmount * $employer_contribution_rate) / 100);
+                                   }
+                              }
+                              // else epfWagesAmount > epf_limit then calculate employee contribution and employer contribution percentage of epf_limit
+                              else
+                              {
+                                   if ($employee_contribution_rate > 0)
+                                   {
+                                        $employeeContributionAmount = (($epf_limit * $employee_contribution_rate) / 100);
+                                   }
+
+                                   if ($employer_contribution_rate > 0)
+                                   {
+                                        $employeerContributionAmount = (($epf_limit * $employer_contribution_rate) / 100);
+                                   }
+                              }
+                         }
+                         // else | epf_limit <= 0 then calculate employee contribution and employer contribution percentage of epfWagesAmount
+                         else
+                         {
+                              if ($employee_contribution_rate > 0)
+                              {
+                                   $employeeContributionAmount = (($epfWagesAmount * $employee_contribution_rate) / 100);
+                              }
+
+                              if ($employer_contribution_rate > 0)
+                              {
+                                   $employeerContributionAmount = (($epfWagesAmount * $employer_contribution_rate) / 100);
+                              }
+                         }
+
+                         if ($employee_epf_status == 1)
+                         {
+                              $data[] = [
+                                   'name' => "Employee Provident Fund",
+                                   'shortName' => "EPF",
+                                   'type' => "percentage",
+                                   'salary' => numberFormat(round($salaryWithGrossEarninig)),
+                                   'raw_salary' => $salaryWithGrossEarninig,
+                                   'percentage' => ($employee_contribution_rate + $employer_contribution_rate),
+                                   'raw_amount' => ($employeeContributionAmount + $employeerContributionAmount),
+                                   'amount' => numberFormat(round(($employeeContributionAmount + $employeerContributionAmount))),
+                                   'employee_contribution_rate' => $employee_contribution_rate,
+                                   'employer_contribution_rate' => $employer_contribution_rate,
+                                   'employee_contribution_rate_amount' => numberFormat(round($employeeContributionAmount)),
+                                   'raw_employee_contribution_rate_amount' => $employeeContributionAmount,
+                                   'raw_employer_contribution_rate_amount' => $employeerContributionAmount,
+                                   'employer_contribution_rate_amount' => numberFormat(round($employeerContributionAmount)),
+                                   'epf_number' => $epf_number,
+                                   'dbObject' => $EpfDeduction->toArray(),
+                              ];
+
+                              $totalDeduction += numberFormat(round($employeeContributionAmount + $employeerContributionAmount));
+                         }
+                    }
+               }
+               // Employee Provident Fund Deduction
+
+
+               // Professional Tax Deduction
+               if ($employeeData->ept_status == 1)
+               {
+                    $PtDeductionsRange = StatutoryDeductionsProfessionalTaxRange::where("created_by", $employeeData->created_by)->get();
+                    foreach ($PtDeductionsRange as $row)
+                    {
+                         if ($salaryWithGrossEarninig >= $row->salary_start_range && $salaryWithGrossEarninig <= $row->salary_end_range)
+                         {
+                              $data[] = [
+                                   'name' => "Professional Tax",
+                                   'shortName' => "PT",
+                                   'type' => "fixed",
+                                   'salary' => $salaryWithGrossEarninig,
+                                   'percentage' => 0,
+                                   'raw_amount' => $row->deduction_amount,
+                                   'amount' => numberFormat(round($row->deduction_amount)),
+                                   'ept_number' => $employeeData->ept_number,
+                                   'dbObject' => $row->toArray()
+                              ];
+
+                              $totalDeduction += numberFormat(round($row->deduction_amount));
+                              break;
+                         }
+                    }
+               }
+               // professional Tax Deduction
+
+               // Employees State Insurance Deduction
+               $EsiDeduction = EmployeesStateInsurance::where("created_by", $employeeData->created_by)->first();
+               if ($EsiDeduction != null && $employeeData->esi_status == 1)
+               {
+                    if ($EsiDeduction->status == 1)
+                    {
+                         if ($salaryWithGrossEarninig <= 21000)
+                         {
+                              $employee_contribution_rate_esi = $EsiDeduction->employee_contribution_rate;
+                              $employer_contribution_rate_esi = $EsiDeduction->employer_contribution_rate;
+
+                              $employeeContributionAmountEsi = 0;
+                              $employeerContributionAmountEsi = 0;
+
+                              if ($employee_contribution_rate_esi > 0)
+                              {
+                                   $employeeContributionAmountEsi = (($salaryWithGrossEarninig * $employee_contribution_rate_esi) / 100);
+                              }
+
+                              if ($employer_contribution_rate_esi > 0)
+                              {
+                                   $employeerContributionAmountEsi = (($salaryWithGrossEarninig * $employer_contribution_rate_esi) / 100);
+                              }
+
+                              $data[] = [
+                                   'name' => "Employees State Insurance",
+                                   'shortName' => "ESI",
+                                   'type' => "percentage",
+                                   'salary' => $salaryWithGrossEarninig,
+                                   'percentage' => ($employee_contribution_rate_esi + $employer_contribution_rate_esi),
+
+                                   'amount' => numberFormat(round(($employeeContributionAmountEsi + $employeerContributionAmountEsi))),
+                                   'raw_amount' => ($employeeContributionAmountEsi + $employeerContributionAmountEsi),
+
+                                   'raw_employee_contribution_rate' => numberFormat(round($employee_contribution_rate_esi)),
+                                   'employee_contribution_rate' => $employee_contribution_rate_esi,
+
+                                   'raw_employer_contribution_rate' => numberFormat(round($employer_contribution_rate_esi)),
+                                   'employer_contribution_rate' => $employer_contribution_rate_esi,
+
+                                   'raw_employee_contribution_rate_amount' => $employeeContributionAmountEsi,
+                                   'employee_contribution_rate_amount' => numberFormat(round($employeeContributionAmountEsi)),
+
+                                   'employer_contribution_rate_amount' => $employeerContributionAmountEsi,
+                                   'raw_employer_contribution_rate_amount' => numberFormat(round($employeerContributionAmountEsi)),
+
+                                   'esi_number' => $employeeData->esi_number,
+                                   'dbObject' => $EsiDeduction->toArray(),
+                              ];
+
+                              $totalDeduction += numberFormat(round(($employeeContributionAmountEsi + $employeerContributionAmountEsi)));
+                         }
+                    }
+               }
+               // Employees State Insurance Deduction
+
+
+               return ["total" => $totalDeduction, 'data' => $data];
+          }
+          catch (Exception | Throwable $ex)
+          {
+               return ["total" => 0, 'data' => []];
+          }
+     }
+
+     // EPF Employee | Employee Provident Fund of Employee
+     public static function providentFundEmployeeDeduction($employeeId, $salaryWithGrossEarninig, array $extraData = [], $calculateByEmployeeWorkingDays = true)
+     {
+
+          // dd("here providentFundEmployeeDeduction");
+          $data = [];
+          $totalDeduction = 0;
+
+          $companyWorkingDays = $extraData["companyWorkingDays"];
+          $employeeWorkingDays = $extraData["employeeWorkingDays"];
+          $formate_month_year = $extraData["formate_month_year"];
+          $extraLeaveDaysTotalAmount = $extraData["extraLeaveDaysTotalAmount"];
+
+          try
+          {
+               $employeeData = Employee::where('id', '=', $employeeId)->first();
+
+               // Employee Provident Fund Deduction
+               $EpfDeduction = StatutoryDeductionsEpf::where("created_by", $employeeData->created_by)->first();
+
+               if ($EpfDeduction != null)
+               {
+                    if ($EpfDeduction->status == 1 && $employeeData->epf_status == 1)
+                    {
+                         $employee_contribution_rate = $EpfDeduction->employee_contribution_rate;
+                         $override_employee_pf = $EpfDeduction->override_employee_pf;
+
+                         // override_employee_pf == 1 means get epf deduction percentage data from employee
+                         $employee_epf_status = 1;
+
+                         $epf_number = $EpfDeduction->epf_number;
+                         if ($override_employee_pf == 1)
+                         {
+                              $employee_contribution_rate = $employeeData->epf_employee_contribution_rate;
+                              $employee_epf_status = $employeeData->epf_status;
+                              $epf_number = $employeeData->epf_number;
+                         }
+
+                         $employeeContributionAmount = 0;
+
+                         $allowancesIds = (json_decode($EpfDeduction->epf_deductions_allowances_ids ?? '') ?? []);
+                         $epfDeductionsAllowancesTotalAmount = 0;
+                         $epfDeductionsAllowancesData = [];
+
+                         $epfDeductionsAllowancesTotalAmountDataRow = Employee::payslipAllowanceEmployeeWise($employeeId, $extraData, $allowancesIds, false);
+
+                         if (!empty($epfDeductionsAllowancesTotalAmountDataRow))
+                         {
+                              $epfDeductionsAllowancesTotalAmount = $epfDeductionsAllowancesTotalAmountDataRow["total"]; //6865
+                              $epfDeductionsAllowancesData = $epfDeductionsAllowancesTotalAmountDataRow["data"];
+                         }
+
+                         if ($epfDeductionsAllowancesTotalAmount > 0)
+                         {
+                              // $epfDeductionsAllowancesTotalAmount = ($epfDeductionsAllowancesTotalAmount - $extraLeaveDaysTotalAmount);
+                         }
+
+                         $EpfDeduction->epfDeductionsAllowancesData = $epfDeductionsAllowancesData ?? [];
+
+                         $epf_limit_threshold = $EpfDeduction->epf_limit;
+
+                         // if ($calculateByEmployeeWorkingDays)
+                         // {
+                         //      $epf_limit = numberFormat(round($epf_limit_threshold / $companyWorkingDays * $employeeWorkingDays));
+                         // }
+                         // else
+                         // {
+                         //      $epf_limit = numberFormat(round($epf_limit_threshold));
+                         // }
+
+                         // test demo remove this
+                         $epf_limit = numberFormat(round($epf_limit_threshold));
+
+                         $epfWagesAmount = ($salaryWithGrossEarninig - $epfDeductionsAllowancesTotalAmount); // old
+                         // $epfWagesAmount = ($salaryWithGrossEarninig); // new
+
+                         // dd([
+                         //      "salaryWithGrossEarninig" => $salaryWithGrossEarninig,
+                         //      "epfDeductionsAllowancesTotalAmount" => ($epfDeductionsAllowancesTotalAmount),
+                         //      "extraLeaveDaysTotalAmount" => $extraLeaveDaysTotalAmount,
+                         //      "Pf Limit" => $epf_limit_threshold,
+                         //      "epfWagesAmount" => $epfWagesAmount,
+                         // ]);
+
+                         if ($epf_limit > 0) // check if epf_limit is grater than 0
+                         {
+                              // check epfWagesAmount amount is less then epf_limit then calculate 
+                              // employee contribution and employer contribution percentage of epfWagesAmount
+                              if ($epfWagesAmount < $epf_limit)
+                              {
+                                   if ($employee_contribution_rate > 0)
+                                   {
+                                        $employeeContributionAmount = (($epfWagesAmount * $employee_contribution_rate) / 100);
+                                   }
+                              }
+                              // else epfWagesAmount > epf_limit then calculate employee contribution and employer contribution percentage of epf_limit
+                              else
+                              {
+                                   if ($employee_contribution_rate > 0)
+                                   {
+                                        $employeeContributionAmount = (($epf_limit * $employee_contribution_rate) / 100);
+                                   }
+                              }
+                         }
+                         // else | epf_limit <= 0 then calculate employee contribution and employer contribution percentage of epfWagesAmount
+                         else
+                         {
+                              if ($employee_contribution_rate > 0)
+                              {
+                                   $employeeContributionAmount = (($epfWagesAmount * $employee_contribution_rate) / 100);
+                              }
+                         }
+                         if ($employee_epf_status == 1)
+                         {
+                              $data[] = [
+                                   'name' => "Employee Provident Fund",
+                                   'shortName' => "EPF",
+                                   'type' => "percentage",
+                                   'salary' => numberFormat(round($salaryWithGrossEarninig)),
+                                   'percentage' => $employee_contribution_rate,
+                                   'raw_amount' => $employeeContributionAmount,
+                                   'amount' => numberFormat(round($employeeContributionAmount)),
+                                   'epf_number' => $epf_number,
+                              ];
+
+                              $totalDeduction += numberFormat(round($employeeContributionAmount));
+                         }
+                    }
+               }
+               // Employee Provident Fund Deduction
+
+               return ["total" => $totalDeduction, 'data' => $data];
+          }
+          catch (Exception | Throwable $ex)
+          {
+               dd($ex);
+               return ["total" => 0, 'data' => []];
+          }
+     }
+
+     // EPF Company | Employee Provident Fund of Company
+     public static function providentFundCompanyDeduction($employeeId, $salaryWithGrossEarninig, array $extraData = [], $calculateByEmployeeWorkingDays = true)
+     {
+          $data = [];
+          $totalDeduction = 0;
+
+          $companyWorkingDays = $extraData["companyWorkingDays"];
+          $employeeWorkingDays = $extraData["employeeWorkingDays"];
+
+          try
+          {
+               $employeeData = Employee::where('id', '=', $employeeId)->first();
+
+               // Employee Provident Fund Deduction
+               $EpfDeduction = StatutoryDeductionsEpf::where("created_by", $employeeData->created_by)->first();
+
+               if ($EpfDeduction != null)
+               {
+                    if ($EpfDeduction->status == 1 && $employeeData->epf_status == 1)
+                    {
+                         $employer_contribution_rate = $EpfDeduction->employer_contribution_rate;
+                         $override_employee_pf = $EpfDeduction->override_employee_pf;
+
+                         // override_employee_pf == 1 means get epf deduction percentage data from employee
+                         $employee_epf_status = 1;
+
+                         $epf_number = $EpfDeduction->epf_number;
+                         if ($override_employee_pf == 1)
+                         {
+                              $employer_contribution_rate = $employeeData->epf_employer_contribution_rate;
+
+                              $employee_epf_status = $employeeData->epf_status;
+
+                              $epf_number = $employeeData->epf_number;
+                         }
+
+                         $employeerContributionAmount = 0;
+
+                         $allowancesIds = (json_decode($EpfDeduction->epf_deductions_allowances_ids ?? '') ?? []);
+                         $epfDeductionsAllowancesTotalAmount = 0;
+                         $epfDeductionsAllowancesData = [];
+
+                         $epfDeductionsAllowancesTotalAmountDataRow = Employee::payslipAllowanceEmployeeWise($employeeId, $extraData, $allowancesIds, false);
+                         if (!empty($epfDeductionsAllowancesTotalAmountDataRow))
+                         {
+                              $epfDeductionsAllowancesTotalAmount = $epfDeductionsAllowancesTotalAmountDataRow["total"]; //6865
+                              $epfDeductionsAllowancesData = $epfDeductionsAllowancesTotalAmountDataRow["data"];
+                         }
+
+                         $EpfDeduction->epfDeductionsAllowancesData = $epfDeductionsAllowancesData ?? [];
+
+                         $epf_limit_threshold = $EpfDeduction->epf_limit;
+
+                         // if ($calculateByEmployeeWorkingDays)
+                         // {
+                         //      $epf_limit = numberFormat(round($epf_limit_threshold / $companyWorkingDays * $employeeWorkingDays));
+                         // }
+                         // else
+                         // {
+                         //      $epf_limit = numberFormat(round($epf_limit_threshold));
+                         // }
+
+                         $epf_limit = numberFormat(round($epf_limit_threshold));
+
+                         $epfWagesAmount = ($salaryWithGrossEarninig - $epfDeductionsAllowancesTotalAmount);
+
+                         if ($epf_limit > 0) // check if epf_limit is grater than 0
+                         {
+                              // check epfWagesAmount amount is less then epf_limit then calculate 
+                              // employee contribution and employer contribution percentage of epfWagesAmount
+                              if ($epfWagesAmount < $epf_limit)
+                              {
+
+                                   if ($employer_contribution_rate > 0)
+                                   {
+                                        $employeerContributionAmount = (($epfWagesAmount * $employer_contribution_rate) / 100);
+                                   }
+                              }
+                              else // epfWagesAmount > epf_limit then calculate employee contribution and employer contribution percentage of epf_limit
+                              {
+
+                                   if ($employer_contribution_rate > 0)
+                                   {
+                                        $employeerContributionAmount = (($epf_limit * $employer_contribution_rate) / 100);
+                                   }
+                              }
+                         }
+                         else // epf_limit <= 0 then calculate employee contribution and employer contribution percentage of epfWagesAmount
+                         {
+
+                              if ($employer_contribution_rate > 0)
+                              {
+                                   $employeerContributionAmount = (($epfWagesAmount * $employer_contribution_rate) / 100);
+                              }
+                         }
+
+                         if ($employee_epf_status == 1)
+                         {
+                              $data = [
+                                   'name' => "Employer's Provident Fund",
+                                   'shortName' => "EPF",
+                                   'type' => "percentage",
+                                   'salary' => numberFormat(round($salaryWithGrossEarninig)),
+                                   'percentage' => $employer_contribution_rate,
+                                   'raw_amount' => ($employeerContributionAmount),
+                                   'amount' => numberFormat(round($employeerContributionAmount)),
+                                   'epf_number' => $epf_number,
+                              ];
+
+                              $totalDeduction += numberFormat(round(+$employeerContributionAmount));
+                         }
+                    }
+               }
+               // Employee Provident Fund Deduction
+
+
+               return ["total" => $totalDeduction, 'data' => $data];
+          }
+          catch (Exception | Throwable $ex)
+          {
+               return ["total" => 0, 'data' => []];
+          }
+     }
+
+     // ESI Employee | Employees State Insurance
+     public static function employeesStateInsuranceEmployeeDeduction($employeeId, $salaryWithGrossEarninig, array $extraData = [])
+     {
+          $data = [];
+          $totalDeduction = 0;
+
+          $companyWorkingDays = $extraData["companyWorkingDays"];
+          $employeeWorkingDays = $extraData["employeeWorkingDays"];
+
+          try
+          {
+               $employeeData = Employee::where('id', '=', $employeeId)->first();
+
+               // Employees State Insurance Deduction
+               $EsiDeduction = EmployeesStateInsurance::where("created_by", $employeeData->created_by)->first();
+
+               if ($EsiDeduction != null && $employeeData->esi_status == 1)
+               {
+                    if ($EsiDeduction->status == 1)
+                    {
+                         if ($salaryWithGrossEarninig <= 21000)
+                         {
+                              $employee_contribution_rate_esi = $EsiDeduction->employee_contribution_rate;
+                              $employeeContributionAmountEsi = 0;
+
+                              if ($employee_contribution_rate_esi > 0)
+                              {
+                                   $employeeContributionAmountEsi = (($salaryWithGrossEarninig * $employee_contribution_rate_esi) / 100);
+                              }
+
+                              $data[] = [
+                                   'name' => "Employees State Insurance",
+                                   'shortName' => "ESI",
+                                   'type' => "percentage",
+                                   'salary' => $salaryWithGrossEarninig,
+                                   'percentage' => $employee_contribution_rate_esi,
+                                   'amount' => numberFormat(round(($employeeContributionAmountEsi))),
+                                   'raw_amount' => ($employeeContributionAmountEsi),
+                                   'esi_number' => $employeeData->esi_number,
+                              ];
+
+                              $totalDeduction += numberFormat(round($employeeContributionAmountEsi));
+                         }
+                    }
+               }
+               // Employees State Insurance Deduction
+
+
+               return ["total" => $totalDeduction, 'data' => $data];
+          }
+          catch (Exception | Throwable $ex)
+          {
+               // dd($ex);
+               return ["total" => 0, 'data' => []];
+          }
+     }
+
+     // ESI Company | Employees State Insurance
+     public static function employeesStateInsuranceCompanyDeduction($employeeId, $salaryWithGrossEarninig, array $extraData = [])
+     {
+          $data = [];
+          $totalDeduction = 0;
+
+          $companyWorkingDays = $extraData["companyWorkingDays"];
+          $employeeWorkingDays = $extraData["employeeWorkingDays"];
+
+          try
+          {
+               $employeeData = Employee::where('id', '=', $employeeId)->first();
+
+               $EsiDeduction = EmployeesStateInsurance::where("created_by", $employeeData->created_by)->first();
+               if ($EsiDeduction != null && $employeeData->esi_status == 1)
+               {
+                    if ($EsiDeduction->status == 1)
+                    {
+                         if ($salaryWithGrossEarninig <= 21000)
+                         {
+                              $employer_contribution_rate_esi = $EsiDeduction->employer_contribution_rate;
+                              $employeerContributionAmountEsi = 0;
+
+                              if ($employer_contribution_rate_esi > 0)
+                              {
+                                   $employeerContributionAmountEsi = (($salaryWithGrossEarninig * $employer_contribution_rate_esi) / 100);
+                              }
+
+                              $data = [
+                                   'name' => "Employer's State Insurance",
+                                   'shortName' => "ESI",
+                                   'type' => "percentage",
+                                   'salary' => $salaryWithGrossEarninig,
+                                   'percentage' => ($employer_contribution_rate_esi),
+                                   'amount' => numberFormat(round($employeerContributionAmountEsi)),
+                                   'raw_amount' => $employeerContributionAmountEsi,
+                                   'esi_number' => $employeeData->esi_number,
+                              ];
+
+                              $totalDeduction += numberFormat(round(($employeerContributionAmountEsi)));
+                         }
+                    }
+               }
+
+
+               return ["total" => $totalDeduction, 'data' => $data];
+          }
+          catch (Exception | Throwable $ex)
+          {
+               return ["total" => 0, 'data' => []];
+          }
+     }
+
+     // PT | Professional Tax
+     public static function employeeProfessionalTaxDeduction($employeeId, $salaryWithGrossEarninig, array $extraData = [])
+     {
+          $data = [];
+          $totalDeduction = 0;
+
+          $companyWorkingDays = $extraData["companyWorkingDays"];
+          $employeeWorkingDays = $extraData["employeeWorkingDays"];
+
+          try
+          {
+               $employeeData = Employee::where('id', '=', $employeeId)->first();
+
+               if ($employeeData->ept_status == 1)
+               {
+                    $PtDeductionsRange = StatutoryDeductionsProfessionalTaxRange::where("created_by", $employeeData->created_by)->get();
+                    foreach ($PtDeductionsRange as $row)
+                    {
+                         if ($salaryWithGrossEarninig >= $row->salary_start_range && $salaryWithGrossEarninig <= $row->salary_end_range)
+                         {
+                              $data[] = [
+                                   'name' => "Professional Tax",
+                                   'shortName' => "PT",
+                                   'type' => "fixed",
+                                   'salary' => $salaryWithGrossEarninig,
+                                   'percentage' => 0,
+                                   'raw_amount' => $row->deduction_amount,
+                                   'amount' => numberFormat(round($row->deduction_amount)),
+                                   'ept_number' => $employeeData->ept_number,
+                              ];
+
+                              $totalDeduction += numberFormat(round($row->deduction_amount));
+                              break;
+                         }
+                    }
+               }
+
+               return ["total" => $totalDeduction, 'data' => $data];
+          }
+          catch (Exception | Throwable $ex)
+          {
+               return ["total" => 0, 'data' => []];
+          }
+     }
+
+     public static function tdsDeductionEmployeeWise($employeeId, array $extraData = [], $calculateByEmployeeWorkingDays = true)
+     {
+          try
+          {
+               $companyWorkingDays = $extraData["companyWorkingDays"];
+               $employeeWorkingDays = $extraData["employeeWorkingDays"];
+
+               $employeeDetails = Employee::where('id', $employeeId)->first();
+
+               $totalAmount = 0;
+               $tdsDeductionPaymentData = [];
+
+               if ($employeeDetails->tax_deducted_at_source_status == 1 && $employeeDetails->tax_deducted_at_source > 0)
+               {
+                    $salary = $employeeDetails->salary;
+
+                    if ($calculateByEmployeeWorkingDays)
+                    {
+                         $tdsDeductionAmount = ($employeeDetails->tax_deducted_at_source / $companyWorkingDays * $employeeWorkingDays);
+                    }
+                    else
+                    {
+                         $tdsDeductionAmount = $employeeDetails->tax_deducted_at_source;
+                    }
+
+                    $tdsDeductionPercentage = 0;
+
+                    $tdsDeductionPaymentData[] = [
+                         "name" => "TDS",
+                         "type" => "fixed",
+                         "percentage" => $tdsDeductionPercentage,
+                         "raw_amount" => $tdsDeductionAmount,
+                         "amount" => numberFormat(round($tdsDeductionAmount), 0),
+                         "displayInSalarySlip" => true,
+                    ];
+
+                    $totalAmount += numberFormat(round($tdsDeductionAmount), 0);
+               }
+
+
+               return ["total" => $totalAmount, 'data' => $tdsDeductionPaymentData];
+          }
+          catch (Exception | Throwable $ex)
+          {
+               return ["total" => 0, 'data' => []];
+          }
+     }
+
+
+     // Payslip Deductions Functions End
+
+
+
+
+
+
+
+
+     public function getLastClockInOutDataAttribute()
+     {
+          return AttendanceEmployee::select("id", "employee_id", "clock_in_date_time", "clock_out_date_time", "clock_in_latitude", "clock_in_longitude", "clock_out_latitude", "clock_out_longitude", "clock_in", "clock_out", "image", "image as clocked_in_image", "clock_out_image", "clock_out_image as clocked_out_image")->where('employee_id', '=', $this->id)
+               //29-08 told to rmeove geofencing condition --Monali
+               //->where('geofencing_status', '=', ($this->geofencing_status ?? 0))
+               ->orderBy("id", "DESC")->first();
+     }
+}

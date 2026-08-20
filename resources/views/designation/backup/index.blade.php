@@ -1,0 +1,173 @@
+@extends('layouts.admin')
+
+@section('page-title')
+    {{ __('Manage Designation') }}
+@endsection
+
+@section('breadcrumb')
+    <li class="breadcrumb-item"><a href="{{ route('home') }}">{{ __('Home') }}</a></li>
+    <li class="breadcrumb-item">{{ __('Designation') }}</li>
+@endsection
+
+@section('action-button')
+    @can('Create Designation')
+        <a href="#" data-url="{{ route('designation.create') }}" data-ajax-popup="true"
+            data-title="{{ __('Create New Designation') }}" data-bs-toggle="tooltip" title="" class="btn btn-sm btn-primary"
+            data-bs-original-title="{{ __('Create') }}">
+            <i class="ti ti-plus"></i>
+        </a>
+    @endcan
+@endsection
+
+
+
+@section('content')
+    <div class="row">
+        {{-- <div class="col-3">
+        @include('layouts.hrm_setup')
+    </div> --}}
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body table-border-style">
+
+                    <div class="table-responsive">
+                        <table class="table" id="designations-table">
+                            <thead>
+                                <tr>
+                                    <th>{{ __('No') }}</th>
+                                    <th>{{ __('Branch') }}</th>
+                                    <th>{{ __('Department') }}</th>
+                                    <th>{{ __('Designation') }}</th>
+                                    <th>{{ __('Status') }}</th>
+                                    <th width="200px">{{ __('Action') }}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {{-- @foreach ($designations as $designation)
+                            @php
+                            $department = \App\Models\Department::where(
+                            'id',
+                            $designation->department_id,
+                            )->first();
+                            @endphp
+                            <tr>
+                                <td>{{ $designation->branch->name ?? '' }}
+                                </td>
+                                <td>{{ !empty($department->name) ? $department->name : '' }}</td>
+                                <td>{{ $designation->name }}</td>
+                                <td>
+
+                                    @if ($designation->status == 'Active')
+                                    <div class="action-btn bg-success ms-2">
+                                        {!! Form::open([
+                                        'method' => 'get',
+                                        'route' => ['designation_in_active', $designation->id],
+                                        'id' => 'delete-form-' . $designation->id,
+                                        ]) !!}
+                                        <a href="#" class=" btn btn-sm  align-items-center bs-pass-para"
+                                            data-bs-toggle="tooltip" title="" data-bs-original-title="InActive"
+                                            aria-label="InActive"><i class="ti ti-check  text-white text-white"></i></a>
+                                        </form>
+                                    </div>
+
+                                    <!-- <a href="{{ route('designation_in_active', $designation->id) }}" class="btn btn-success btn-sm"onclick="return confirm('Are you sure?')">Active</a> -->
+                                    @else
+                                    <div class="action-btn bg-danger ms-2">
+                                        {!! Form::open([
+                                        'method' => 'get',
+                                        'route' => ['designation_active', $designation->id],
+                                        'id' => 'delete-form-' . $designation->id,
+                                        ]) !!}
+                                        <a href="#" class=" btn btn-sm  align-items-center bs-pass-para"
+                                            data-bs-toggle="tooltip" title="" data-bs-original-title="Active"
+                                            aria-label="Active"><i class="ti ti-check  text-white text-white"></i></a>
+                                        </form>
+                                    </div>
+
+                                    <!-- <a href="{{ route('designation_active', $designation->id) }}" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure?')">In-Active</a> -->
+                                    @endif
+                                </td>
+
+                                <td class="Action">
+                                    <span>
+                                        @can('Edit Designation')
+                                        <div class="action-btn bg-info ms-2">
+                                            <a href="#" class=" btn btn-sm  align-items-center"
+                                                data-url="{{ route('designation.edit', $designation->id) }}"
+                                                data-ajax-popup="true" data-size="md" data-bs-toggle="tooltip" title=""
+                                                data-title="{{ __('Edit Designation') }}"
+                                                data-bs-original-title="{{ __('Edit') }}">
+                                                <i class="ti ti-pencil text-white"></i>
+                                            </a>
+                                        </div>
+                                        @endcan
+
+                                        @can('Delete Designation')
+                                        <div class="action-btn bg-danger ms-2">
+                                            {!! Form::open([
+                                            'method' => 'DELETE',
+                                            'route' => ['designation.destroy', $designation->id],
+                                            'id' => 'delete-form-' . $designation->id,
+                                            ]) !!}
+                                            <a href="#" class=" btn btn-sm  align-items-center bs-pass-para"
+                                                data-bs-toggle="tooltip" title="" data-bs-original-title="Delete"
+                                                aria-label="Delete"><i
+                                                    class="ti ti-trash text-white text-white"></i></a>
+                                            </form>
+                                        </div>
+                                        @endcan
+                                    </span>
+                                </td>
+                            </tr>
+                            @endforeach --}}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+        $(document).ready(function() {
+            $('#designations-table').DataTable({
+                processing: true,
+                serverSide: true,
+                ajax: "{{ route('designation.index') }}",
+                order: [
+                    [4, 'asc']
+                ], // default order by Branch or Department
+                columns: [{
+                        data: 'DT_RowIndex',
+                        name: 'DT_RowIndex',
+                        orderable: false,
+                        searchable: false
+                    },
+                    {
+                        data: 'branch_name',
+                        name: 'branch_name'
+                    },
+                    {
+                        data: 'department_name',
+                        name: 'department_name'
+                    },
+                    {
+                        data: 'name',
+                        name: 'name'
+                    },
+                    {
+                        data: 'status_badge',
+                        name: 'status',
+                        orderable: true,
+                        searchable: true
+                    },
+                    {
+                        data: 'action',
+                        name: 'action',
+                        orderable: false,
+                        searchable: false
+                    }
+                ]
+            });
+        });
+    </script>
+@endsection

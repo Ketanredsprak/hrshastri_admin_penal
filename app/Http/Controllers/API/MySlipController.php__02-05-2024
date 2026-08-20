@@ -1,0 +1,139 @@
+<?php
+
+namespace App\Http\Controllers\API;
+
+use App\Http\Controllers\Controller;
+use App\Exports\PayslipExport;
+use App\Models\Allowance;
+use App\Models\Commission;
+use App\Models\Employee;
+use App\Models\Loan;
+use App\Mail\InvoiceSend;
+use App\Mail\PayslipSend;
+use App\Models\OtherPayment;
+use App\Models\Overtime;
+use App\Models\PaySlip;
+use App\Models\SaturationDeduction;
+use App\Models\Utility;
+use App\Models\Leave;
+use App\Models\PayslipType;
+use DB;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Http\Request;
+
+class MySlipController extends Controller
+{
+     public function my_slip(request $request)
+     {
+          $formate_month_year = $request->datePicker;
+          $validatePaysilp    = PaySlip::where('salary_month', '=', $formate_month_year)->where('created_by', \Auth::user()->creatorId())->get()->toarray();
+          $data = [];
+          if (empty($validatePaysilp))
+          {
+               $data = [];
+               return;
+          }
+          else
+          {
+               if (Auth::user()->type == 'employee')
+               {
+                    $paylip_employee = PaySlip::where('pay_slips.status', 1)->select(
+                         [
+                              'employees.id',
+                              'employees.employee_id',
+                              'employees.name',
+                              'employees.salary',
+                              'payslip_types.name as payroll_type',
+                              'pay_slips.basic_salary',
+                              'pay_slips.net_payble',
+                              'pay_slips.id as pay_slip_id',
+                              'pay_slips.status',
+                              'employees.user_id',
+                         ]
+                    )->leftjoin(
+                         'employees',
+                         function ($join) use ($formate_month_year)
+                         {
+                              $join->on('employees.id', '=', 'pay_slips.employee_id');
+                              $join->on('pay_slips.salary_month', '=', \DB::raw("'" . $formate_month_year . "'"));
+                              $join->leftjoin('payslip_types', 'payslip_types.id', '=', 'employees.salary_type');
+                         }
+                    )->where('employees.created_by', \Auth::user()->creatorId())->get();
+               }
+               else
+               {
+
+                    $paylip_employee = PaySlip::select(
+                         [
+                              'employees.id',
+                              'employees.employee_id',
+                              'employees.name',
+                              'employees.salary',
+                              'payslip_types.name as payroll_type',
+                              'pay_slips.basic_salary',
+                              'pay_slips.net_payble',
+                              'pay_slips.id as pay_slip_id',
+                              'pay_slips.status',
+                              'employees.user_id',
+                         ]
+                    )->leftjoin(
+                         'employees',
+                         function ($join) use ($formate_month_year)
+                         {
+                              $join->on('employees.id', '=', 'pay_slips.employee_id');
+                              $join->on('pay_slips.salary_month', '=', \DB::raw("'" . $formate_month_year . "'"));
+                              $join->leftjoin('payslip_types', 'payslip_types.id', '=', 'employees.salary_type');
+                         }
+                    )->where('employees.created_by', \Auth::user()->creatorId())->get();
+               }
+               foreach ($paylip_employee as $employee)
+               {
+                    if (Auth::user()->type == 'employee')
+                    {
+                         $empdata = Employee::find($employee->id);
+                         $playslapdata = PayslipType::find($empdata->play_slab_id);
+                         if (Auth::user()->id == $employee->user_id)
+                         {
+                              $tmp   = [];
+                              $tmp['id'] = $employee->id;
+                              $tmp['employee_code'] = \Auth::user()->employeeIdFormat($employee->employee_id);
+                              $tmp['name'] = $employee->name;
+                              $tmp['pay_slab'] = !empty($playslapdata->name)  ?  $playslapdata->name : $employee->id;
+                              $tmp['basic_salary'] = !empty($employee->basic_salary) ? \Auth::user()->priceFormat($employee->salary) : '-';
+                              $tmp['net_payble'] = !empty($employee->net_payble) ? \Auth::user()->priceFormat($employee->net_payble) : '-';
+                              if ($employee->status == 1)
+                              {
+                                   $tmp['status'] = 'Paid';
+                              }
+                              else
+                              {
+                                   $tmp['status'] = 'UnPaid';
+                              }
+                              $tmp['pay_slip_id']  = !empty($employee->pay_slip_id) ? $employee->pay_slip_id : 0;
+                              $tmp['url']  = route('employee.show', Crypt::encrypt($employee->id));
+                              $tmp['my_slip_pdf']  = asset('payslip/pdf_api/' . $employee->id . '/' . $formate_month_year);
+                              $data[] = $tmp;
+                         }
+                    }
+               }
+               if (!empty($data))
+               {
+                    $response = [
+                         'status'  => 1,
+                         'message' => 'success',
+                         'data'    => $data,
+                    ];
+               }
+               else
+               {
+                    $response = [
+                         'status'  => 0,
+                         'message' => 'Data not found',
+                    ];
+               }
+               return $response;
+          }
+     }
+}

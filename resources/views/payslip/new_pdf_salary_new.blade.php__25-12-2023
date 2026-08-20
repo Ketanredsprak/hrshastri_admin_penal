@@ -1,0 +1,953 @@
+@php
+
+    // $logo = asset(Storage::url('uploads/logo/'));
+
+    $logo = \App\Models\Utility::get_file('uploads/logo/');
+
+    $company_logo = Utility::get_company_logo();
+
+    $Designation = App\Models\Designation::find($employee->designation_id);
+
+    $departments = App\Models\Department::find($employee->department_id);
+
+    $employeesId = \Auth::user()->employeeIdFormat($employee->id);
+@endphp
+
+<!DOCTYPE html
+    PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+
+
+<head>
+
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+
+    <title>Untitled Document</title>
+
+</head>
+
+<style type="text/css">
+    body {
+
+        margin: 0;
+
+        padding: 0;
+
+        font-family: Arial, Helvetica, sans-serif;
+
+        color: #000000;
+
+        font-size: 14px;
+
+    }
+
+
+
+    * {
+
+        box-sizing: border-box;
+
+        -webkit-box-sizing: border-box;
+
+        -moz-box-sizing: border-box;
+
+        -o-box-sizing: border-box;
+
+    }
+
+
+
+    table {
+
+        margin: 0;
+
+        padding: 0;
+
+        width: 100%;
+
+        border-collapse: collapse;
+
+    }
+</style>
+
+
+
+<body>
+
+    <div class="modal-body">
+
+        <div class="text-md-end mb-2">
+
+            <a href="#" class="btn btn-sm btn-primary" data-bs-toggle="tooltip" data-bs-placement="bottom"
+                title="{{ __('Download') }}" onclick="saveAsPDF()"><span class="fa fa-download"></span></a>
+
+
+
+            <a title="Mail Send" href="{{ route('payslip.send', [$employee->id, $payslip->salary_month]) }}"
+                class="btn btn-sm btn-warning"><span class="fa fa-paper-plane"></span></a>
+
+        </div>
+
+
+
+        <table width="100%" border="0" cellspacing="0" cellpadding="0" id="printableArea">
+
+            <tr>
+
+                <td align="left" valign="top" style="padding:20px;">
+
+                    <table width="100%" border="0" cellspacing="0" cellpadding="0">
+
+                        <tr>
+
+
+
+                            <td align="center" valign="top">
+
+                                <table width="100%" border="0" cellspacing="0" cellpadding="0">
+
+                                    <tr>
+
+                                        <td align="center" style="text-align:center;">
+
+                                            <span style="font-size:18px; font-weight:bold;">Payslip</span>
+
+                                            <p>Payment slip for the month of {{ $payslip->salary_month }}</p>
+
+                                        </td>
+
+                                    </tr>
+
+                                </table>
+
+                            </td>
+
+
+
+                        </tr>
+
+                        <tr>
+
+                            <td align="left" valign="top">
+
+                                <table width="100%" border="0" cellspacing="0" cellpadding="0">
+
+                                    <tr>
+
+                                        <td align="left" valign="top" width="50%"
+                                            style="width:50%; padding:10px; line-height:24px; font-family:Arial, Helvetica, sans-serif; font-size:14px; color:#222222; border-bottom:0px; border:1px solid #000000;">
+
+
+
+                                            <div class="invoice-number">
+
+                                                <img src="{{ $logo . '/' . (isset($company_logo) && !empty($company_logo) ? $company_logo : 'logo-dark.png') }}"
+                                                    width="170px;">
+
+                                            </div>
+
+                                            <br />
+
+                                            <strong>{{ \Utility::getValByName('company_name') }}</strong><br />
+
+                                            {{ \Utility::getValByName('company_address') }}<br />
+
+                                            {{ \Utility::getValByName('company_city') }}<br />
+
+                                            {{ \Utility::getValByName('company_state') }}
+                                            {{ \Utility::getValByName('company_zipcode') }}
+
+                                        </td>
+
+                                        <td align="left" valign="top" width="50%"
+                                            style="width:50%; padding:10px; line-height:24px; font-family:Arial, Helvetica, sans-serif; font-size:14px; color:#222222; border-bottom:0px; border:1px solid #000000;">
+
+                                            <strong>Employee Id:</strong> {{ $employeesId }} <br />
+
+                                            <strong>Name:</strong> {{ $employee->name }}<br />
+
+                                            <strong>Designation:</strong> {{ $Designation->name }}<br />
+
+                                            <strong>Department:</strong> {{ $departments->name }}<br />
+
+                                            <strong>{{ __('Salary Date') }} :</strong>
+
+                                            {{ \Auth::user()->dateFormat($payslip->created_at) }}<br>
+
+                                        </td>
+
+                                    </tr>
+
+                                </table>
+
+
+
+                            </td>
+
+                        </tr>
+
+
+
+                        <tr>
+
+                            <td align="left" valign="top">
+
+                                <table width="100%" border="0" cellspacing="0" cellpadding="0">
+
+                                    <thead>
+
+                                        <tr>
+
+                                            <th bgcolor="#cccccc" width="50%"
+                                                style="width:50%; font-size:16px; border:1px solid #000000; border-top:0px; text-align:center; background:#cccccc; padding:10px; font-family:Arial, Helvetica, sans-serif; font-weight:bold;">
+
+                                                Earnings</th>
+
+                                            <th bgcolor="#cccccc" width="50%"
+                                                style="width:50%; font-size:16px; border:1px solid #000000; border-top:0px; text-align:center; background:#cccccc; padding:10px; font-family:Arial, Helvetica, sans-serif; font-weight:bold;">
+
+                                                Deductions</th>
+
+                                        </tr>
+
+                                    </thead>
+
+                                    <tbody>
+
+                                        <tr>
+
+                                            <td align="left" valign="top" style="border:1px solid #000000;">
+
+                                                <table width="100%" border="0" cellspacing="0" cellpadding="0">
+
+                                                    <tr>
+
+                                                        <td width="50%" align="left" valign="middle"
+                                                            style="width:50%; text-align:left; padding:8px 10px; font-weight:bold;">
+                                                            Description</td>
+
+                                                        <td width="50%" align="right" valign="middle"
+                                                            style="width:50%; text-align:right; padding:8px 10px; font-weight:bold;">
+                                                            Amount</td>
+
+                                                    </tr>
+
+                                                </table>
+
+
+
+                                            </td>
+
+                                            <td align="left" valign="top" style="border:1px solid #000000;">
+
+                                                <table width="100%" border="0" cellspacing="0" cellpadding="0">
+
+                                                    <tr>
+
+                                                        <td width="50%" align="left" valign="middle"
+                                                            style="width:50%; text-align:left; padding:8px 10px; font-weight:bold;">
+                                                            Description</td>
+
+                                                        <td width="50%" align="right" valign="middle"
+                                                            style="width:50%; text-align:right; padding:8px 10px; font-weight:bold;">
+                                                            Amount</td>
+
+                                                    </tr>
+
+                                                </table>
+
+
+
+                                            </td>
+
+                                        </tr>
+
+                                        <tr>
+
+                                            <td align="left" valign="top" style="border:1px solid #000000;">
+
+                                                <table width="100%" border="0" cellspacing="0"
+                                                    cellpadding="0">
+
+                                                    <tr>
+
+                                                        <td align="left" valign="middle"
+                                                            style="text-align:left; padding:8px 10px; border-bottom:1px solid #000000;">
+                                                            Basic Salary</td>
+
+                                                        <td align="right" valign="middle"
+                                                            style="width:100px; text-align:right; padding:8px 10px; border-bottom:1px solid #000000;">
+                                                            {{ \Auth::user()->priceFormat($payslip->basic_salary) }}
+
+                                                        </td>
+
+                                                    </tr>
+
+                                                    {{-- @foreach ($payslipDetail['earning']['allowance'] as $allowance) --}}
+
+                                                    @if (!empty($payslipDetail['earning']['allowance_DB']))
+
+                                                        @foreach ($payslipDetail['earning']['allowance_DB'] as $allowance)
+                                                            
+                                                                @php
+                                                                    $employess = \App\Models\Employee::find($employee->id);
+                                                                    $empdallow = ($allowance->amount * $employess->salary) / 100;
+                                                                @endphp
+
+                                                                @if ($allowance->amount == 0 || $allowance->amount == 00)
+
+                                                                  @if ($allowance->is_display_slary_slip == 1)
+                                                                      <tr>
+                                                                          <td align="left" valign="middle"
+                                                                              style="text-align:left; padding:8px 10px; border-bottom:1px solid #000000;">
+                                                                              {{ $allowance->name }}</td>
+                                                                          <td align="right" valign="middle"
+                                                                              style="width:100px; text-align:right; padding:8px 10px; border-bottom:1px solid #000000;">
+
+                                                                              @if ($allowance->type != 'percentage')
+                                                                                  {{ \Auth::user()->priceFormat($allowance->amount) }}
+                                                                              @else
+                                                                                  @if ($allowance->allowance_types == 0 || $allowance->allowance_types == null)
+                                                                                      {{ $allowance->amount }} %
+                                                                                  @else
+                                                                                      {{ $allowance->amount }} %
+                                                                                      <?php
+                                                                                      if ($allowance->type == 'percentage') {
+                                                                                          $getvalue = get_allowance_value($allowance->id, $allowance->allowance_types, $employess);
+                                                                                      
+                                                                                          $empdallow = ($getvalue * $allowance->amount) / 100;
+                                                                                      }
+                                                                                      ?>
+                                                                                  @endif
+                                                                                  ({{ \Auth::user()->priceFormat($empdallow) }})
+                                                                              @endif
+
+                                                                          </td>
+                                                                      </tr>
+                                                                  @endif 
+
+                                                                  @else
+                                                                    <tr>
+                                                                      <td align="left" valign="middle"
+                                                                          style="text-align:left; padding:8px 10px; border-bottom:1px solid #000000;">
+                                                                          {{ $allowance->name }}</td>
+                                                                      <td align="right" valign="middle"
+                                                                          style="width:100px; text-align:right; padding:8px 10px; border-bottom:1px solid #000000;">
+
+                                                                          @if ($allowance->type != 'percentage')
+                                                                              {{ \Auth::user()->priceFormat($allowance->amount) }}
+                                                                          @else
+                                                                              @if ($allowance->allowance_types == 0 || $allowance->allowance_types == null)
+                                                                                  {{ $allowance->amount }} %
+                                                                              @else
+                                                                                  {{ $allowance->amount }} %
+                                                                                  <?php
+                                                                                  if ($allowance->type == 'percentage') {
+                                                                                      $getvalue = get_allowance_value($allowance->id, $allowance->allowance_types, $employess);
+                                                                                  
+                                                                                      $empdallow = ($getvalue * $allowance->amount) / 100;
+                                                                                  }
+                                                                                  ?>
+                                                                              @endif
+                                                                              ({{ \Auth::user()->priceFormat($empdallow) }})
+                                                                          @endif
+
+                                                                      </td>
+                                                                  </tr>
+                                                                  @endif
+
+                                                            
+                                                        @endforeach
+                                                    @endif
+
+
+
+                                                </table>
+
+                                            </td>
+
+                                            <td align="left" valign="top" style="border:1px solid #000000;">
+
+                                                {{-- @foreach ($payslipDetail['deduction']['deduction'] as $deduction) --}}
+
+
+
+                                                @if (!empty($payslipDetail['deduction']['deduction_DB']))
+
+                                                    @foreach ($payslipDetail['deduction']['deduction_DB'] as $deduction)
+                                                        @php
+                                                            $employess = \App\Models\Employee::find($employee->id);
+                                                            $empdeduction = ($deduction->amount * $employess->salary) / 100;
+                                                        @endphp
+
+                                                        @if ($deduction->employees_id == 0 || $deduction->employees_id == $employee->id)
+
+                                                            @if ($deduction->amount == 0 || $deduction->amount == 00)
+
+                                                                @if ($deduction->is_display_slary_slip == 1)
+
+                                                                    <table width="100%" border="0"
+                                                                        cellspacing="0" cellpadding="0">
+
+                                                                        <tr>
+
+                                                                            <td align="left" valign="middle"
+                                                                                style="text-align:left; padding:8px 10px; border-bottom:1px solid #000000;">
+                                                                                {{ $deduction->name }}</td>
+
+                                                                            <td align="right" valign="middle"
+                                                                                style="width:100px; text-align:right; padding:8px 10px; border-bottom:1px solid #000000;">
+
+                                                                                @if ($deduction->type != 'percentage')
+                                                                                    {{ \Auth::user()->priceFormat($deduction->amount) }}
+                                                                                @else
+                                                                                    {{ $deduction->amount }}%
+
+                                                                                    ({{ \Auth::user()->priceFormat($empdeduction) }})
+                                                                                @endif
+
+                                                                            </td>
+
+                                                                        </tr>
+
+                                                                    </table>
+                                                                @endif
+                                                            @else
+                                                                <table width="100%" border="0" cellspacing="0"
+                                                                    cellpadding="0">
+
+                                                                    <tr>
+
+                                                                        <td align="left" valign="middle"
+                                                                            style="text-align:left; padding:8px 10px; border-bottom:1px solid #000000;">
+                                                                            {{ $deduction->name }}</td>
+
+                                                                        <td align="right" valign="middle"
+                                                                            style="width:100px; text-align:right; padding:8px 10px; border-bottom:1px solid #000000;">
+
+                                                                            @if ($deduction->type != 'percentage')
+                                                                                {{ \Auth::user()->priceFormat($deduction->amount) }}
+                                                                            @else
+                                                                                {{ $deduction->amount }}%({{ \Auth::user()->priceFormat($empdeduction) }})
+                                                                            @endif
+
+
+
+                                                                        </td>
+
+                                                                    </tr>
+                                                                  </table>
+                                                            @endif
+
+                                                        @endif
+                                                    @endforeach
+                                            @endif
+
+
+
+                                                <?php
+                                                
+                                                function get_allowance_value($id, $parent_id, $employess)
+                                                {
+                                                    $get_parentData = \App\Models\AllowanceOption::find($parent_id);
+                                                
+                                                    if (!empty($get_parentData)) {
+                                                        if ($get_parentData->allowance_types == 0 || $get_parentData->allowance_types == null) {
+                                                            if ($get_parentData->type == 'percentage') {
+                                                                $empBasicSalary = ($get_parentData->amount * $employess->salary) / 100;
+                                                
+                                                                return $empBasicSalary;
+                                                            } else {
+                                                                return $get_parentData->amount;
+                                                            }
+                                                        } else {
+                                                            get_allowance_value($id, $get_parentData->id, $employess);
+                                                        }
+                                                    }
+                                                }
+                                                
+                                                ?>
+
+
+
+                                            </td>
+
+                                        </tr>
+
+                                        <!--Repeated Row Start-->
+
+
+
+
+
+
+
+                                        {{-- //new tr create --}}
+
+                                        <tr>
+
+                                            <td align="left" valign="top" style="border:1px solid #000000;">
+
+                                                {{-- @foreach ($payslipDetail['earning']['commission'] as $commission) --}}
+
+                                                @if (!empty($payslipDetail['earning']['commission_DB']))
+
+                                                    @foreach ($payslipDetail['earning']['commission_DB'] as $commission)
+                                                        @php
+                                                            
+                                                            $employess = \App\Models\Employee::find($employee->id);
+                                                            $empcomm = ($commission->amount * $employess->salary) / 100;
+
+                                                        @endphp
+
+                                                        @if ($commission->employees_id == 0 || $commission->employees_id == $employee->id)
+                                                        
+                                                            <table width="100%" border="0" cellspacing="0"
+                                                                cellpadding="0">
+
+                                                                <tr>
+
+                                                                    <td align="left" valign="middle"
+                                                                        style="text-align:left; padding:8px 10px;">
+                                                                        {{ $employee->name }} {{ $commission->name }}</td>
+
+                                                                    <td align="right" valign="middle"
+                                                                        style="width:150px; text-align:right; padding:8px 10px;">
+
+                                                                        @if ($commission->type != 'percentage')
+                                                                            {{ \Auth::user()->priceFormat($commission->amount) }}
+                                                                        @else
+                                                                            @if ($commission->commision_types == 0 || $commission->commision_types == null)
+                                                                                {{ $commission->amount }}%
+                                                                            @else
+                                                                                {{ $commission->amount }}%
+
+
+
+                                                                                <?php
+                                                                                
+                                                                                if ($commission->type == 'percentage') {
+                                                                                    $getvaluedata = get_commission_value($commission->id, $commission->commision_types, $employess);
+                                                                                
+                                                                                    $empcomm = ($getvaluedata * $commission->amount) / 100;
+                                                                                }
+                                                                                
+                                                                                ?>
+                                                                            @endif
+
+
+
+                                                                            ({{ \Auth::user()->priceFormat($empcomm) }})
+                                                                        @endif
+
+                                                                    </td>
+
+                                                                </tr>
+
+                                                            </table>
+                                                        @endif
+                                                    @endforeach
+
+                                                @endif
+
+
+
+                                                <?php
+                                                
+                                                function get_commission_value($id, $parent_id, $employess)
+                                                {
+                                                    $get_parentData = \App\Models\Commission_option::find($parent_id);
+                                                
+                                                    $get_CurruntData = \App\Models\Commission_option::find($id);
+                                                
+                                                    if (!empty($get_parentData)) {
+                                                        if ($get_parentData->commision_types == 0 || $get_parentData->commision_types == null) {
+                                                            if ($get_parentData->type == 'percentage') {
+                                                                $empBasicSalary = ($get_parentData->amount * $employess->salary) / 100;
+                                                
+                                                                return $empBasicSalary;
+                                                            } else {
+                                                                return $get_parentData->amount;
+                                                            }
+                                                        } else {
+                                                            get_commission_value($id, $get_parentData->id, $employess);
+                                                        }
+                                                    }
+                                                }
+                                                
+                                                ?>
+
+                                            </td>
+
+                                            {{-- //loan  --}}
+
+                                            <td align="left" valign="top" style="border:1px solid #000000;">
+
+
+
+                                                @if (!empty($payslipDetail['deduction']['loan_DB']))
+
+                                                    @foreach ($payslipDetail['deduction']['loan_DB'] as $loan)
+                                                        @php
+
+                                                            $employess = \App\Models\Employee::find($loan->employee_id);
+
+                                                            $emploan = ($loan->amount * $employess->salary) / 100;
+
+                                                        @endphp
+
+
+
+                                                        <table width="100%" border="0" cellspacing="0"
+                                                            cellpadding="0">
+
+                                                            <tr>
+
+                                                                <td width="50%" align="left" valign="middle"
+                                                                    style="width:50%; text-align:left; padding:8px 10px;">
+                                                                    {{ $loan->title }}</td>
+
+                                                                <td width="50%" align="right" valign="middle"
+                                                                    style="width:50%; text-align:right; padding:8px 10px;">
+
+                                                                    @if ($loan->type != 'percentage')
+                                                                        {{ \Auth::user()->priceFormat($loan->amount) }}
+                                                                    @else
+                                                                        {{ $loan->amount }}%
+
+                                                                        ({{ \Auth::user()->priceFormat($emploan) }})
+                                                                    @endif
+
+                                                                </td>
+
+                                                            </tr>
+
+                                                        </table>
+                                                    @endforeach
+
+                                                @endif
+
+                                            </td>
+
+                                        </tr>
+
+
+
+                                        {{-- //new tr create --}}
+
+                                        <tr>
+
+                                            <td align="left" valign="top" style="border:1px solid #000000;">
+
+                                                {{-- @foreach ($payslipDetail['earning']['otherPayment'] as $otherPayment) --}}
+
+                                                @if (!empty($payslipDetail['earning']['otherPayment_DB']))
+
+                                                    @foreach ($payslipDetail['earning']['otherPayment_DB'] as $otherPayment)
+                                                        @php
+
+                                                            $employess = \App\Models\Employee::find($employee->id);
+
+                                                            $emppayment = ($otherPayment->amount * $employess->salary) / 100;
+
+                                                        @endphp
+
+                                                        @if ($otherPayment->employees_id == 0 || $otherPayment->employees_id == $employee->id)
+                                                            <table width="100%" border="0" cellspacing="0"
+                                                                cellpadding="0">
+
+                                                                <tr>
+
+                                                                    <td width="50%" align="left" valign="middle"
+                                                                        style="width:50%; text-align:left; padding:8px 10px; border-bottom:1px solid #000000;">
+                                                                        {{ $otherPayment->name }}</td>
+
+                                                                    <td width="50%" align="right" valign="middle"
+                                                                        style="width:50%; text-align:right; padding:8px 10px; border-bottom:1px solid #000000;">
+
+                                                                        @if ($otherPayment->type != 'percentage')
+                                                                            {{ \Auth::user()->priceFormat($otherPayment->amount) }}
+                                                                        @else
+                                                                            {{ $otherPayment->amount }}%
+
+                                                                            ({{ \Auth::user()->priceFormat($emppayment) }})
+                                                                        @endif
+
+                                                                    </td>
+
+                                                                </tr>
+
+                                                            </table>
+                                                        @endif
+                                                    @endforeach
+
+                                                @endif
+
+                                            </td>
+
+                                            <td align="left" valign="top" style="border:1px solid #000000;">
+
+                                                <?php $totalleaveamount = 0; ?>
+
+                                                @if (!empty($payslip['leave_deduction']))
+
+
+
+                                                    @foreach (json_decode($payslip['leave_deduction']) as $extraleave)
+                                                        @php
+
+                                                            $totalleaveamount += $extraleave->amountdeduct;
+
+                                                        @endphp
+
+
+
+                                                        <table width="100%" border="0" cellspacing="0"
+                                                            cellpadding="0">
+
+                                                            <tr>
+
+                                                                <td width="50%" align="left" valign="middle"
+                                                                    style="width:50%; text-align:left; padding:8px 10px; border-bottom:1px solid #000000;">
+                                                                    {{ $extraleave->leave_title }}</td>
+
+                                                                <td width="50%" align="right" valign="middle"
+                                                                    style="width:50%; text-align:right; padding:8px 10px; border-bottom:1px solid #000000;">
+
+                                                                    {{ \Auth::user()->priceFormat($extraleave->amountdeduct) }}
+
+                                                                </td>
+
+                                                            </tr>
+
+                                                        </table>
+                                                    @endforeach
+
+
+
+
+
+                                                @endif
+
+
+
+                                            </td>
+
+                                        </tr>
+
+
+
+
+
+
+
+                                        <?php
+                                        
+                                        $salary_month = strtotime($payslip->salary_month);
+                                        
+                                        $totalPlease = $payslipDetail['totalEarning'] + $payslip->basic_salary;
+                                        
+                                        ?>
+
+
+
+
+
+                                        {{-- 8596  --}}
+
+                                        <tr>
+
+                                            <td align="left" valign="top" style="border:1px solid #000000;">
+
+                                                <table width="100%" border="0" cellspacing="0"
+                                                    cellpadding="0">
+
+                                                    <tr>
+
+                                                        <td width="50%" align="left" valign="middle"
+                                                            style="width:50%; text-align:left; padding:8px 10px; font-weight:bold;">
+                                                            Gross Earning</td>
+
+                                                        <td width="50%" align="right" valign="middle"
+                                                            style="width:50%; text-align:right; padding:8px 10px; font-weight:bold;">
+                                                            {{ \Auth::user()->priceFormat($payslipDetail['totalEarning'] + $payslip->basic_salary) }}
+                                                        </td>
+
+                                                        {{-- + $payslip->basic_salary --}}
+
+                                                        {{-- {{ \Auth::user()->priceFormat($payslipDetail['totalEarning'] + $payslip->basic_salary) }} --}}
+
+                                                    </tr>
+
+                                                </table>
+
+
+
+                                            </td>
+
+                                            <td align="left" valign="top" style="border:1px solid #000000;">
+
+                                                <table width="100%" border="0" cellspacing="0"
+                                                    cellpadding="0">
+
+                                                    <tr>
+
+                                                        <td width="50%" align="left" valign="middle"
+                                                            style="width:50%; text-align:left; padding:8px 10px; font-weight:bold;">
+                                                            Gross Deduction</td>
+
+                                                        <td width="50%" align="right" valign="middle"
+                                                            style="width:50%; text-align:right; padding:8px 10px; font-weight:bold;">
+                                                            {{-- @dd($payslipDetail['totalDeduction']); --}}
+                                                            {{ \Auth::user()->priceFormat($payslipDetail['totalDeduction'] + $totalleaveamount) }}
+                                                        </td>
+
+                                                        {{-- {{ \Auth::user()->priceFormat($payslipDetail['totalDeduction'] + $totalleaveamount) }} --}}
+
+                                                    </tr>
+
+                                                </table>
+
+                                            </td>
+
+                                        </tr>
+
+
+
+
+
+                                    </tbody>
+
+                                    <tfoot>
+
+                                        <tr>
+
+
+
+                                            <th colspan="2" bgcolor="#cccccc"
+                                                style="text-align:right; font-size:16px; background:#cccccc; padding:10px; border-left:1px solid #000000; border-right:1px solid #000000;">
+
+                                                Net Pay: {{ \Auth::user()->priceFormat($payslip->net_payble) }} for the
+                                                Month of {{ date('M-Y', $salary_month) }}
+
+                                                {{-- {{ \Auth::user()->priceFormat($totalPlease - ($payslipDetail['totalDeduction'] + $totalleaveamount)) }} --}}
+
+                                                {{-- $payslip->net_payble --}}
+
+
+
+                                                <?php
+                                                
+                                                $digit = new NumberFormatter('en', NumberFormatter::SPELLOUT);
+                                                
+                                                // echo ucwords($digit->format($totalPlease - ($payslipDetail['totalDeduction'] + $totalleaveamount)));
+                                                
+                                                // echo ucwords($digit->format($payslip->net_payble));
+                                                
+                                                echo $payslip->net_payble;
+                                                
+                                                ?>
+
+                                            </th>
+
+                                        </tr>
+
+                                    </tfoot>
+
+                                </table>
+
+
+
+                            </td>
+
+                        </tr>
+
+                        <tr>
+
+                            <td align="left" valign="top"
+                                style="padding:10px; font-family:Arial, Helvetica, sans-serif; color:#000000; line-height:24px; border:1px solid #000000;">
+
+                                <strong>Received with thanks: {{ ucwords($digit->format($payslip->net_payble)) }}
+                                    .</strong> <br />
+
+                                Net Salary Credited to Your {{ $employee->bank_name }} Account Number
+                                {{ $employee->account_number }} <br />
+
+                                1] AS PART OF OUR POLICY OF PRIVACY YOU ARE REQUESTED NOT TO DISCUSS YOUR REMUNERATION
+                                WITH ANY PERSON
+
+                                OTHER THEN YOUR CLOSE FAMILY MEMBER. <br />
+
+                                2] THIS IS A COMPUTER GENERATED PAYSLIP, NO SIGNATURE OR STAMP IS REQUIRED.
+
+                            </td>
+
+                        </tr>
+
+                    </table>
+
+
+
+                </td>
+
+            </tr>
+
+        </table>
+
+        <script type="text/javascript" src="{{ asset('js/html2pdf.bundle.min.js') }}"></script>
+
+        <script>
+            function saveAsPDF() {
+
+                var element = document.getElementById('printableArea');
+
+                var opt = {
+
+                    margin: 0.3,
+
+                    filename: '{{ str_replace(".","",$employee->name) }}',
+
+                    image: {
+
+                        type: 'jpeg',
+
+                        quality: 1
+
+                    },
+
+                    html2canvas: {
+
+                        scale: 4,
+
+                        dpi: 72,
+
+                        letterRendering: true
+
+                    },
+
+                    jsPDF: {
+
+                        unit: 'in',
+
+                        format: 'A4'
+
+                    }
+
+                };
+
+                html2pdf().set(opt).from(element).save();
+
+            }
+        </script>
+
+</body>
+
+
+
+
+
+
+
+</html>

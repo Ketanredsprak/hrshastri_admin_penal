@@ -1,0 +1,1845 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use DB;
+use DateTime;
+use App\Email;
+use App\Exports\EmployeeAttendanceImportSampleExcelFileDownload;
+use Carbon\Carbon;
+use App\Models\User;
+use App\Models\Branch;
+use App\Models\Utility;
+use App\Models\Employee;
+use App\Models\Department;
+use App\Models\IpRestrict;
+use Illuminate\Http\Request;
+use App\Imports\AttendanceImport;
+use App\Models\NotificationModel;
+use App\Models\AttendanceEmployee;
+use Illuminate\Support\Facades\Auth;
+use Maatwebsite\Excel\Facades\Excel;
+use App\Exports\MarkedAttendanceExport;
+use App\Imports\EmployeeAttendanceImport;
+use App\Models\WorkingShiftEmployees;
+use App\Models\WorkingShifts;
+use Exception;
+use Illuminate\Support\Facades\Validator;
+use Throwable;
+use Illuminate\Support\Facades\Crypt;
+use App\Imports\AttendanceChunkImport;
+use Illuminate\Support\Facades\Cache;
+
+class AttendanceEmployeeController extends Controller
+{
+     public function google_map($id)
+     {
+          $data = AttendanceEmployee::find($id);
+          return view('attendance.google_map', compact('data'));
+     }
+
+     public function checkAddressSaved(Request $request)
+     {
+          $validator = Validator::make(
+               $request->all(),
+               [
+                    'key' => 'required',
+                    'attendance_id' => 'required',
+               ]
+          );
+
+          if ($validator->fails())
+          {
+               return response()->json(['status' => 0, 'message' => $validator->errors()->first()]);
+          }
+
+          try
+          {
+               $key = $request->key;
+               $attendance_data = AttendanceEmployee::find($request->attendance_id);
+
+               return response()->json(['status' => 1, 'message' => __('Address fetched successfully.'), 'data' => $attendance_data->$key]);
+          }
+          catch (Exception | Throwable $ex)
+          {
+               return response()->json(['status' => 0, 'message' => showExceptionMessage($ex)]);
+          }
+     }
+
+     public function saveAddressFromLatLng(Request $request)
+     {
+          $validator = Validator::make(
+               $request->all(),
+               [
+                    'key' => 'required',
+                    'address' => 'required',
+                    'attendance_id' => 'required',
+               ]
+          );
+
+          if ($validator->fails())
+          {
+               return response()->json(['status' => 0, 'message' => $validator->errors()->first()]);
+          }
+
+          try
+          {
+               $key = $request->key;
+               $attendance_data = AttendanceEmployee::find($request->attendance_id);
+               $attendance_data->$key = $request->address;
+               $attendance_data->save();
+               return response()->json(['status' => 1, 'message' => __('Address saved successfully.')]);
+          }
+          catch (Exception | Throwable $ex)
+          {
+               return response()->json(['status' => 0, 'message' => showExceptionMessage($ex)]);
+          }
+     }
+
+     public function employee_birthday($id)
+     {
+          $id = Crypt::decryptString($id);
+          $notification = NotificationModel::find($id);
+
+          $Employee = Employee::where('user_id', $notification->user_id)->first();
+          if (empty($Employee))
+          {
+               $Employee = User::find($notification->user_id);
+          }
+          $notification->status = 1;
+          if (\Auth::user()->type != 'company')
+          {
+               $notification->save();
+          }
+          return view('Birthday.index', compact('Employee', 'notification'));
+     }
+
+     public function employee_anniversary()
+     {
+          $total_anniversary  = Employee::whereDay('company_doj', Carbon::now())->whereMonth('company_doj', Carbon::now())->where('created_by', \Auth::user()->creatorId())->get();
+          return view('Birthday.anniversary', compact('total_anniversary'));
+     }
+
+     public function currunt_month_holiday()
+     {
+          $total_holidays = DB::table('holidays')->where('created_by', '=', \Auth::user()->creatorId());
+          $total_holidays = $total_holidays->whereMonth('end_date', date('m'))
+               ->whereYear('end_date', date('Y'))->whereMonth('start_date', date('m'))
+               ->whereYear('start_date', date('Y'))->get();
+          return view('Birthday.crntmonth_holiday', compact('total_holidays'));
+     }
+
+     public function send_employee_email($id)
+     {
+          $data = Email::employee_email($id);
+          return redirect()->back()->with('success', __('Employee notification send.'));
+     }
+
+     public function employee_anniversary_send_email($id)
+     {
+          $data = Email::employee_anniversary_send_email($id);
+          return redirect()->back()->with('success', __('Employee notification send.'));
+     }
+
+     public function my_attendance()
+     {
+          $emp = !empty(\Auth::user()->employee) ? \Auth::user()->employee->id : 0;
+          $attendanceEmployee = AttendanceEmployee::where('employee_id', $emp);
+          $attendanceEmployee = $attendanceEmployee->orderBy('id', 'DESC')->get();
+          return view('attendance.my_attendance', compact('attendanceEmployee'));
+     }
+
+     public function index(Request $request)
+     {
+          if (\Auth::user()->can('Manage Attendance'))
+          {
+               $branch = Branch::where('created_by', \Auth::user()->creatorId())->get()->pluck('name', 'id');
+               $branch->prepend('All', '');
+
+               $department = Department::where('created_by', \Auth::user()->creatorId())->get()->pluck('name', 'id');
+               $department->prepend('All', '');
+
+               $type = $request->type ?? "daily";
+               $date = $request->date ?? date("Y-m-d");
+
+               // dd(\Auth::user()->type);
+               if (\Auth::user()->type == 'employee')
+               {
+                    $emp = !empty(\Auth::user()->employee) ? \Auth::user()->employee->id : 0;
+                    // dd($emp);
+                    $attendanceEmployee = AttendanceEmployee::where('employee_id', $emp);
+
+                    if ($type == 'monthly' && !empty($request->month))
+                    {
+                         $month = date('m', strtotime($request->month));
+                         $year  = date('Y', strtotime($request->month));
+
+
+                         $start_date = date($year . '-' . $month . '-01');
+                         $end_date = date('Y-m-t', strtotime('01-' . $month . '-' . $year));
+
+                         // old date
+                         // $end_date   = date($year . '-' . $month . '-t');
+
+                         $attendanceEmployee->whereBetween(
+                              'date',
+                              [
+                                   $start_date,
+                                   $end_date,
+                              ]
+                         );
+                    }
+                    elseif ($type == 'daily' && !empty($date))
+                    {
+                         $attendanceEmployee->where('date', $date);
+                    }
+                    else
+                    {
+                         $month      = date('m');
+                         $year       = date('Y');
+                         $start_date = date($year . '-' . $month . '-01');
+                         $end_date = date('Y-m-t', strtotime('01-' . $month . '-' . $year));
+                         $attendanceEmployee->whereBetween(
+                              'date',
+                              [
+                                   $start_date,
+                                   $end_date,
+                              ]
+                         );
+                    }
+
+                    $attendanceEmployee = $attendanceEmployee->orderBy('id', 'DESC')->get();
+               }
+               else
+               {
+                    if (\Auth::user()->type == 'company')
+                    {
+                         $employee = Employee::select('id')->where('created_by', \Auth::user()->creatorId());
+                    }
+                    else
+                    {
+                         // $employee = Employee::where('users_types_id',auth::id())->select('id')->where('created_by', \Auth::user()->creatorId());
+                         $employee = Employee::whereIn('id', selectedEmployee())->select('id')->where('created_by', \Auth::user()->creatorId());
+                    }
+                    if (!empty($request->branch))
+                    {
+                         $employee->where('branch_id', $request->branch);
+                    }
+
+                    if (!empty($request->department))
+                    {
+                         $employee->where('department_id', $request->department);
+                    }
+                    $employee = $employee->get()->pluck('id');
+                    $attendanceEmployee = AttendanceEmployee::whereIn('employee_id', $employee);
+                    if ($type == 'monthly' && !empty($request->month))
+                    {
+
+                         $month = date('m', strtotime($request->month));
+                         $year  = date('Y', strtotime($request->month));
+                         $start_date = date($year . '-' . $month . '-01');
+                         $end_date = date('Y-m-t', strtotime('01-' . $month . '-' . $year));
+
+                         // old date
+                         // $end_date   = date($year . '-' . $month . '-t');
+
+                         $attendanceEmployee->whereBetween(
+                              'date',
+                              [
+                                   $start_date,
+                                   $end_date,
+                              ]
+                         );
+                    }
+                    elseif ($type == 'daily' && !empty($date))
+                    {
+                         $attendanceEmployee->where('date', $date);
+                    }
+                    else
+                    {
+
+                         $month      = date('m');
+                         $year       = date('Y');
+                         $start_date = date($year . '-' . $month . '-01');
+                         $end_date = date('Y-m-t', strtotime('01-' . $month . '-' . $year));
+                         // old date
+                         // $end_date   = date($year . '-' . $month . '-t');
+
+                         $attendanceEmployee->whereBetween(
+                              'date',
+                              [
+                                   $start_date,
+                                   $end_date,
+                              ]
+                         );
+                    }
+
+                    $attendanceEmployee = $attendanceEmployee->orderBy('id', 'DESC')->get();
+               }
+
+               // dd($attendanceEmployee->pluck("employee_id"));
+
+               // dd("Employee Ids", implode(',', $attendanceEmployee->pluck("employee_id")->toArray()));
+
+               $requestBranchId = $request->branch ?? "";
+               $requestDepartmentId = $request->department ?? "";
+
+               return view('attendance.index', compact('attendanceEmployee', 'branch', 'department', 'type', 'date', 'requestBranchId', 'requestDepartmentId'));
+          }
+          else
+          {
+               return redirect()->back()->with('error', __('Permission denied.'));
+          }
+     }
+
+     public function create()
+     {
+          if (\Auth::user()->can('Create Attendance'))
+          {
+               $employees = User::where('created_by', '=', Auth::user()->creatorId())->where('type', '=', "employee")->get()->pluck('name', 'id');
+
+               return view('attendance.create', compact('employees'));
+          }
+          else
+          {
+               return redirect()->back()->with('error', __('Permission denied.'));
+          }
+     }
+
+     public function store(Request $request)
+     {
+          if (\Auth::user()->can('Create Attendance'))
+          {
+               $validator = \Validator::make(
+                    $request->all(),
+                    [
+                         'employee_id' => 'required',
+                         'date' => 'required',
+                         'clock_in' => 'required',
+                         'clock_out' => 'required',
+                    ]
+               );
+               if ($validator->fails())
+               {
+                    $messages = $validator->getMessageBag();
+
+                    return redirect()->back()->with('error', $messages->first());
+               }
+
+               $startTime = date("H:i", strtotime(Utility::getValByName('company_start_time')));
+               $endTime = date("H:i", strtotime(Utility::getValByName('company_end_time')));
+
+               $attendance = AttendanceEmployee::where('employee_id', '=', $request->employee_id)->where('date', '=', $request->date)->where('clock_out', '=', '00:00:00')->get()->toArray();
+               if ($attendance)
+               {
+                    return redirect()->route('attendanceemployee.index')->with('error', __('Employee Attendance Already Created.'));
+               }
+               else
+               {
+                    $date = date("Y-m-d");
+
+                    // $late = "00:00:00";
+                    // if (strtotime(date("H:i", strtotime($request->clock_in))) > strtotime($startTime))
+                    // {
+                    //      $totalLateSeconds = strtotime(date("H:i", strtotime($request->clock_in))) - strtotime($startTime);
+                    //      $hours            = floor($totalLateSeconds / 3600);
+                    //      $mins             = floor($totalLateSeconds / 60 % 60);
+                    //      $secs             = floor($totalLateSeconds % 60);
+                    //      $late             = sprintf('%02d:%02d:%02d', $hours, $mins, $secs);
+                    // }
+
+                    // //early Leaving
+                    // $totalEarlyLeavingSeconds = strtotime($date . $endTime) - strtotime($request->clock_out);
+                    // $hours                    = floor($totalEarlyLeavingSeconds / 3600);
+                    // $mins                     = floor($totalEarlyLeavingSeconds / 60 % 60);
+                    // $secs                     = floor($totalEarlyLeavingSeconds % 60);
+                    // $earlyLeaving             = sprintf('%02d:%02d:%02d', $hours, $mins, $secs);
+
+
+                    // if (strtotime($request->clock_out) > strtotime($date . $endTime))
+                    // {
+                    //      //Overtime
+                    //      $totalOvertimeSeconds = strtotime($request->clock_out) - strtotime($date . $endTime);
+                    //      $hours                = floor($totalOvertimeSeconds / 3600);
+                    //      $mins                 = floor($totalOvertimeSeconds / 60 % 60);
+                    //      $secs                 = floor($totalOvertimeSeconds % 60);
+                    //      $overtime             = sprintf('%02d:%02d:%02d', $hours, $mins, $secs);
+                    // }
+                    // else
+                    // {
+                    //      $overtime = '00:00:00';
+                    // }
+
+                    // Attandence Calculation Late Comming, Early Leaving, Overtime,
+                    $is_flexi_hour_applied = 0;
+                    $late = "00:00:00";
+                    $earlyLeaving = "00:00:00";
+                    $overtime = '00:00:00';
+
+                    $employeeId = $request->employee_id;
+
+                    $clockInDatetime = date("Y-m-d H:i:s", strtotime($request->clock_in));
+                    $clockOutDatetime = date("Y-m-d H:i:s", strtotime($request->clock_out));
+
+                    $calculateAttendanceData = (object)calculateAttendanceData($employeeId, $date, $clockInDatetime, $clockOutDatetime);
+
+                    if ($calculateAttendanceData->status == 1)
+                    {
+                         if (!empty($calculateAttendanceData->data))
+                         {
+                              $calculateAttendanceDataRow = (object)$calculateAttendanceData->data ?? [];
+
+                              $is_flexi_hour_applied = ($calculateAttendanceDataRow->is_flexi_hour_applied == true ? 1 : 0);
+                              $late = $calculateAttendanceDataRow->late_comming ?? $late;
+                              $earlyLeaving = $calculateAttendanceDataRow->early_leaving ?? $earlyLeaving;
+                              $overtime = $calculateAttendanceDataRow->overtime ?? $overtime;
+                         }
+                    }
+                    // Attandence Calculation Late Comming, Early Leaving, Overtime,
+
+                    $employeeAttendance                = new AttendanceEmployee();
+                    $employeeAttendance->employee_id   = $request->employee_id;
+                    $employeeAttendance->date          = $request->date;
+                    $employeeAttendance->status        = 'Present';
+                    $employeeAttendance->clock_in      = $request->clock_in . ':00';
+                    $employeeAttendance->clock_out     = $request->clock_out . ':00';
+                    $employeeAttendance->late          = $late;
+                    $employeeAttendance->early_leaving = $earlyLeaving;
+                    $employeeAttendance->overtime      = $overtime;
+                    $employeeAttendance->total_rest    = '00:00:00';
+                    $employeeAttendance->created_by    = \Auth::user()->creatorId();
+                    $employeeAttendance->is_flexi_hours_used    = $is_flexi_hour_applied;
+                    $employeeAttendance->clock_in_ip_address    = ($request->ip() ?? null);
+                    $employeeAttendance->clock_out_ip_address    = ($request->ip() ?? null);
+                    $employeeAttendance->save();
+
+                    return redirect()->route('attendanceemployee.index')->with('success', __('Employee attendance successfully created.'));
+               }
+          }
+          else
+          {
+               return redirect()->back()->with('error', __('Permission denied.'));
+          }
+     }
+     public function show(Request $request)
+     {
+          return redirect()->route('attendance.index');
+     }
+     public function edit($id)
+     {
+          if (\Auth::user()->can('Edit Attendance'))
+          {
+               $attendanceEmployee = AttendanceEmployee::where('id', $id)->first();
+               $employees          = Employee::where('created_by', '=', \Auth::user()->creatorId())->get()->pluck('name', 'id');
+
+               $clockIn = "";
+               $clockOut = "";
+               if (!empty($attendanceEmployee))
+               {
+                    if ($attendanceEmployee->clock_in != '00:00:00' && !empty($attendanceEmployee->clock_in))
+                    {
+                         $clockIn = $attendanceEmployee->clock_in;
+                    }
+
+                    if ($attendanceEmployee->clock_out != '00:00:00' && !empty($attendanceEmployee->clock_out))
+                    {
+                         $clockOut = $attendanceEmployee->clock_out;
+                    }
+               }
+
+               return view('attendance.edit', compact('attendanceEmployee', 'employees', 'clockIn', 'clockOut'));
+          }
+          else
+          {
+               return redirect()->back()->with('error', __('Permission denied.'));
+          }
+     }
+
+     public function update(Request $request, $id)
+     {
+          $validator = \Validator::make(
+               $request->all(),
+               [
+                    'clock_in'   => 'required',
+               ],
+               [
+                    'clock_in'   => 'The clock in field is required.',
+               ]
+          );
+
+          if ($validator->fails())
+          {
+               // return redirect()->back()->with('error', __('First Add Required Fields.'));
+               $messages = $validator->messages();
+               return response()->json(['status' => 0, 'message' => $messages]);
+          }
+
+          try
+          {
+
+               $clockInDatetime = null;
+               $clockOutDatetime = null;
+
+               $clockIn = null;
+               $clockOut = null;
+
+               if (!empty($request->clock_in) && $request->clock_in != null && $request->clock_in != "00:00:00")
+               {
+                    $clockInDatetime = date("Y-m-d H:i:s", strtotime($request->clock_in));
+                    $clockIn = date("H:i:s", strtotime($clockInDatetime));
+               }
+
+               if (!empty($request->clock_out) && $request->clock_out != null && $request->clock_out != "00:00:00")
+               {
+                    $clockOutDatetime = date("Y-m-d H:i:s", strtotime($request->clock_out));
+                    $clockOut = date("H:i:s", strtotime($clockOutDatetime));
+               }
+
+               $todayAttendance = AttendanceEmployee::where('id', '=', $id)->first();
+
+               $attendanceDate = date("Y-m-d", strtotime($todayAttendance->clock_in_date_time));
+               $clockInDate = date("Y-m-d", strtotime($todayAttendance->clock_in_date_time));
+               $clockOutDate = date("Y-m-d", strtotime($todayAttendance->clock_out_date_time));
+
+               // Attandence Calculation Late Comming, Early Leaving, Overtime,
+               $is_flexi_hour_applied = 0;
+               $late = "00:00:00";
+               $earlyLeaving = "00:00:00";
+               $overtime = '00:00:00';
+
+               $employeeId = $todayAttendance->employee_id;
+
+               $calculateAttendanceData = (object)calculateAttendanceData($employeeId, $attendanceDate, $clockInDatetime, $clockOutDatetime);
+               // $calculateAttendanceData = (object)calculateAttendanceData_NewTest($employeeId, $attendanceDate, $clockInDatetime, $clockOutDatetime);
+               // dd($calculateAttendanceData);
+
+               if ($calculateAttendanceData->status == 1)
+               {
+                    if (!empty($calculateAttendanceData->data))
+                    {
+                         $calculateAttendanceDataRow = (object)$calculateAttendanceData->data ?? [];
+
+                         $is_flexi_hour_applied = ($calculateAttendanceDataRow->is_flexi_hour_applied == true ? 1 : 0);
+                         $late = $calculateAttendanceDataRow->late_comming ?? $late;
+                         $earlyLeaving = $calculateAttendanceDataRow->early_leaving ?? $earlyLeaving;
+                         $overtime = $calculateAttendanceDataRow->overtime ?? $overtime;
+                    }
+               }
+               // Attandence Calculation Late Comming, Early Leaving, Overtime
+
+               $attendanceEmployee                = AttendanceEmployee::find($id);
+               $attendanceEmployee->date          = $attendanceDate;
+               $attendanceEmployee->clock_in      = $clockIn;
+               $attendanceEmployee->clock_out     = $clockOut;
+               $attendanceEmployee->late          = $late;
+               $attendanceEmployee->early_leaving = $earlyLeaving;
+               $attendanceEmployee->overtime      = $overtime;
+               $attendanceEmployee->total_rest    = '00:00:00';
+               $attendanceEmployee->is_flexi_hours_used    = $is_flexi_hour_applied;
+               $attendanceEmployee->clock_in_date_time    = $clockInDatetime;
+               $attendanceEmployee->clock_out_date_time    = $clockOutDatetime;
+               $attendanceEmployee->clock_in_ip_address    = ($request->ip() ?? null);
+               $attendanceEmployee->clock_out_ip_address    = $clockOutDatetime != null ? ($request->ip() ?? null) : null;;
+
+               $attendanceEmployee->save();
+
+               return redirect()->back()->with('success', __('Attedance Updated.'));
+          }
+
+          catch (Exception | Throwable $ex)
+          {
+               return redirect()->back()->with('error', showExceptionMessage($ex));
+          }
+     }
+
+     public function destroy($id)
+     {
+          if (\Auth::user()->can('Delete Attendance'))
+          {
+               $attendance = AttendanceEmployee::where('id', $id)->first();
+
+               $attendance->delete();
+
+               return redirect()->route('attendanceemployee.index')->with('success', __('Attendance successfully deleted.'));
+          }
+          else
+          {
+               return redirect()->back()->with('error', __('Permission denied.'));
+          }
+     }
+
+     // clock in clock out api
+     public function attendance(Request $request) // for dashboard clock in and clock out
+     {
+          try
+          {
+               $clock_type = $request->clock_type ?? 0; // 0 = clock in, 1 = clock out
+
+               $settings = Utility::settings();
+               if ($settings['ip_restrict'] == 'on')
+               {
+                    $userIp = request()->ip();
+                    $ip     = IpRestrict::where('created_by', \Auth::user()->creatorId())->whereIn('ip', [$userIp])->first();
+                    if (!empty($ip))
+                    {
+                         return redirect()->back()->with('error', __('this ip is not allowed to clock in & clock out.'));
+                    }
+               }
+
+               $employeeId = Auth::user()->employee->id;
+
+               $startTime = date("H:i", strtotime(Utility::getValByName('company_start_time')));
+               $endTime = date("H:i", strtotime(Utility::getValByName('company_end_time')));
+
+               $date = date("Y-m-d");
+               $time = date("H:i");
+
+               // this is for tesging static time, comment this
+               // $time = date("H:i", strtotime("11:00:00"));
+
+               $attendance = AttendanceEmployee::orderBy('id', 'desc')->where('employee_id', '=', $employeeId)->whereDate('date', $date)->first();
+
+               if (empty($attendance)) // clock in
+               {
+                    $late = "00:00:00";
+                    $is_flexi_hour_applied = 0;
+                    // Attandence Calculation Late Comming, Early Leaving, Overtime,
+                    $clockInDatetime = date("Y-m-d H:i:s");
+
+                    $calculateAttendanceData = (object)calculateAttendanceData($employeeId, $date, $clockInDatetime, null);
+                    if ($calculateAttendanceData->status == 1)
+                    {
+                         if (!empty($calculateAttendanceData->data))
+                         {
+                              $calculateAttendanceDataRow = (object)$calculateAttendanceData->data ?? [];
+
+                              $late = $calculateAttendanceDataRow->late_comming ?? $late;
+                              $is_flexi_hour_applied = ($calculateAttendanceDataRow->is_flexi_hour_applied == true ? 1 : 0);
+                         }
+                    }
+                    // Attandence Calculation Late Comming, Early Leaving, Overtime,
+
+                    DB::beginTransaction();
+
+                    $employeeAttendance                = new AttendanceEmployee();
+                    $employeeAttendance->employee_id   = $employeeId;
+                    $employeeAttendance->date          = $date;
+                    $employeeAttendance->status        = 'Present';
+                    $employeeAttendance->clock_in      = $time;
+                    $employeeAttendance->clock_out     = '00:00:00';
+                    $employeeAttendance->late          = $late;
+                    $employeeAttendance->is_flexi_hours_used = $is_flexi_hour_applied;
+                    $employeeAttendance->early_leaving = '00:00:00';
+                    $employeeAttendance->overtime      = '00:00:00';
+                    $employeeAttendance->total_rest    = '00:00:00';
+                    $employeeAttendance->created_by    = Auth::user()->id;
+                    $employeeAttendance->clock_in_ip_address    = ($request->ip() ?? null);
+
+
+                    $employeeAttendance->save();
+
+                    DB::commit();
+
+                    return redirect()->route('home')->with('success', __('Clocked in successfully.'));
+               }
+               else
+               {
+                    if ($clock_type == 0) // if clock in
+                    {
+                         return redirect()->route('home')->with('error', __('Already Clocked in.'));
+                    }
+
+                    if ($attendance->clock_out != "00:00:00")
+                    {
+                         return redirect()->route('home')->with('error', __('Already Clocked out.'));
+                    }
+
+                    // Attandence Calculation Late Comming, Early Leaving, Overtime,
+
+                    $is_flexi_hour_applied = 0;
+                    $late = "00:00:00";
+                    $earlyLeaving = "00:00:00";
+                    $overtime = '00:00:00';
+
+                    $clockInDatetime = date("Y-m-d H:i:s", strtotime($attendance->clock_in));
+                    $clockOutDatetime = date("Y-m-d H:i:s");
+
+                    $clockInTime = date("H:i", strtotime($attendance->clock_in));
+                    $calculateAttendanceData = (object)calculateAttendanceData($employeeId, $date, $clockInDatetime, $clockOutDatetime);
+                    if ($calculateAttendanceData->status == 1)
+                    {
+                         if (!empty($calculateAttendanceData->data))
+                         {
+                              $calculateAttendanceDataRow = (object)$calculateAttendanceData->data ?? [];
+
+                              $is_flexi_hour_applied = ($calculateAttendanceDataRow->is_flexi_hour_applied == true ? 1 : 0);
+                              $late = $calculateAttendanceDataRow->late_comming ?? $late;
+                              $earlyLeaving = $calculateAttendanceDataRow->early_leaving ?? $earlyLeaving;
+                              $overtime = $calculateAttendanceDataRow->overtime ?? $overtime;
+                         }
+                    }
+                    // Attandence Calculation Late Comming, Early Leaving, Overtime,
+
+                    // dd($calculateAttendanceData);
+
+                    DB::beginTransaction();
+                    $attendance = AttendanceEmployee::find($attendance->id);
+
+                    $attendance->clock_out = $time;
+                    $attendance->early_leaving = $earlyLeaving;
+                    $attendance->overtime = $overtime;
+                    $attendance->total_rest = '00:00:00';
+
+                    $attendance->clock_out_ip_address    = ($request->ip() ?? null);
+                    // $attendance->is_flexi_hour_applied = $is_flexi_hour_applied;
+
+                    $attendance->save();
+                    DB::commit();
+
+                    return redirect()->route('home')->with('success', __('Clocked out successfully.'));
+               }
+          }
+          catch (Exception $ex)
+          {
+               return redirect()->route('home')->with('error', showExceptionMessage($ex));
+          }
+          catch (Throwable $ex)
+          {
+               return redirect()->route('home')->with('error', showExceptionMessage($ex));
+          }
+     }
+
+     public function bulkAttendance(Request $request)
+     {
+          if (\Auth::user()->can('Create Attendance'))
+          {
+
+               $branch = Branch::where('created_by', \Auth::user()->creatorId())->get()->pluck('name', 'id');
+               $branch->prepend('Select Branch', '');
+
+               $department = Department::where('created_by', \Auth::user()->creatorId())->get()->pluck('name', 'id');
+               $department->prepend('Select Department', '');
+
+               $employees = [];
+               if (!empty($request->branch) && !empty($request->department))
+               {
+                    $employees = Employee::where('created_by', \Auth::user()->creatorId())->where('branch_id', $request->branch)->where('department_id', $request->department)->get();
+               }
+
+               $requestBranchId = $request->branch ?? "";
+               $requestDepartmentId = $request->department ?? "";
+
+               return view('attendance.bulk', compact('employees', 'branch', 'department', 'requestBranchId', 'requestDepartmentId'));
+          }
+          else
+          {
+               return redirect()->back()->with('error', __('Permission denied.'));
+          }
+     }
+
+     public function bulkAttendanceData(Request $request)
+     {
+          try
+          {
+               if (Auth::user()->can('Create Attendance'))
+               {
+                    if (!empty($request->branch) && !empty($request->department))
+                    {
+
+                         $startTime = date("H:i", strtotime(Utility::getValByName('company_start_time')));
+                         $endTime = date("H:i", strtotime(Utility::getValByName('company_end_time')));
+
+                         $date      = $request->date;
+
+                         $employees = $request->employee_id;
+                         $atte      = [];
+                         foreach ($employees as $employee)
+                         {
+                              $present = 'present-' . $employee;
+                              $inRequest      = 'in-' . $employee;
+                              $outRequest     = 'out-' . $employee;
+                              $atte[]  = $present;
+
+
+
+
+
+                              if ($request->$present == 'on' && ($request->$inRequest != null && $request->$outRequest != null))
+                              {
+
+                                   $in  = date("Y-m-d H:i:s", strtotime($request->$inRequest));
+                                   $out = date("Y-m-d H:i:s", strtotime($request->$outRequest));
+
+                                   $clockInDatetime = null;
+                                   $clockOutDatetime = null;
+
+                                   $clockIn = null;
+                                   $clockOut = null;
+
+                                   if (!empty($in) && $in != null && $in != "00:00:00")
+                                   {
+                                        $clockInDatetime = date("Y-m-d H:i:s", strtotime($in));
+                                        $clockIn = date("H:i:s", strtotime($clockInDatetime));
+                                   }
+
+                                   if (!empty($out) && $out != null && $out != "00:00:00")
+                                   {
+                                        $clockOutDatetime = date("Y-m-d H:i:s", strtotime($out));
+                                        $clockOut = date("H:i:s", strtotime($clockOutDatetime));
+                                   }
+
+                                   $attendance = AttendanceEmployee::where('employee_id', '=', $employee)->where('date', '=', $request->date)->first();
+
+                                   if (!empty($attendance))
+                                   {
+                                        $employeeAttendance = $attendance;
+
+                                        $attendanceDate = date("Y-m-d", strtotime($attendance->clock_in_date_time));
+                                        $clockInDate = date("Y-m-d", strtotime($attendance->clock_in_date_time));
+                                        $clockOutDate = date("Y-m-d", strtotime($attendance->clock_out_date_time));
+                                   }
+                                   else
+                                   {
+                                        $employeeAttendance              = new AttendanceEmployee();
+                                        $employeeAttendance->employee_id = $employee;
+                                        $employeeAttendance->created_by  = Auth::user()->creatorId();
+                                   }
+
+
+
+                                   // -----------------------------------------------------------------------
+
+
+                                   // Attandence Calculation Late Comming, Early Leaving, Overtime,
+                                   $is_flexi_hour_applied = 0;
+                                   $late = "00:00:00";
+                                   $earlyLeaving = "00:00:00";
+                                   $overtime = '00:00:00';
+
+                                   $employeeId = $employee;
+
+                                   $calculateAttendanceData = (object)calculateAttendanceData($employeeId, $request->date, $clockInDatetime, $clockOutDatetime);
+
+                                   if ($calculateAttendanceData->status == 1)
+                                   {
+                                        if (!empty($calculateAttendanceData->data))
+                                        {
+                                             $calculateAttendanceDataRow = (object)$calculateAttendanceData->data ?? [];
+
+                                             $is_flexi_hour_applied = ($calculateAttendanceDataRow->is_flexi_hour_applied == true ? 1 : 0);
+                                             $late = $calculateAttendanceDataRow->late_comming ?? $late;
+                                             $earlyLeaving = $calculateAttendanceDataRow->early_leaving ?? $earlyLeaving;
+                                             $overtime = $calculateAttendanceDataRow->overtime ?? $overtime;
+                                        }
+                                   }
+                                   // Attandence Calculation Late Comming, Early Leaving, Overtime,
+
+                                   DB::beginTransaction();
+
+                                   $employeeAttendance->date          = date('Y-m-d', strtotime($clockInDatetime));
+                                   $employeeAttendance->status        = 'Present';
+                                   $employeeAttendance->clock_in      = $clockIn;
+                                   $employeeAttendance->clock_out     = $clockOut;
+                                   $employeeAttendance->late          = $late;
+                                   $employeeAttendance->early_leaving = $earlyLeaving;
+                                   $employeeAttendance->overtime      = $overtime;
+                                   $employeeAttendance->total_rest    = '00:00:00';
+                                   $employeeAttendance->is_flexi_hours_used    = $is_flexi_hour_applied;
+
+                                   $employeeAttendance->clock_in_date_time    = $clockInDatetime;
+                                   $employeeAttendance->clock_out_date_time    = $clockOutDatetime;
+
+                                   $employeeAttendance->clock_in_ip_address    = ($request->ip() ?? null);
+                                   $employeeAttendance->clock_out_ip_address    = ($request->ip() ?? null);
+
+                                   $employeeAttendance->save();
+
+                                   DB::commit();
+                              }
+                         }
+
+                         return redirect()->back()->with('success', __('Employee attendance successfully created.'));
+                    }
+                    else
+                    {
+                         return redirect()->back()->with('error', __('Branch & department field required.'));
+                    }
+               }
+               else
+               {
+                    return redirect()->back()->with('error', __('Permission denied.'));
+               }
+          }
+          catch (Exception $ex)
+          {
+               return redirect()->back()->with('error', showExceptionMessage($ex));
+          }
+          catch (Throwable $ex)
+          {
+               return redirect()->back()->with('error', showExceptionMessage($ex));
+          }
+     }
+
+     public function importFile()
+     {
+          return view('attendance.import');
+     }
+
+     public function import(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'file' => 'required|mimes:csv,txt,xlsx',
+        ]);
+
+        if ($validator->fails()) {
+            return back()->with('error', $validator->errors()->first());
+        }
+
+        $user = auth()->user();
+        $companyId = method_exists($user, 'creatorId') ? $user->creatorId() : $user->id;
+
+        // Cache company settings once
+        $settings = [
+            'company_start_time' => Utility::getValByName('company_start_time'),
+            'company_end_time'   => Utility::getValByName('company_end_time'),
+            'company_flexi_hours'=> Utility::getValByName('company_flexi_hours'),
+            'company_flexi_days' => Utility::getValByName('company_flexi_days'),
+        ];
+
+        // Cache employee email → id map
+        $employeeCacheKey = "employees_map_{$companyId}";
+        Cache::remember($employeeCacheKey, now()->addMinutes(30), function () use ($companyId) {
+            return Employee::where('created_by', $companyId)
+                ->pluck('id', 'email')
+                ->mapWithKeys(fn ($id, $email) => [strtolower(trim($email)) => $id])
+                ->toArray();
+        });
+
+        // Fast import using chunk reading
+        Excel::import(new AttendanceChunkImport($companyId, $settings), $request->file('file'));
+
+        return back()->with('success', "Attendance imported successfully.");
+    }
+
+     public function import_bk_nirav(Request $request)
+     {
+          return $this->importEmployeeAttendance($request);
+
+          $rules = [
+               'file' => 'required|mimes:csv,txt,xlsx',
+          ];
+          $validator = \Validator::make($request->all(), $rules);
+
+          if ($validator->fails())
+          {
+               $messages = $validator->getMessageBag();
+
+               return redirect()->back()->with('error', $messages->first());
+          }
+
+          $attendance = (new AttendanceImport())->toArray(request()->file('file'))[0];
+
+          $email_data = [];
+          foreach ($attendance as $key => $employee)
+          {
+               if ($key != 0)
+               {
+                    echo "<pre>";
+                    if ($employee != null && Employee::where('email', $employee[0])->where('created_by', \Auth::user()->creatorId())->exists())
+                    {
+                         $email = $employee[0];
+                    }
+                    else
+                    {
+                         $email_data[] = $employee[0];
+                    }
+               }
+          }
+          $totalattendance = count($attendance) - 1;
+          $errorArray    = [];
+
+          // $startTime = Utility::getValByName('company_start_time');
+          // $endTime   = Utility::getValByName('company_end_time');
+
+          $startTime = date("H:i", strtotime(Utility::getValByName('company_start_time')));
+          $endTime = date("H:i", strtotime(Utility::getValByName('company_end_time')));
+
+          if (!empty($attendanceData))
+          {
+               $errorArray[] = $attendanceData;
+          }
+          else
+          {
+               foreach ($attendance as $key => $value)
+               {
+                    if ($key != 0)
+                    {
+                         $employeeData = Employee::where('email', $value[0])->where('created_by', \Auth::user()->creatorId())->first();
+                         // $employeeId = 0;
+                         if (!empty($employeeData))
+                         {
+                              $employeeId = $employeeData->id;
+
+
+                              $clockIn = $value[2];
+                              $clockOut = $value[3];
+
+                              if ($clockIn)
+                              {
+                                   $status = "present";
+                              }
+                              else
+                              {
+                                   $status = "leave";
+                              }
+
+
+                              // Attandence Calculation Late Comming, Early Leaving, Overtime,
+                              $is_flexi_hour_applied = 0;
+                              $late = "00:00:00";
+                              $earlyLeaving = "00:00:00";
+                              $overtime = '00:00:00';
+
+                              $employeeId = $employee;
+
+                              $date = $value[1];
+
+
+                              $clockInDatetime = date("Y-m-d H:i:s", strtotime($date . " " . $clockIn));
+                              $clockOutDatetime = date("Y-m-d H:i:s", strtotime($date . " " . $clockOut));
+                              $clockOutDatetime = new DateTime($clockOutDatetime);
+
+                              // If clock-out time is earlier than clock-in time, adjust date
+                              if ($clockOutDatetime < new DateTime($clockInDatetime))
+                              {
+                                   $clockOutDatetime->modify('+1 day');
+                                   $clockOutDatetime = $clockOutDatetime->format('Y-m-d H:i:s');
+                              }
+
+                              $calculateAttendanceData = (object)calculateAttendanceData($employeeId, $date, $clockInDatetime, $clockOutDatetime);
+
+                              if ($calculateAttendanceData->status == 1)
+                              {
+                                   if (!empty($calculateAttendanceData->data))
+                                   {
+                                        $calculateAttendanceDataRow = (object)$calculateAttendanceData->data ?? [];
+
+                                        $is_flexi_hour_applied = ($calculateAttendanceDataRow->is_flexi_hour_applied == true ? 1 : 0);
+                                        $late = $calculateAttendanceDataRow->late_comming ?? $late;
+                                        $earlyLeaving = $calculateAttendanceDataRow->early_leaving ?? $earlyLeaving;
+                                        $overtime = $calculateAttendanceDataRow->overtime ?? $overtime;
+                                   }
+                              }
+                              // Attandence Calculation Late Comming, Early Leaving, Overtime,
+
+                              $check = AttendanceEmployee::where('employee_id', $employeeId)->where('date', $value[1])->first();
+                              if ($check)
+                              {
+                                   $check->update([
+                                        'late' => $late,
+                                        'early_leaving' => ($earlyLeaving > 0) ? $earlyLeaving : '00:00:00',
+                                        'overtime' => $overtime,
+                                        'clock_in' => $value[2],
+                                        'clock_out' => $value[3],
+                                        'is_flexi_hours_used' => $is_flexi_hour_applied,
+                                   ]);
+                              }
+                              else
+                              {
+                                   $time_sheet = AttendanceEmployee::create([
+                                        'employee_id' => $employeeId,
+                                        'date' => $value[1],
+                                        'status' => $status,
+                                        'late' => $late,
+                                        'early_leaving' => ($earlyLeaving > 0) ? $earlyLeaving : '00:00:00',
+                                        'overtime' => $overtime,
+                                        'clock_in' => $value[2],
+                                        'clock_out' => $value[3],
+                                        'created_by' => \Auth::user()->id,
+                                        'is_flexi_hours_used' => $is_flexi_hour_applied,
+                                   ]);
+                              }
+                         }
+                    }
+                    else
+                    {
+                         $email_data = implode(' And ', $email_data);
+                    }
+               }
+               if (!empty($email_data))
+               {
+                    return redirect()->back()->with('status', 'this record is not import. ' . '</br>' . $email_data);
+               }
+               else
+               {
+                    if (empty($errorArray))
+                    {
+                         $data['status'] = 'success';
+                         $data['msg']    = __('Record successfully imported');
+                    }
+                    else
+                    {
+
+                         $data['status'] = 'error';
+                         $data['msg']    = count($errorArray) . ' ' . __('Record imported fail out of' . ' ' . $totalattendance . ' ' . 'record');
+
+
+                         foreach ($errorArray as $errorData)
+                         {
+                              $errorRecord[] = implode(',', $errorData->toArray());
+                         }
+
+                         \Session::put('errorArray', $errorRecord);
+                    }
+
+                    return redirect()->back()->with($data['status'], $data['msg']);
+               }
+          }
+     }
+     public function import_bk(Request $request)
+     {
+          $rules = [
+               'file' => 'required|mimes:csv,txt,xlsx',
+          ];
+          $validator = \Validator::make($request->all(), $rules);
+
+          if ($validator->fails())
+          {
+               $messages = $validator->getMessageBag();
+
+               return redirect()->back()->with('error', $messages->first());
+          }
+
+          $attendance = (new AttendanceImport())->toArray(request()->file('file'))[0];
+
+          $email_data = [];
+          foreach ($attendance as $key => $employee)
+          {
+               if ($key != 0)
+               {
+                    echo "<pre>";
+                    if ($employee != null && Employee::where('email', $employee[0])->where('created_by', \Auth::user()->creatorId())->exists())
+                    {
+                         $email = $employee[0];
+                    }
+                    else
+                    {
+                         $email_data[] = $employee[0];
+                    }
+               }
+          }
+          $totalattendance = count($attendance) - 1;
+          $errorArray    = [];
+
+          // $startTime = Utility::getValByName('company_start_time');
+          // $endTime   = Utility::getValByName('company_end_time');
+
+          $startTime = date("H:i", strtotime(Utility::getValByName('company_start_time')));
+          $endTime = date("H:i", strtotime(Utility::getValByName('company_end_time')));
+
+          if (!empty($attendanceData))
+          {
+               $errorArray[] = $attendanceData;
+          }
+          else
+          {
+               foreach ($attendance as $key => $value)
+               {
+                    if ($key != 0)
+                    {
+                         $employeeData = Employee::where('email', $value[0])->where('created_by', \Auth::user()->creatorId())->first();
+                         // $employeeId = 0;
+                         if (!empty($employeeData))
+                         {
+                              $employeeId = $employeeData->id;
+
+
+                              $clockIn = $value[2];
+                              $clockOut = $value[3];
+
+                              if ($clockIn)
+                              {
+                                   $status = "present";
+                              }
+                              else
+                              {
+                                   $status = "leave";
+                              }
+
+                              // $late = "00:00:00";
+                              // if (strtotime(date("H:i", strtotime($clockIn))) > strtotime($startTime))
+                              // {
+                              //      $totalLateSeconds = strtotime(date("H:i", strtotime($clockIn))) - strtotime($startTime);
+                              //      $hours            = floor($totalLateSeconds / 3600);
+                              //      $mins             = floor($totalLateSeconds / 60 % 60);
+                              //      $secs             = floor($totalLateSeconds % 60);
+                              //      $late             = sprintf('%02d:%02d:%02d', $hours, $mins, $secs);
+                              // }
+
+                              // $totalEarlyLeavingSeconds = strtotime($endTime) - strtotime($clockOut);
+                              // $hours                    = floor($totalEarlyLeavingSeconds / 3600);
+                              // $mins                     = floor($totalEarlyLeavingSeconds / 60 % 60);
+                              // $secs                     = floor($totalEarlyLeavingSeconds % 60);
+                              // $earlyLeaving             = sprintf('%02d:%02d:%02d', $hours, $mins, $secs);
+
+                              // if (strtotime($clockOut) > strtotime($endTime))
+                              // {
+                              //      //Overtime
+                              //      $totalOvertimeSeconds = strtotime($clockOut) - strtotime($endTime);
+                              //      $hours                = floor($totalOvertimeSeconds / 3600);
+                              //      $mins                 = floor($totalOvertimeSeconds / 60 % 60);
+                              //      $secs                 = floor($totalOvertimeSeconds % 60);
+                              //      $overtime             = sprintf('%02d:%02d:%02d', $hours, $mins, $secs);
+                              // }
+                              // else
+                              // {
+                              //      $overtime = '00:00:00';
+                              // }
+
+
+                              // Attandence Calculation Late Comming, Early Leaving, Overtime,
+                              $is_flexi_hour_applied = 0;
+                              $late = "00:00:00";
+                              $earlyLeaving = "00:00:00";
+                              $overtime = '00:00:00';
+
+                              $employeeId = $employee;
+
+                              // $in = "11:00:00";
+                              // $out = "17:10:00";
+
+                              $date = $value[1];
+
+                              $clockInDatetime = date("Y-m-d H:i:s", strtotime($clockIn));
+                              $clockOutDatetime = date("Y-m-d H:i:s", strtotime($clockOut));
+
+                              $calculateAttendanceData = (object)calculateAttendanceData($employeeId, $date, $clockInDatetime, $clockOutDatetime);
+
+                              if ($calculateAttendanceData->status == 1)
+                              {
+                                   if (!empty($calculateAttendanceData->data))
+                                   {
+                                        $calculateAttendanceDataRow = (object)$calculateAttendanceData->data ?? [];
+
+                                        $is_flexi_hour_applied = ($calculateAttendanceDataRow->is_flexi_hour_applied == true ? 1 : 0);
+                                        $late = $calculateAttendanceDataRow->late_comming ?? $late;
+                                        $earlyLeaving = $calculateAttendanceDataRow->early_leaving ?? $earlyLeaving;
+                                        $overtime = $calculateAttendanceDataRow->overtime ?? $overtime;
+                                   }
+                              }
+                              // Attandence Calculation Late Comming, Early Leaving, Overtime,
+
+                              $check = AttendanceEmployee::where('employee_id', $employeeId)->where('date', $value[1])->first();
+                              if ($check)
+                              {
+                                   $check->update([
+                                        'late' => $late,
+                                        'early_leaving' => ($earlyLeaving > 0) ? $earlyLeaving : '00:00:00',
+                                        'overtime' => $overtime,
+                                        'clock_in' => $value[2],
+                                        'clock_out' => $value[3],
+                                        'is_flexi_hours_used' => $is_flexi_hour_applied,
+                                   ]);
+                              }
+                              else
+                              {
+                                   $time_sheet = AttendanceEmployee::create([
+                                        'employee_id' => $employeeId,
+                                        'date' => $value[1],
+                                        'status' => $status,
+                                        'late' => $late,
+                                        'early_leaving' => ($earlyLeaving > 0) ? $earlyLeaving : '00:00:00',
+                                        'overtime' => $overtime,
+                                        'clock_in' => $value[2],
+                                        'clock_out' => $value[3],
+                                        'created_by' => \Auth::user()->id,
+                                        'is_flexi_hours_used' => $is_flexi_hour_applied,
+                                   ]);
+                              }
+                         }
+                    }
+                    else
+                    {
+                         $email_data = implode(' And ', $email_data);
+                    }
+               }
+               if (!empty($email_data))
+               {
+                    return redirect()->back()->with('status', 'this record is not import. ' . '</br>' . $email_data);
+               }
+               else
+               {
+                    if (empty($errorArray))
+                    {
+                         $data['status'] = 'success';
+                         $data['msg']    = __('Record successfully imported');
+                    }
+                    else
+                    {
+
+                         $data['status'] = 'error';
+                         $data['msg']    = count($errorArray) . ' ' . __('Record imported fail out of' . ' ' . $totalattendance . ' ' . 'record');
+
+
+                         foreach ($errorArray as $errorData)
+                         {
+                              $errorRecord[] = implode(',', $errorData->toArray());
+                         }
+
+                         \Session::put('errorArray', $errorRecord);
+                    }
+
+                    return redirect()->back()->with($data['status'], $data['msg']);
+               }
+          }
+     }
+
+     public function export($type, $filter_month, $branch, $department)
+     {
+
+          try
+          {
+               if (\Auth::user()->type == 'employee')
+               {
+                    $emp = !empty(\Auth::user()->employee) ? \Auth::user()->employee->id : 0;
+                    $attendanceEmployee = AttendanceEmployee::where('employee_id', $emp);
+
+                    if ($type == 'monthly' && !empty($filter_month))
+                    {
+                         $month = date('m', strtotime($filter_month));
+                         $year  = date('Y', strtotime($filter_month));
+
+
+                         $start_date = date($year . '-' . $month . '-01');
+                         $end_date = date('Y-m-t', strtotime('01-' . $month . '-' . $year));
+
+                         // old date
+                         // $end_date   = date($year . '-' . $month . '-t');
+
+                         $attendanceEmployee->whereBetween(
+                              'date',
+                              [
+                                   $start_date,
+                                   $end_date,
+                              ]
+                         );
+                    }
+                    elseif ($type == 'daily' && !empty($filter_month))
+                    {
+                         $attendanceEmployee->where('date', $filter_month);
+                    }
+                    else
+                    {
+                         $month      = date('m');
+                         $year       = date('Y');
+                         $start_date = date($year . '-' . $month . '-01');
+                         $end_date = date('Y-m-t', strtotime('01-' . $month . '-' . $year));
+                         $attendanceEmployee->whereBetween(
+                              'date',
+                              [
+                                   $start_date,
+                                   $end_date,
+                              ]
+                         );
+                    }
+
+                    $attendanceEmployee = $attendanceEmployee->orderBy('id', 'DESC')->get();
+               }
+               else
+               {
+                    if (\Auth::user()->type == 'company')
+                    {
+                         $employee = Employee::select('id')->where('created_by', \Auth::user()->creatorId());
+                    }
+                    else
+                    {
+                         // $employee = Employee::where('users_types_id',auth::id())->select('id')->where('created_by', \Auth::user()->creatorId());
+                         $employee = Employee::whereIn('id', selectedEmployee())->select('id')->where('created_by', \Auth::user()->creatorId());
+                    }
+                    if ($branch)
+                    {
+                         $employee->where('branch_id', $branch);
+                    }
+
+                    if ($department)
+                    {
+                         $employee->where('department_id', $department);
+                    }
+                    $employee = $employee->get()->pluck('id');
+                    $attendanceEmployee = AttendanceEmployee::whereIn('employee_id', $employee);
+                    if ($type == 'monthly' && !empty($filter_month))
+                    {
+
+                         $month = date('m', strtotime($filter_month));
+                         $year  = date('Y', strtotime($filter_month));
+                         $start_date = date($year . '-' . $month . '-01');
+                         $end_date = date('Y-m-t', strtotime('01-' . $month . '-' . $year));
+
+                         // old date
+                         // $end_date   = date($year . '-' . $month . '-t');
+
+                         $attendanceEmployee->whereBetween(
+                              'date',
+                              [
+                                   $start_date,
+                                   $end_date,
+                              ]
+                         );
+                    }
+                    elseif ($type == 'daily' && !empty($filter_month))
+                    {
+                         $attendanceEmployee->where('date', $filter_month);
+                    }
+                    else
+                    {
+
+                         $month      = date('m');
+                         $year       = date('Y');
+                         $start_date = date($year . '-' . $month . '-01');
+                         $end_date = date('Y-m-t', strtotime('01-' . $month . '-' . $year));
+                         // old date
+                         // $end_date   = date($year . '-' . $month . '-t');
+
+                         $attendanceEmployee->whereBetween(
+                              'date',
+                              [
+                                   $start_date,
+                                   $end_date,
+                              ]
+                         );
+                    }
+
+                    $attendanceEmployee = $attendanceEmployee->orderBy('id', 'DESC')->get();
+               }
+
+
+
+
+               $fileName = 'Marked_attendance_' . date('Y-m-d i:h:s') . '.csv';
+               $headers = array(
+                    "Content-type" => "text/csv",
+                    "Content-Disposition" => "attachment; filename=$fileName",
+                    "Pragma" => "no-cache",
+                    "Cache-Control" => "must-revalidate, post-check=0, pre-check=0",
+                    "Expires" => "0",
+               );
+
+               $columns = array(
+                    "Employee Id",
+                    "Employee Name",
+                    "Date",
+                    "Status",
+                    "Clock In",
+                    "Clock In Ip Address",
+                    "Clock Out",
+                    "Clock Out Ip Address",
+                    "Late",
+                    "Early Leaving",
+                    "Overtime",
+                    "Created By",
+                    "Clock In Location",
+                    "Clock Out Location"
+               );
+
+               $callback = function () use ($attendanceEmployee, $columns)
+               {
+                    $file = fopen('php://output', 'w');
+                    fputcsv($file, $columns);
+
+                    foreach ($attendanceEmployee as $k => $attendance)
+                    {
+
+                         $clockInDateTime = '';
+                         $clockOutDateTime = '';
+
+                         if (
+                              empty($attendance->clock_in_date_time) ||
+                              $attendance->clock_in_date_time == '0000-00-00 00:00:00'
+                         )
+                         {
+                              $clockInDateTime =
+                                   $attendance->getRawOriginal('date') . ' ' . $attendance->clock_in;
+                         }
+                         else
+                         {
+                              $clockInDateTime = $attendance->clock_in_date_time;
+                         }
+
+                         if (
+                              empty($attendance->clock_out_date_time) ||
+                              $attendance->clock_out_date_time == '0000-00-00 00:00:00'
+                         )
+                         {
+                              $clockOutDateTime =
+                                   $attendance->getRawOriginal('date') . ' ' . $attendance->clock_out;
+                         }
+                         else
+                         {
+                              $clockOutDateTime = $attendance->clock_out_date_time;
+                         }
+
+                         if (
+                              $attendance->clock_in != '' &&
+                              $attendance->clock_in != '00:00:00'
+                         )
+                         {
+                              $clockInDateTime = \Auth::user()->dateFormat($clockInDateTime) .
+                                   ' ' .
+                                   \Auth::user()->timeFormat($clockInDateTime);
+                         }
+                         else
+                         {
+                              $clockInDateTime = "";
+                         }
+
+                         if (
+                              $attendance->clock_out != '' &&
+                              $attendance->clock_out != '00:00:00'
+                         )
+                         {
+                              $clockOutDateTime = \Auth::user()->dateFormat($clockOutDateTime) .
+                                   ' ' .
+                                   \Auth::user()->timeFormat($clockOutDateTime);
+                         }
+                         else
+                         {
+                              $clockOutDateTime = "";
+                         }
+
+
+                         $data["Employee Id"] = !empty($attendance->employee) ? $attendance->employee->employee_id : '';
+                         $data["Employee Name"] = !empty($attendance->employee) ? $attendance->employee->name : '';
+                         $data["Date"] = \Auth::user()->dateFormat($attendance->date);
+                         $data["Status"] = $attendance->status;
+
+                         $data["Clock In"] = (string)$clockInDateTime;
+                         $data["Clock In Ip Address"] = (string)($attendance->clock_in_ip_address ?? "");
+                         $data["Clock Out"] = (string)$clockOutDateTime;
+                         $data["Clock Out Ip Address"] = (string)($attendance->clock_out_ip_address ?? "");
+
+                         $data["Late"] = $attendance->late;
+                         $data["Early Leaving"] = $attendance->early_leaving;
+                         $data["Overtime"] = $attendance->overtime;
+                         $data["Created By"] = Employee::login_user($attendance->created_by);
+                         $data["Clock In Location"] = (!empty($attendance->clock_in_latitude)) ? "https://www.google.com/maps/search/?api=1&query={$attendance->clock_in_latitude},{$attendance->clock_in_longitude}" : '-';
+                         $data["Clock Out Location"] = (!empty($attendance->clock_out_latitude)) ? "https://www.google.com/maps/search/?api=1&query={$attendance->clock_out_latitude},{$attendance->clock_out_longitude}" : '-';
+
+                         fputcsv(
+                              $file,
+                              array(
+                                   $data['Employee Id'],
+                                   $data['Employee Name'],
+                                   $data['Date'],
+                                   $data['Status'],
+                                   $data['Clock In'],
+                                   $data['Clock In Ip Address'],
+                                   $data['Clock Out'],
+                                   $data['Clock Out Ip Address'],
+                                   $data['Late'],
+                                   $data['Early Leaving'],
+                                   $data['Overtime'],
+                                   $data['Created By'],
+                                   $data['Clock In Location'],
+                                   $data['Clock Out Location']
+                              )
+                         );
+                    }
+
+                    fclose($file);
+               };
+
+               return response()->stream($callback, 200, $headers);
+
+               $name = 'Marked_attendance_' . date('Y-m-d i:h:s');
+               $data = Excel::download(new MarkedAttendanceExport(), $name . '.xlsx');
+
+               return $data;
+          }
+          catch (Exception | Throwable $ex)
+          {
+               return redirect()->back()->with('error', showExceptionMessage($ex));
+          }
+     }
+
+
+
+     public function attendanceImportSampleFileDownload(Request $request)
+     {
+          try
+          {
+               // $monthDates = [];
+
+               // $month = (!empty($request->month) && $request->month != null) ? $request->month : date("Y-m");
+
+               // if (!preg_match('/^\d{4}-\d{2}$/', $month))
+               // {
+               //      $month = date("Y-m");
+               // }
+               // // $date = Carbon::now()->startOfMonth();
+               // $date = Carbon::createFromFormat('Y-m', $month)->startOfMonth();
+
+               // while ($date->isSameMonth(Carbon::now()))
+               // {
+               //      $monthDates[] = $date->toDateString();
+               //      $date->addDay();
+               // }
+
+               // dd($monthDates);
+
+               $monthDates = [];
+
+               $importMonth = (!empty($request->importMonth) && $request->importMonth != null) ? $request->importMonth : date("Y-m");
+
+               if (!preg_match('/^\d{4}-\d{2}$/', $importMonth))
+               {
+                    $importMonth = date("Y-m");
+               }
+
+               $date = Carbon::createFromFormat('Y-m', $importMonth)->startOfMonth();
+               $endOfMonth = $date->copy()->endOfMonth();
+
+               while ($date->lte($endOfMonth))
+               {
+                    $monthDates[] = $date->toDateString();
+                    $date->addDay();
+               }
+
+               $pasasData = [
+                    "monthDates" => $monthDates,
+               ];
+
+               $downloadFileName = "Attendance_Import_" . strtoupper(date('M_Y', strtotime($importMonth))) . ".xlsx";
+               return Excel::download(new EmployeeAttendanceImportSampleExcelFileDownload($pasasData), $downloadFileName);
+          }
+          catch (Exception | Throwable $ex)
+          {
+               return redirect()->back()->with('error', showExceptionMessage($ex));
+          }
+     }
+
+
+     public function importEmployeeAttendance(Request $request)
+     {
+          try
+          {
+               $rules = [
+                    'file' => 'required|mimes:xls,xlsx,csv',
+                    'importMonth' => [
+                         'required',
+                         'regex:/^\d{4}-(0[1-9]|1[0-2])$/', // Regex for YYYY-MM format
+                         function ($attribute, $value, $fail)
+                         {
+                              try
+                              {
+                                   Carbon::createFromFormat('Y-m', $value)->startOfMonth();
+                              }
+                              catch (\Exception $e)
+                              {
+                                   $fail('The ' . $attribute . ' is not a valid date.');
+                              }
+                         }
+                    ],
+               ];
+
+               $validator = Validator::make($request->all(), $rules);
+
+               if ($validator->fails())
+               {
+                    $messages = $validator->getMessageBag();
+                    return redirect()->back()->with('error', $messages->first());
+               }
+
+               $request->merge(['skip_ip' => true]);
+
+               $attendanceRawData = (new EmployeeAttendanceImport())->toArray(request()->file('file'))[0];
+
+               $attendanceData = array_slice($attendanceRawData, 2);
+
+               $monthDates = [];
+
+               $importMonth = (!empty($request->importMonth) && $request->importMonth != null) ? $request->importMonth : date("Y-m");
+
+               if (!preg_match('/^\d{4}-\d{2}$/', $importMonth))
+               {
+                    $importMonth = date("Y-m");
+               }
+
+               $date = Carbon::createFromFormat('Y-m', $importMonth)->startOfMonth();
+               $endOfMonth = $date->copy()->endOfMonth();
+
+               while ($date->lte($endOfMonth))
+               {
+                    $monthDates[] = $date->toDateString();
+                    $date->addDay();
+               }
+
+               foreach ($attendanceData as $attendanceRawRow)
+               {
+                    $employeeEmail = $attendanceRawRow[0] ?? "";
+                    if (!empty(trim($employeeEmail)))
+                    {
+                         $employeeData = Employee::where("email", $employeeEmail)->first();
+
+                         if ($employeeData != null)
+                         {
+                              $employeeId = $employeeData->id;
+                              $attendanceChunk = array_chunk(array_slice($attendanceRawRow, 1), 2);
+
+                              $dataIncrementValue = 0;
+
+                              $insertedData = [];
+                              foreach ($monthDates as $monthCurrentDate)
+                              {
+                                   $attendanceChunkRow = $attendanceChunk[$dataIncrementValue] ?? [];
+
+                                   $clockIn = "";
+                                   $clockOut = "";
+
+                                   if (!empty($attendanceChunkRow))
+                                   {
+                                        if (array_key_exists(0, $attendanceChunkRow))
+                                        {
+                                             $clockIn = getTimeDataForExcelImport($attendanceChunkRow[0]); // get clock in data
+                                        }
+
+                                        if (array_key_exists(1, $attendanceChunkRow))
+                                        {
+                                             $clockOut = getTimeDataForExcelImport($attendanceChunkRow[1]); // get clock in data
+                                        }
+                                   }
+
+                                   if (!empty(trim($clockIn)) && isValidTime($clockIn) && $clockIn != null && $clockIn != "00:00:00") // check if clock in is valid
+                                   {
+                                        // Attandence Calculation Late Comming, Early Leaving, Overtime,
+
+                                        $is_flexi_hour_applied = 0;
+                                        $late = "00:00:00";
+                                        $earlyLeaving = "00:00:00";
+                                        $overtime = '00:00:00';
+
+                                        try
+                                        {
+                                             if (!empty(trim($clockOut)) && isValidTime($clockOut) && $clockOut != null && $clockOut != "00:00:00") // check if clock out is valid, calculate attendance data only if clock out is a valid time
+                                             {
+                                                  $clockInDatetime = date("Y-m-d H:i:s", strtotime($monthCurrentDate . " " . $clockIn));
+                                                  $clockOutDatetime = date("Y-m-d H:i:s", strtotime($monthCurrentDate . " " . $clockOut));
+                                                  $clockOutDatetime = new DateTime($clockOutDatetime);
+
+                                                  // If clock-out time is earlier than clock-in time, adjust date
+                                                  if ($clockOutDatetime < new DateTime($clockInDatetime))
+                                                  {
+                                                       $clockOutDatetime->modify('+1 day');
+                                                       $clockOutDatetime = $clockOutDatetime->format('Y-m-d H:i:s');
+                                                  }
+
+                                                  $calculateAttendanceData = (object)calculateAttendanceData($employeeId, $monthCurrentDate, $clockInDatetime, $clockOutDatetime);
+
+                                                  if ($calculateAttendanceData->status == 1)
+                                                  {
+                                                       if (!empty($calculateAttendanceData->data))
+                                                       {
+                                                            $calculateAttendanceDataRow = (object)$calculateAttendanceData->data ?? [];
+
+                                                            $is_flexi_hour_applied = ($calculateAttendanceDataRow->is_flexi_hour_applied == true ? 1 : 0);
+                                                            $late = $calculateAttendanceDataRow->late_comming ?? $late;
+                                                            $earlyLeaving = $calculateAttendanceDataRow->early_leaving ?? $earlyLeaving;
+                                                            $overtime = $calculateAttendanceDataRow->overtime ?? $overtime;
+                                                       }
+                                                  }
+                                             }
+                                             else
+                                             {
+                                                  $clockOut = "00:00:00";
+                                             }
+                                        }
+                                        catch (Exception | Throwable $ex)
+                                        {
+                                        }
+                                        // Attandence Calculation Late Comming, Early Leaving, Overtime,
+
+                                        // Save Attendance Data 
+
+                                        DB::beginTransaction();
+
+                                        try
+                                        {
+                                             $attendance = AttendanceEmployee::where('employee_id', '=', $employeeId)->where('date', '=', $monthCurrentDate)->first();
+
+                                             if (!empty($attendance))
+                                             {
+                                                  $employeeAttendance = $attendance;
+                                             }
+                                             else
+                                             {
+                                                  $employeeAttendance              = new AttendanceEmployee();
+                                                  $employeeAttendance->employee_id = $employeeId;
+                                                  $employeeAttendance->created_by  = Auth::user()->creatorId();
+                                             }
+
+
+                                             $employeeAttendance->date          = $monthCurrentDate;
+                                             $employeeAttendance->status        = 'Present';
+                                             $employeeAttendance->clock_in      = $clockIn;
+                                             $employeeAttendance->clock_out     = $clockOut;
+                                             $employeeAttendance->late          = $late;
+                                             $employeeAttendance->early_leaving = $earlyLeaving;
+                                             $employeeAttendance->overtime      = $overtime;
+                                             $employeeAttendance->total_rest    = '00:00:00';
+                                             $employeeAttendance->is_flexi_hours_used    = $is_flexi_hour_applied;
+                                             $employeeAttendance->save();
+
+                                             $insertedData[] = $employeeAttendance;
+
+                                             DB::commit();
+                                        }
+                                        catch (Exception | Throwable $ex)
+                                        {
+                                             DB::rollback();
+                                        }
+                                        // Save Attendance Data
+                                   }
+                                   $dataIncrementValue++;
+                              }
+                         }
+                    }
+               }
+
+               $data['status'] = 'success';
+               $data['msg'] = __('Attendance Imported successfully.');
+
+               return redirect()->back()->with($data['status'], $data['msg']);
+          }
+          catch (Exception | Throwable $e)
+          {
+               return redirect()->back()->with('error', showExceptionMessage($e));
+          }
+     }
+
+     public function getDepartments(Request $request)
+     {
+          $data = [];
+          try
+          {
+               $search = $request->search ?? "";
+               $branch_id = $request->branch_id ?? 0;
+
+               $data = Department::select('id', 'name', 'branch_id')
+                    ->when(!empty(trim($search)), function ($query) use ($search)
+                    {
+                         $query->where([['name', 'like', '%' . $search . '%']]);
+                    })
+                    ->when(!empty($branch_id) && $branch_id > 0, function ($query) use ($branch_id)
+                    {
+                         $query->where("branch_id", $branch_id);
+                    })
+                    ->where('created_by', \Auth::user()->creatorId())
+                    ->OrderBy("name", "ASC")
+                    ->get();
+          }
+          catch (Exception | Throwable $e)
+          {
+          }
+
+          return ApiResponse($data);
+     }
+}
