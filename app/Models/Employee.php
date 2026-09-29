@@ -245,11 +245,21 @@ class Employee extends Model
           }
      }
 
-     public function get_net_salary($formate_month_year)
+     public function get_net_salary($formate_month_year = null)
      {
+          if (empty($formate_month_year)) {
+              $formate_month_year = date('Y-m');
+          }
+          // Accept both Y-m and Y-m-d style inputs
+          if (preg_match('/^\d{4}-\d{2}-\d{2}/', (string) $formate_month_year)) {
+               $formate_month_year = substr((string) $formate_month_year, 0, 7);
+          }
           $startDate = date($formate_month_year . '-d');
 
           $data = Employee::where('id', $this->id)->first();
+          if (!$data) {
+               return 0;
+          }
 
           //allowance
           $allowances      = AllowanceOption::where('is_display', 'Yes')->where('created_by', \Auth::user()->creatorId())->where('play_slab_id', $data->play_slab_id)->get();

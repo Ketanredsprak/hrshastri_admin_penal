@@ -102,6 +102,14 @@ class TerminationController extends Controller
                     $termination->main_created_by  = Auth::id();
                     $termination->save();
 
+                    $employee = Employee::find($request->employee_id);
+                    if ($employee)
+                    {
+                         $employee->employee_exit = 1;
+                         $employee->employe_status = 'Terminated';
+                         $employee->save();
+                    }
+
                     DB::commit();
 
                     $setings = Utility::settings();

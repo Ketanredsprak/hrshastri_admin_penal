@@ -68,9 +68,19 @@ class PlanRequestController extends Controller
         if($objUser->requested_plan == 0)
         {
             $planID = \Illuminate\Support\Facades\Crypt::decrypt($plan_id);
+            $plan   = Plan::find($planID);
 
-            if(!empty($planID))
+            if(!empty($plan))
             {
+                if(!$objUser->canSubscribePlan($plan))
+                {
+                    return redirect()->back()->with('error', $plan->getIneligibilityReason($objUser) ?? __('Cannot request plan: Your active employee/user count exceeds this plan\'s capacity.'));
+                }
+                if($objUser->isPlanDowngrade($plan))
+                {
+                    return redirect()->back()->with('error', __('Downgrade is not allowed. You can renew your current plan or upgrade to a higher plan.'));
+                }
+
                 PlanRequest::create([
                                         'user_id' => $objUser->id,
                                         'plan_id' => $planID,
@@ -115,7 +125,7 @@ class PlanRequestController extends Controller
                     $user->save();
 
                     $plan       = Plan::find($plan_request->plan_id);
-                    $assignPlan = $user->assignPlan($plan_request->plan_id, $plan_request->duration);
+                    $assignPlan = $user->assignPlan($plan_request->plan_id, true);
                     $price      = $plan->price;
 
                     if($assignPlan['is_success'] == true && !empty($plan))

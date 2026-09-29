@@ -28,10 +28,7 @@
                                         <select class="form-control month_date " name="year" tabindex="-1" aria-hidden="true">
                                              <option value="--">--</option>
                                              @foreach ($month as $k => $mon)
-                                             @php
-                                             $selected = date('m') - 1 == $k ? 'selected' : '';
-                                             @endphp
-                                             <option value="{{ $k }}" {{ $selected }}>{{ $mon }}
+                                             <option value="{{ $k }}" {{ date('m') == $k ? 'selected' : '' }}>{{ $mon }}
                                              </option>
                                              @endforeach
                                         </select>
@@ -40,7 +37,7 @@
                               </div>
                               <div class="col-sm-6 col-lg-4">
                                    <div class="btn-box">
-                                        {{ Form::select('year', $year, null, ['class' => 'form-control year_date ']) }}
+                                        {{ Form::select('year', $year, date('Y'), ['class' => 'form-control year_date ']) }}
                                    </div>
                               </div>
 

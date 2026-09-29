@@ -526,7 +526,10 @@ class MyPaySlipController extends Controller
           $payslipEmployee->saturation_deduction = Employee::saturation_deduction($payslipEmployee->employee_id);
           $payslipEmployee->other_payment        = Employee::other_payment($payslipEmployee->employee_id);
           $payslipEmployee->overtime             = Employee::overtime($payslipEmployee->employee_id);
-          $payslipEmployee->net_payble           = Employee::find($payslipEmployee->employee_id)->get_net_salary();
+          $employeeModel = Employee::find($payslipEmployee->employee_id);
+          $payslipEmployee->net_payble           = $employeeModel
+               ? $employeeModel->get_net_salary($payslipEmployee->salary_month ?? date('Y-m'))
+               : 0;
           $payslipEmployee->save();
           return redirect()->route('payslip.index')->with('success', __('Employee payroll successfully updated.'));
      }

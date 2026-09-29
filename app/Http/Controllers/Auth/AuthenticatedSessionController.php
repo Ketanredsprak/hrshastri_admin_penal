@@ -98,102 +98,30 @@ class AuthenticatedSessionController extends Controller
           // }
           $user = \Auth::user();
           // dd($user);
-          if ($user->type == 'company')
+          if ($user->type !== 'super admin' && !$user->hasActiveSubscription())
           {
-               $plan = plan::find($user->plan);
-               if ($plan)
+               if ($user->type === 'company')
                {
-                    if ($plan->duration != 'unlimited')
-                    {
-                         $datetime1 = $user->plan_expire_date;
-                         $datetime2 = date('Y-m-d');
-
-                         // dd($datetime1,$datetime2);
-
-                         if (!empty($datetime1) && $datetime1 < $datetime2)
-                         {
-                              $user->assignplan(1);
-
-                              return redirect()->intended(RouteServiceProvider::HOME)->with('error', __('Your current plan has been expired.'));
-                         }
-                    }
+                    $user->last_login = date('Y-m-d H:i:s');
+                    $user->save();
+                    return redirect()->route('dashboard')->with('error', __('Your subscription has expired. Please renew to continue using HR Shastri.'));
+               }
+               else
+               {
+                    auth()->logout();
+                    $request->session()->invalidate();
+                    $request->session()->regenerateToken();
+                    return redirect()->route('login')->with('message', __('Your organization\'s subscription plan is inactive or expired. Please contact your company administrator.'));
                }
           }
 
-          if ($user->type == 'company')
+          // Soft warning: expiring within 5 days — land on dashboard with notice
+          if ($user->type === 'company' && $user->isSubscriptionExpiringSoon(5))
           {
-               $free_plan = Plan::where('price', '=', '0.0')->first();
-               $plan      = Plan::find($user->plan);
-
-               if ($user->plan != $free_plan->id)
-               {
-                    if (date('Y-m-d') > $user->plan_expire_date && $plan->duration != 'Unlimited')
-                    {
-                         $user->plan             = $free_plan->id;
-                         $user->plan_expire_date = null;
-                         $user->save();
-
-                         $users     = User::where('created_by', '=', \Auth::user()->creatorId())->get();
-                         $employees = Employee::where('created_by', '=', \Auth::user()->creatorId())->get();
-
-                         if ($free_plan->max_users == -1)
-                         {
-                              foreach ($users as $user)
-                              {
-                                   $user->is_active = 1;
-                                   $user->save();
-                              }
-                         }
-                         else
-                         {
-                              $userCount = 0;
-                              foreach ($users as $user)
-                              {
-                                   $userCount++;
-                                   if ($userCount <= $free_plan->max_users)
-                                   {
-                                        $user->is_active = 1;
-                                        $user->save();
-                                   }
-                                   else
-                                   {
-                                        $user->is_active = 0;
-                                        $user->save();
-                                   }
-                              }
-                         }
-
-
-                         if ($free_plan->max_employees == -1)
-                         {
-                              foreach ($employees as $employee)
-                              {
-                                   $employee->is_active = 1;
-                                   $employee->save();
-                              }
-                         }
-                         else
-                         {
-                              $employeeCount = 0;
-                              foreach ($employees as $employee)
-                              {
-                                   $employeeCount++;
-                                   if ($employeeCount <= $free_plan->max_customers)
-                                   {
-                                        $employee->is_active = 1;
-                                        $employee->save();
-                                   }
-                                   else
-                                   {
-                                        $employee->is_active = 0;
-                                        $employee->save();
-                                   }
-                              }
-                         }
-
-                         return redirect()->route('home')->with('error', 'Your plan expired limit is over, please upgrade your plan');
-                    }
-               }
+               $user->last_login = date('Y-m-d H:i:s');
+               $user->save();
+               return redirect()->intended(RouteServiceProvider::HOME)
+                    ->with('subscription_expiring', true);
           }
 
           $user->last_login = date('Y-m-d H:i:s');

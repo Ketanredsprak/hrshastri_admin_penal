@@ -363,6 +363,10 @@ class MyClaimReimbursement extends Controller
      public function create()
      {
           $employee = Employee::where('user_id', Auth::id())->first();
+          if (!$employee)
+          {
+               return response()->json(['error' => __('Claim can only be created from an employee account.')], 401);
+          }
           $myvisit = MyVisitModel::where('claim_status', null)->where('status', 'Approved')->where('userid', $employee->id)->where('created_by', '=', Auth::user()->creatorId())->get();
           return view('Myclaim.create', compact('myvisit'));
      }

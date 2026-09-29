@@ -151,6 +151,9 @@ class Utility extends Model
                "half_day_working_hours" => 4,
                "half_day_working_minute" => 0,
                "auto_leave_deduction" => "off",
+               "employee_audit_log_enabled" => "on",
+               "attendance_punch_image_cleanup_enabled" => "off",
+               "attendance_punch_image_retention_days" => "3",
                "company_latitude" => "",
                "company_longitude" => "",
           ];

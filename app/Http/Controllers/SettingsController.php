@@ -601,6 +601,28 @@ class SettingsController extends Controller
                {
                     $post['auto_leave_deduction'] = 'off';
                }
+               if (!isset($request->employee_audit_log_enabled))
+               {
+                    $post['employee_audit_log_enabled'] = 'off';
+               } else {
+                    $post['employee_audit_log_enabled'] = 'on';
+               }
+
+               if (!isset($request->attendance_punch_image_cleanup_enabled))
+               {
+                    $post['attendance_punch_image_cleanup_enabled'] = 'off';
+               } else {
+                    $post['attendance_punch_image_cleanup_enabled'] = 'on';
+               }
+
+               $retentionDays = (int) ($request->attendance_punch_image_retention_days ?? 3);
+               if ($retentionDays < 1) {
+                    $retentionDays = 1;
+               }
+               if ($retentionDays > 365) {
+                    $retentionDays = 365;
+               }
+               $post['attendance_punch_image_retention_days'] = (string) $retentionDays;
 
                unset($post['_token']);
 

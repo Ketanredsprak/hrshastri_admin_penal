@@ -1,13 +1,142 @@
+/* ==========================================================================
+   GLOBAL ACTION BUTTONS & TABLE ACTION COLUMN STYLES (ALL CRUDs)
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   PAGE HEADER / BREADCRUMB SPACING
+   Fixes cramped title + breadcrumb on ALL admin screens (theme zeroes margins;
+   pages that start with <style> also skip theme's .page-header+.row gap).
+   -------------------------------------------------------------------------- */
+.dash-content .page-header {
+	margin-bottom: 0.75rem !important;
+	padding-bottom: 0.15rem !important;
+}
+
+.dash-content .page-header .page-header-title h4,
+.dash-content .page-header h4 {
+	margin-bottom: 0.25rem !important;
+}
+
+.dash-content .page-header .breadcrumb {
+	margin-top: 0.15rem !important;
+	margin-bottom: 0 !important;
+	padding: 0.1rem 0 0.15rem !important;
+	line-height: 1.5 !important;
+	display: flex !important;
+	flex-wrap: wrap !important;
+}
+
+.dash-content .page-header .row.align-items-start,
+.dash-content .page-header .row.align-items-center {
+	align-items: flex-start !important;
+}
+
+.dash-content .page-header .float-end {
+	margin-top: 0.1rem;
+}
+
+/* Keep a small gap even when content starts with <style> or non-.row markup */
+.dash-content .page-header + *:not(style) {
+	margin-top: 0.35rem;
+}
+
+.dash-content .page-header + style + *:not(style) {
+	margin-top: 0.35rem;
+}
+
+td.Action,
+th.Action,
+td.action,
+th.action,
+table.dataTable td:last-child,
+table.table td:last-child,
+.action-btn-wrapper,
+.action-buttons,
+td:has(> .action-btn),
+td:has(> form > .action-btn),
+td:has(> span > .action-btn) {
+	white-space: nowrap !important;
+	vertical-align: middle !important;
+}
+
+td.Action span,
+td.action span,
+td > span:has(.action-btn),
+td > .d-inline-flex {
+	display: inline-flex !important;
+	align-items: center !important;
+	flex-wrap: nowrap !important;
+	gap: 4px !important;
+	vertical-align: middle !important;
+}
+
+/* Ensure all forms inside table cells stay inline and never force a line break */
+td form,
+th form,
+.table td form,
+.dataTable td form,
+.action-btn form,
+td > form,
+span > form,
+form:has(> .action-btn) {
+	display: inline-flex !important;
+	margin: 0 !important;
+	padding: 0 !important;
+	vertical-align: middle !important;
+}
+
 .action-btn {
-	width: 29px;
-	height: 28px;
-	border-radius:6px;
-	color: #fff;
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	font-size: 20px;
-	flex-shrink: 0;
+	width: 29px !important;
+	height: 28px !important;
+	min-width: 29px !important;
+	min-height: 28px !important;
+	border-radius: 6px !important;
+	color: #fff !important;
+	display: inline-flex !important;
+	align-items: center !important;
+	justify-content: center !important;
+	font-size: 15px !important;
+	flex-shrink: 0 !important;
+	vertical-align: middle !important;
+	margin: 0 2px !important;
+	transition: all 0.2s ease-in-out !important;
+	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08) !important;
+}
+
+.action-btn:hover {
+	transform: translateY(-1px) !important;
+	box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15) !important;
+}
+
+.action-btn a,
+.action-btn a.btn,
+.action-btn button,
+.action-btn a.btn-sm,
+.action-btn button.btn-sm {
+	display: inline-flex !important;
+	align-items: center !important;
+	justify-content: center !important;
+	width: 100% !important;
+	height: 100% !important;
+	margin: 0 !important;
+	padding: 0 !important;
+	border: none !important;
+	background: transparent !important;
+	color: #fff !important;
+	text-decoration: none !important;
+	box-shadow: none !important;
+}
+
+.action-btn a i,
+.action-btn a svg,
+.action-btn button i,
+.action-btn button svg {
+	font-size: 15px !important;
+	width: 15px !important;
+	height: 15px !important;
+	line-height: 1 !important;
+	color: #fff !important;
+	stroke: #fff !important;
 }
 /* .choose-files {
     color: #fff;
@@ -300,19 +429,7 @@
 .comp-card {
 	height: 142px !important;
 }
-.drp-language .dropdown-toggle {
-	color: #525B69;
-	display: inline-flex;
-	align-items: center;
-	padding: 0.6rem 0.7rem;
-	margin: 0 7.5px;
-	border-radius: 4px;
-	position: relative;
-	font-weight: 500;
-	border-radius: 6px;
-	border: 1px solid rgba(104, 104, 104, 0.2);
-	background: #ffffff;
-}
+/* (Old language dropdown override removed - replaced with modern header toolbar system) */
 /* chat counter */
 .choose-files {
 	color: #fff;
@@ -367,5 +484,1581 @@
 @keyframes  sp-anime {
 	100% {
 					transform: rotate(360deg);
+	}
+}
+
+/* ==========================================================================
+   NO SIDEBAR / INACTIVE SUBSCRIPTION FULL-PAGE LAYOUT
+   ========================================================================== */
+body.no-sidebar .dash-container,
+body.no-sidebar .dash-header:not(.transprent-bg):not(.dash-mob-header)~.dash-container {
+	margin-left: 0 !important;
+}
+
+body.no-sidebar .dash-header {
+	left: 0 !important;
+	width: 100% !important;
+}
+
+body.no-sidebar .dash-footer {
+	margin-left: 0 !important;
+	width: 100% !important;
+}
+
+body.no-sidebar .dash-sidebar {
+	display: none !important;
+}
+
+body.no-sidebar .mob-hamburger {
+	display: none !important;
+}
+
+body.no-sidebar .dash-container .dash-content {
+	padding-left: 30px;
+	padding-right: 30px;
+	max-width: 100%;
+}
+
+/* ==========================================================================
+   SUPER ADMIN IMPERSONATION BAR & LAYOUT OFFSET
+   ========================================================================== */
+.impersonation-indicator-bar {
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
+	height: 44px;
+	z-index: 99999;
+	background: linear-gradient(90deg, #0f172a 0%, #1e293b 100%);
+	border-bottom: 2px solid #f59e0b;
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+	display: flex;
+	align-items: center;
+}
+
+.impersonation-indicator-bar .impersonation-bar-content {
+	width: 100%;
+}
+
+body.is-impersonating .dash-sidebar {
+	top: 44px !important;
+	height: calc(100vh - 44px) !important;
+}
+
+body.is-impersonating .dash-header {
+	top: 44px !important;
+}
+
+body.is-impersonating .dash-container {
+	top: calc(70px + 44px) !important;
+	min-height: calc(100vh - 70px - 44px) !important;
+}
+
+body.is-impersonating .dash-footer {
+	top: calc(70px + 44px) !important;
+}
+
+/* ==========================================================================
+   MODERN COMMERCIAL HRMS / SAAS UI — SIDEBAR & DASHBOARD REDESIGN
+   Strict UI-Only — Zero functional side-effects, full JS compatibility
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. ROOT DESIGN TOKENS
+   -------------------------------------------------------------------------- */
+:root {
+	--hrms-primary: #2563eb;
+	--hrms-primary-hover: #1d4ed8;
+	--hrms-primary-soft: rgba(37, 99, 235, 0.08);
+	--hrms-primary-glow: rgba(37, 99, 235, 0.16);
+	--hrms-success: #10b981;
+	--hrms-success-soft: rgba(16, 185, 129, 0.09);
+	--hrms-warning: #f59e0b;
+	--hrms-warning-soft: rgba(245, 158, 11, 0.09);
+	--hrms-danger: #ef4444;
+	--hrms-danger-soft: rgba(239, 68, 68, 0.09);
+	--hrms-info: #06b6d4;
+	--hrms-info-soft: rgba(6, 182, 212, 0.09);
+	--hrms-surface: #ffffff;
+	--hrms-surface-alt: #f8fafc;
+	--hrms-border: #edf2f7;
+	--hrms-border-subtle: #f1f5f9;
+	--hrms-text-heading: #0f172a;
+	--hrms-text-body: #334155;
+	--hrms-text-muted: #64748b;
+	--hrms-text-faint: #94a3b8;
+	--hrms-radius: 12px;
+	--hrms-radius-sm: 8px;
+	--hrms-radius-lg: 16px;
+	--hrms-shadow-card: 0 1px 3px rgba(15, 23, 42, 0.03), 0 4px 12px rgba(15, 23, 42, 0.03);
+	--hrms-shadow-hover: 0 10px 25px -4px rgba(15, 23, 42, 0.08), 0 4px 6px -2px rgba(15, 23, 42, 0.02);
+}
+
+/* --------------------------------------------------------------------------
+   2. MODERN SIDEBAR UI
+   -------------------------------------------------------------------------- */
+.dash-sidebar {
+	background: #ffffff !important;
+	border-right: 1px solid #eef2f6 !important;
+	box-shadow: 0 0 24px 0 rgba(15, 23, 42, 0.04) !important;
+	width: 256px !important;
+	transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+	z-index: 1026 !important;
+}
+
+.dash-sidebar .m-header {
+	height: 70px !important;
+	padding: 0 22px !important;
+	display: flex !important;
+	align-items: center !important;
+	border-bottom: 1px solid #f1f5f9 !important;
+	background: #ffffff !important;
+}
+
+.dash-sidebar .m-header .b-brand {
+	display: flex !important;
+	align-items: center !important;
+	gap: 10px !important;
+	text-decoration: none !important;
+}
+
+.dash-sidebar .m-header .b-brand img {
+	max-height: 42px !important;
+	width: auto !important;
+	object-fit: contain !important;
+	filter: drop-shadow(0 1px 2px rgba(0,0,0,0.04)) !important;
+}
+
+/* Slim Modern Scrollbar for Sidebar */
+.dash-sidebar .navbar-content {
+	padding: 14px 12px 28px 12px !important;
+	height: calc(100vh - 70px) !important;
+	overflow-y: auto !important;
+	scrollbar-width: thin !important;
+	scrollbar-color: #cbd5e1 transparent !important;
+}
+
+.dash-sidebar .navbar-content::-webkit-scrollbar {
+	width: 4px !important;
+}
+
+.dash-sidebar .navbar-content::-webkit-scrollbar-track {
+	background: transparent !important;
+}
+
+.dash-sidebar .navbar-content::-webkit-scrollbar-thumb {
+	background-color: #cbd5e1 !important;
+	border-radius: 10px !important;
+}
+
+.dash-sidebar .navbar-content::-webkit-scrollbar-thumb:hover {
+	background-color: #94a3b8 !important;
+}
+
+/* Sidebar Navigation Items */
+.dash-sidebar .dash-navbar {
+	list-style: none !important;
+	padding: 0 !important;
+	margin: 0 !important;
+}
+
+.dash-sidebar .dash-item {
+	margin-bottom: 3px !important;
+	position: relative !important;
+}
+
+.dash-sidebar .dash-caption {
+	padding: 16px 12px 6px 12px !important;
+	font-size: 10.5px !important;
+	font-weight: 700 !important;
+	letter-spacing: 0.08em !important;
+	text-transform: uppercase !important;
+	color: #94a3b8 !important;
+	display: block !important;
+}
+
+.dash-sidebar .dash-link {
+	display: flex !important;
+	align-items: center !important;
+	padding: 8px 12px !important;
+	border-radius: 8px !important;
+	color: #475569 !important;
+	font-size: 13.5px !important;
+	font-weight: 500 !important;
+	text-decoration: none !important;
+	position: relative !important;
+	transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.dash-sidebar .dash-micon {
+	width: 26px !important;
+	height: 26px !important;
+	min-width: 26px !important;
+	display: inline-flex !important;
+	align-items: center !important;
+	justify-content: center !important;
+	margin-right: 10px !important;
+	color: #64748b !important;
+	font-size: 18px !important;
+	flex-shrink: 0 !important;
+	transition: all 0.18s ease-in-out !important;
+}
+
+.dash-sidebar .dash-micon i,
+.dash-sidebar .dash-micon svg {
+	font-size: 18px !important;
+	width: 18px !important;
+	height: 18px !important;
+	color: inherit !important;
+	line-height: 1 !important;
+	display: inline-block !important;
+	vertical-align: middle !important;
+}
+
+.dash-sidebar .dash-mtext {
+	flex: 1 1 auto !important;
+	line-height: 1.35 !important;
+	display: inline-block !important;
+	white-space: nowrap !important;
+	overflow: hidden !important;
+	text-overflow: ellipsis !important;
+	color: inherit !important;
+}
+
+.dash-sidebar .dash-arrow {
+	display: inline-flex !important;
+	align-items: center !important;
+	justify-content: center !important;
+	margin-left: auto !important;
+	color: #94a3b8 !important;
+	font-size: 14px !important;
+	transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), color 0.18s ease !important;
+}
+
+.dash-sidebar .dash-arrow i,
+.dash-sidebar .dash-arrow svg {
+	font-size: 14px !important;
+	width: 14px !important;
+	height: 14px !important;
+}
+
+/* Hover State */
+.dash-sidebar .dash-item:not(.active):not(.dash-trigger) > .dash-link:hover {
+	background-color: #f1f5f9 !important;
+	color: #0f172a !important;
+	transform: translateX(2px) !important;
+}
+
+.dash-sidebar .dash-item:not(.active):not(.dash-trigger) > .dash-link:hover .dash-micon {
+	color: #2563eb !important;
+	transform: scale(1.08) !important;
+}
+
+.dash-sidebar .dash-item:not(.active):not(.dash-trigger) > .dash-link:hover .dash-arrow {
+	color: #475569 !important;
+}
+
+/* Active State — top-level sidebar items only (not submenu rows) */
+.dash-sidebar .dash-navbar > .dash-item.active:not(.dash-hasmenu) > .dash-link,
+.dash-sidebar .dash-navbar > .dash-item.active:not(.dash-hasmenu) > .dash-link.active {
+	background: linear-gradient(135deg, rgba(37, 99, 235, 0.08) 0%, rgba(59, 130, 246, 0.14) 100%) !important;
+	color: #2563eb !important;
+	font-weight: 600 !important;
+	box-shadow: 0 1px 4px rgba(37, 99, 235, 0.08) !important;
+}
+
+.dash-sidebar .dash-navbar > .dash-item.active:not(.dash-hasmenu) > .dash-link::before {
+	content: '' !important;
+	position: absolute !important;
+	left: 0 !important;
+	top: 15% !important;
+	bottom: 15% !important;
+	width: 3.5px !important;
+	background: #2563eb !important;
+	border-radius: 0 4px 4px 0 !important;
+}
+
+.dash-sidebar .dash-navbar > .dash-item.active:not(.dash-hasmenu) > .dash-link .dash-micon {
+	color: #2563eb !important;
+}
+
+/* Submenu Open State (.dash-trigger) */
+.dash-sidebar .dash-item.dash-trigger > .dash-link {
+	background: #f8fafc !important;
+	color: #0f172a !important;
+	font-weight: 600 !important;
+}
+
+/*
+ * Theme rule ".dash-sidebar .active .dash-submenu { display: none }" collapses
+ * open sections when the parent gets .active from dash.js — keep expanded menus visible.
+ */
+body:not(.minimenu) .dash-sidebar.light-sidebar .dash-item.dash-hasmenu.dash-trigger > .dash-submenu,
+body:not(.minimenu) .dash-sidebar .dash-item.dash-hasmenu.dash-trigger > .dash-submenu {
+	display: block !important;
+	max-height: none !important;
+	overflow: visible !important;
+	opacity: 1 !important;
+	visibility: visible !important;
+}
+
+.dash-sidebar .dash-item.dash-trigger > .dash-link .dash-micon {
+	color: #2563eb !important;
+}
+
+.dash-sidebar .dash-item.dash-trigger > .dash-link .dash-arrow {
+	transform: rotate(90deg) !important;
+	color: #2563eb !important;
+}
+
+/* --------------------------------------------------------------------------
+   SUBMENU FIX — Reset old flyout & remove overlapping diamond pseudo-elements
+   -------------------------------------------------------------------------- */
+body:not(.minimenu) .dash-sidebar .dash-submenu,
+body:not(.minimenu) .dash-sidebar .dash-submenu .dash-submenu,
+.dash-sidebar .dash-submenu,
+.dash-sidebar .dash-submenu .dash-submenu {
+	position: static !important;
+	left: auto !important;
+	top: auto !important;
+	width: 100% !important;
+	height: auto !important;
+	box-shadow: none !important;
+	background: transparent !important;
+	overflow: visible !important;
+	padding: 4px 0 6px 14px !important;
+	margin: 2px 0 6px 14px !important;
+	border-left: 1.5px solid #e2e8f0 !important;
+	list-style: none !important;
+}
+
+/* Completely remove and disable old broken diamond/rotated pseudo-elements */
+body:not(.minimenu) .dash-sidebar .dash-submenu .dash-item:before,
+body:not(.minimenu) .dash-sidebar .dash-submenu .dash-item::before,
+body:not(.minimenu) .dash-sidebar .dash-submenu .dash-item.active:before,
+body:not(.minimenu) .dash-sidebar .dash-submenu .dash-item.active::before,
+body:not(.minimenu) .dash-sidebar .dash-submenu .dash-item:hover:before,
+body:not(.minimenu) .dash-sidebar .dash-submenu .dash-item:hover::before,
+body:not(.minimenu) .dash-sidebar .dash-submenu .dash-submenu>.dash-item:before,
+body:not(.minimenu) .dash-sidebar .dash-submenu .dash-submenu .dash-submenu>.dash-item:before,
+body.theme-4 .dash-sidebar.light-sidebar .dash-item .dash-submenu .dash-item::before,
+body.theme-4 .dash-sidebar .dash-item .dash-submenu .dash-item::before,
+.dash-sidebar .dash-submenu .dash-item:before,
+.dash-sidebar .dash-submenu .dash-item::before {
+	display: none !important;
+	content: none !important;
+	border: none !important;
+}
+
+.dash-sidebar .dash-submenu .dash-item {
+	margin-bottom: 2px !important;
+	position: relative !important;
+	list-style: none !important;
+}
+
+.dash-sidebar .dash-submenu .dash-link {
+	display: flex !important;
+	align-items: center !important;
+	padding: 7px 12px 7px 8px !important;
+	font-size: 13px !important;
+	color: #64748b !important;
+	font-weight: 500 !important;
+	border-radius: 6px !important;
+	text-decoration: none !important;
+	position: relative !important;
+	line-height: 1.4 !important;
+	transition: all 0.15s ease-in-out !important;
+}
+
+/* Proper clean circular bullet/icon before submenu text */
+.dash-sidebar .dash-submenu .dash-link::before {
+	content: '' !important;
+	display: inline-block !important;
+	width: 6px !important;
+	height: 6px !important;
+	min-width: 6px !important;
+	min-height: 6px !important;
+	border-radius: 50% !important;
+	background-color: #94a3b8 !important;
+	margin-right: 10px !important;
+	flex-shrink: 0 !important;
+	border: none !important;
+	transform: none !important;
+	position: static !important;
+	transition: all 0.18s ease-in-out !important;
+}
+
+.dash-sidebar .dash-submenu .dash-link:hover {
+	background: #f1f5f9 !important;
+	color: #0f172a !important;
+	transform: translateX(2px) !important;
+}
+
+.dash-sidebar .dash-submenu .dash-link:hover::before {
+	background-color: #2563eb !important;
+	transform: scale(1.3) !important;
+}
+
+.dash-sidebar .dash-submenu .dash-item.active > .dash-link,
+.dash-sidebar .dash-submenu .dash-link.active {
+	background: rgba(37, 99, 235, 0.1) !important;
+	color: #2563eb !important;
+	font-weight: 600 !important;
+	box-shadow: none !important;
+	transform: none !important;
+	width: 100% !important;
+}
+
+.dash-sidebar .dash-submenu .dash-item.active > .dash-link::before,
+.dash-sidebar .dash-submenu .dash-link.active::before {
+	content: '' !important;
+	display: inline-block !important;
+	position: static !important;
+	left: auto !important;
+	top: auto !important;
+	bottom: auto !important;
+	width: 6px !important;
+	height: 6px !important;
+	min-width: 6px !important;
+	min-height: 6px !important;
+	border-radius: 50% !important;
+	background-color: #2563eb !important;
+	box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18) !important;
+	margin-right: 10px !important;
+	transform: scale(1.15) !important;
+}
+
+/* Open section header: expanded but not "current page" unless it is a leaf link */
+.dash-sidebar .dash-navbar > .dash-item.dash-hasmenu.dash-trigger > .dash-link {
+	background: #f8fafc !important;
+	color: #0f172a !important;
+	font-weight: 600 !important;
+	box-shadow: none !important;
+}
+
+.dash-sidebar .dash-navbar > .dash-item.dash-hasmenu.dash-trigger.active > .dash-link::before {
+	display: none !important;
+	content: none !important;
+}
+
+/* Mobile Sidebar Backdrop & Active State */
+@media (max-width: 1024px) {
+	.dash-sidebar {
+		transform: translateX(-100%) !important;
+		left: 0 !important;
+	}
+	.dash-sidebar.mob-sidebar-active {
+		transform: translateX(0) !important;
+		box-shadow: 0 0 40px rgba(0,0,0,0.2) !important;
+	}
+	.dash-menu-overlay {
+		background: rgba(15, 23, 42, 0.5) !important;
+		backdrop-filter: blur(3px) !important;
+		position: fixed !important;
+		top: 0 !important;
+		left: 0 !important;
+		right: 0 !important;
+		bottom: 0 !important;
+		z-index: 1025 !important;
+	}
+}
+
+/* --------------------------------------------------------------------------
+   3. MODERN DASHBOARD STATISTIC & METRIC CARDS
+   -------------------------------------------------------------------------- */
+.dashboard-stat-card {
+	background: #ffffff !important;
+	border: 1px solid #edf2f7 !important;
+	border-radius: 14px !important;
+	box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03), 0 4px 10px rgba(15, 23, 42, 0.03) !important;
+	transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1) !important;
+	margin-bottom: 20px !important;
+	overflow: hidden !important;
+	position: relative !important;
+}
+
+.dashboard-stat-card:hover {
+	transform: translateY(-2px) !important;
+	border-color: #cbd5e1 !important;
+	box-shadow: 0 12px 24px -4px rgba(15, 23, 42, 0.08), 0 4px 6px -2px rgba(15, 23, 42, 0.03) !important;
+}
+
+.dashboard-stat-card .card-body {
+	padding: 20px 22px !important;
+}
+
+.stat-icon-wrapper {
+	width: 48px !important;
+	height: 48px !important;
+	min-width: 48px !important;
+	border-radius: 12px !important;
+	display: inline-flex !important;
+	align-items: center !important;
+	justify-content: center !important;
+	font-size: 22px !important;
+	transition: transform 0.2s ease !important;
+}
+
+.dashboard-stat-card:hover .stat-icon-wrapper {
+	transform: scale(1.08) !important;
+}
+
+.stat-icon-primary {
+	background: rgba(37, 99, 235, 0.1) !important;
+	color: #2563eb !important;
+}
+
+.stat-icon-info {
+	background: rgba(6, 182, 212, 0.1) !important;
+	color: #0891b2 !important;
+}
+
+.stat-icon-warning {
+	background: rgba(245, 158, 11, 0.1) !important;
+	color: #d97706 !important;
+}
+
+.stat-icon-success {
+	background: rgba(16, 185, 129, 0.1) !important;
+	color: #059669 !important;
+}
+
+.stat-label-caption {
+	font-size: 11.5px !important;
+	text-transform: uppercase !important;
+	letter-spacing: 0.05em !important;
+	font-weight: 600 !important;
+	color: #94a3b8 !important;
+	margin-bottom: 2px !important;
+}
+
+.stat-title {
+	font-size: 14.5px !important;
+	font-weight: 600 !important;
+	color: #334155 !important;
+	margin: 0 !important;
+	line-height: 1.2 !important;
+}
+
+.stat-number {
+	font-size: 26px !important;
+	font-weight: 700 !important;
+	letter-spacing: -0.02em !important;
+	line-height: 1 !important;
+	margin: 0 !important;
+}
+
+/* --------------------------------------------------------------------------
+   4. MODERN ATTENDANCE (CLOCK IN / CLOCK OUT) WIDGET
+   -------------------------------------------------------------------------- */
+.dashboard-clock-card {
+	background: #ffffff !important;
+	border: 1px solid #edf2f7 !important;
+	border-radius: 14px !important;
+	box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03), 0 4px 10px rgba(15, 23, 42, 0.03) !important;
+	margin-bottom: 24px !important;
+	overflow: hidden !important;
+}
+
+.dashboard-clock-card .card-header {
+	padding: 16px 22px !important;
+	background: #ffffff !important;
+	border-bottom: 1px solid #f1f5f9 !important;
+	display: flex !important;
+	align-items: center !important;
+	justify-content: space-between !important;
+}
+
+.dashboard-clock-card .card-header h5 {
+	margin: 0 !important;
+	font-size: 16px !important;
+	font-weight: 600 !important;
+	color: #0f172a !important;
+	display: flex !important;
+	align-items: center !important;
+	gap: 8px !important;
+}
+
+.dashboard-clock-card .card-body {
+	padding: 22px !important;
+}
+
+.shift-info-bar {
+	display: flex !important;
+	flex-wrap: wrap !important;
+	align-items: center !important;
+	gap: 10px !important;
+	margin-bottom: 20px !important;
+}
+
+.shift-badge {
+	display: inline-flex !important;
+	align-items: center !important;
+	gap: 6px !important;
+	padding: 6px 14px !important;
+	border-radius: 20px !important;
+	font-size: 12.5px !important;
+	font-weight: 500 !important;
+}
+
+.shift-badge-primary {
+	background: #eff6ff !important;
+	color: #1d4ed8 !important;
+	border: 1px solid #dbeafe !important;
+}
+
+.shift-badge-subtle {
+	background: #f8fafc !important;
+	color: #475569 !important;
+	border: 1px solid #e2e8f0 !important;
+}
+
+.clock-actions-wrapper {
+	display: flex !important;
+	align-items: center !important;
+	gap: 14px !important;
+	flex-wrap: wrap !important;
+}
+
+.btn-clock-in {
+	background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+	border: none !important;
+	color: #ffffff !important;
+	font-weight: 600 !important;
+	font-size: 13.5px !important;
+	letter-spacing: 0.03em !important;
+	padding: 10px 24px !important;
+	border-radius: 8px !important;
+	box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25) !important;
+	display: inline-flex !important;
+	align-items: center !important;
+	gap: 8px !important;
+	transition: all 0.2s ease !important;
+}
+
+.btn-clock-in:hover:not(:disabled) {
+	background: linear-gradient(135deg, #059669 0%, #047857 100%) !important;
+	transform: translateY(-1px) !important;
+	box-shadow: 0 6px 16px rgba(16, 185, 129, 0.35) !important;
+}
+
+.btn-clock-in:active:not(:disabled) {
+	transform: translateY(0) !important;
+}
+
+.btn-clock-in:disabled {
+	opacity: 0.45 !important;
+	cursor: not-allowed !important;
+	box-shadow: none !important;
+}
+
+.btn-clock-out {
+	background: linear-gradient(135deg, #f43f5e 0%, #e11d48 100%) !important;
+	border: none !important;
+	color: #ffffff !important;
+	font-weight: 600 !important;
+	font-size: 13.5px !important;
+	letter-spacing: 0.03em !important;
+	padding: 10px 24px !important;
+	border-radius: 8px !important;
+	box-shadow: 0 4px 12px rgba(244, 63, 94, 0.25) !important;
+	display: inline-flex !important;
+	align-items: center !important;
+	gap: 8px !important;
+	transition: all 0.2s ease !important;
+}
+
+.btn-clock-out:hover:not(:disabled) {
+	background: linear-gradient(135deg, #e11d48 0%, #be123c 100%) !important;
+	transform: translateY(-1px) !important;
+	box-shadow: 0 6px 16px rgba(244, 63, 94, 0.35) !important;
+}
+
+.btn-clock-out:active:not(:disabled) {
+	transform: translateY(0) !important;
+}
+
+.btn-clock-out:disabled {
+	opacity: 0.45 !important;
+	cursor: not-allowed !important;
+	box-shadow: none !important;
+}
+
+/* --------------------------------------------------------------------------
+   5. MODERN DASHBOARD TABLES & SECTION CARDS
+   -------------------------------------------------------------------------- */
+.dashboard-table-card {
+	background: #ffffff !important;
+	border: 1px solid #edf2f7 !important;
+	border-radius: 14px !important;
+	box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03), 0 4px 10px rgba(15, 23, 42, 0.03) !important;
+	margin-bottom: 24px !important;
+	overflow: hidden !important;
+}
+
+.dashboard-table-card .card-header {
+	padding: 16px 22px !important;
+	background: #ffffff !important;
+	border-bottom: 1px solid #f1f5f9 !important;
+	display: flex !important;
+	align-items: center !important;
+	justify-content: space-between !important;
+}
+
+.dashboard-table-card .card-header h5 {
+	margin: 0 !important;
+	font-size: 15.5px !important;
+	font-weight: 600 !important;
+	color: #0f172a !important;
+	display: flex !important;
+	align-items: center !important;
+	gap: 8px !important;
+}
+
+.dashboard-table-card .table-responsive {
+	border-radius: 0 0 14px 14px !important;
+}
+
+.dashboard-table-card table {
+	margin-bottom: 0 !important;
+	width: 100% !important;
+}
+
+.dashboard-table-card table thead th {
+	background: #f8fafc !important;
+	color: #64748b !important;
+	font-size: 11.5px !important;
+	font-weight: 600 !important;
+	text-transform: uppercase !important;
+	letter-spacing: 0.05em !important;
+	padding: 12px 18px !important;
+	border-top: none !important;
+	border-bottom: 1px solid #e2e8f0 !important;
+	white-space: nowrap !important;
+}
+
+.dashboard-table-card table tbody td {
+	padding: 13px 18px !important;
+	font-size: 13px !important;
+	color: #334155 !important;
+	vertical-align: middle !important;
+	border-bottom: 1px solid #f1f5f9 !important;
+}
+
+.dashboard-table-card table tbody tr:last-child td {
+	border-bottom: none !important;
+}
+
+.dashboard-table-card table tbody tr {
+	transition: background-color 0.15s ease !important;
+}
+
+.dashboard-table-card table tbody tr:hover {
+	background-color: #f8fafc !important;
+}
+
+/* Absent Status Pill */
+.absent-btn {
+	background: #fef2f2 !important;
+	color: #dc2626 !important;
+	border: 1px solid #fee2e2 !important;
+	border-radius: 20px !important;
+	padding: 3px 10px !important;
+	font-size: 11px !important;
+	font-weight: 600 !important;
+	display: inline-block !important;
+	letter-spacing: 0.02em !important;
+}
+
+/* --------------------------------------------------------------------------
+   6. CELEBRATION WIDGETS (BIRTHDAYS & ANNIVERSARIES)
+   -------------------------------------------------------------------------- */
+.celebration-card {
+	background: #ffffff !important;
+	border: 1px solid #edf2f7 !important;
+	border-radius: 14px !important;
+	box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03), 0 4px 10px rgba(15, 23, 42, 0.03) !important;
+	margin-bottom: 24px !important;
+	overflow: hidden !important;
+}
+
+.celebration-card .card-header {
+	padding: 16px 20px !important;
+	background: #ffffff !important;
+	border-bottom: 1px solid #f1f5f9 !important;
+}
+
+.celebration-card .card-header h5 {
+	margin: 0 !important;
+	font-size: 15px !important;
+	font-weight: 600 !important;
+	color: #0f172a !important;
+	display: flex !important;
+	align-items: center !important;
+	gap: 8px !important;
+}
+
+.celebration-card table tbody td {
+	padding: 12px 18px !important;
+	vertical-align: middle !important;
+}
+
+.celebration-avatar {
+	width: 38px !important;
+	height: 38px !important;
+	border-radius: 50% !important;
+	object-fit: cover !important;
+	border: 2px solid #ffffff !important;
+	box-shadow: 0 2px 5px rgba(15, 23, 42, 0.1) !important;
+}
+
+.celebration-name {
+	font-weight: 500 !important;
+	font-size: 13.5px !important;
+	color: #1e293b !important;
+	margin-left: 10px !important;
+}
+
+.celebration-badge-today {
+	background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
+	color: #ffffff !important;
+	border-radius: 20px !important;
+	padding: 3px 10px !important;
+	font-size: 11px !important;
+	font-weight: 600 !important;
+	box-shadow: 0 2px 6px rgba(245, 158, 11, 0.25) !important;
+	display: inline-block !important;
+}
+
+.celebration-badge-date {
+	background: #f1f5f9 !important;
+	color: #475569 !important;
+	border-radius: 20px !important;
+	padding: 3px 10px !important;
+	font-size: 11px !important;
+	font-weight: 500 !important;
+	display: inline-block !important;
+}
+
+/* --------------------------------------------------------------------------
+   7. FULLCALENDAR MODERN INTEGRATION
+   -------------------------------------------------------------------------- */
+.calendar-card {
+	background: #ffffff !important;
+	border: 1px solid #edf2f7 !important;
+	border-radius: 14px !important;
+	box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03), 0 4px 10px rgba(15, 23, 42, 0.03) !important;
+	margin-bottom: 24px !important;
+	overflow: hidden !important;
+}
+
+.calendar-card .card-header {
+	padding: 16px 22px !important;
+	background: #ffffff !important;
+	border-bottom: 1px solid #f1f5f9 !important;
+}
+
+.fc-theme-bootstrap .fc-scrollgrid {
+	border: 1px solid #eef2f6 !important;
+	border-radius: 10px !important;
+	overflow: hidden !important;
+}
+
+.fc .fc-toolbar-title {
+	font-size: 16px !important;
+	font-weight: 600 !important;
+	color: #0f172a !important;
+}
+
+.fc .fc-button-primary {
+	background-color: #ffffff !important;
+	border-color: #cbd5e1 !important;
+	color: #475569 !important;
+	font-size: 12.5px !important;
+	font-weight: 500 !important;
+	padding: 6px 12px !important;
+	border-radius: 6px !important;
+	box-shadow: 0 1px 2px rgba(0,0,0,0.04) !important;
+	transition: all 0.15s ease !important;
+}
+
+.fc .fc-button-primary:hover {
+	background-color: #f1f5f9 !important;
+	border-color: #94a3b8 !important;
+	color: #0f172a !important;
+}
+
+.fc .fc-button-primary:not(:disabled).fc-button-active,
+.fc .fc-button-primary:not(:disabled):active {
+	background-color: #2563eb !important;
+	border-color: #2563eb !important;
+	color: #ffffff !important;
+	box-shadow: 0 2px 4px rgba(37, 99, 235, 0.25) !important;
+}
+
+.fc-daygrid-event {
+	border-radius: 4px !important;
+	font-size: 11.5px !important;
+	font-weight: 500 !important;
+	padding: 2px 6px !important;
+}
+
+/* ==========================================================================
+   8. MODERN HEADER TOOLBAR (LANGUAGE, IMPERSONATE, PROFILE, NOTIFICATIONS)
+   ========================================================================== */
+
+.dash-header {
+	min-height: 70px !important;
+	display: flex !important;
+	align-items: center !important;
+}
+
+.dash-header .header-wrapper {
+	width: 100% !important;
+	display: flex !important;
+	align-items: center !important;
+	justify-content: space-between !important;
+	padding: 0 24px !important;
+}
+
+.dash-header .header-toolbar-list {
+	display: inline-flex !important;
+	align-items: center !important;
+	gap: 10px !important;
+	margin: 0 !important;
+	padding: 0 !important;
+	list-style: none !important;
+}
+
+.dash-header .header-toolbar-list > li {
+	display: inline-flex !important;
+	align-items: center !important;
+	margin: 0 !important;
+	padding: 0 !important;
+}
+
+/* 8.1 Unified Header Action Items (Language Trigger) */
+.dash-header .header-nav-btn,
+.dash-header .drp-language a.dash-head-link {
+	height: 38px !important;
+	min-height: 38px !important;
+	background: #ffffff !important;
+	border: 1px solid #e2e8f0 !important;
+	border-radius: 9px !important;
+	padding: 0 12px !important;
+	color: #475569 !important;
+	font-size: 13px !important;
+	font-weight: 500 !important;
+	display: inline-flex !important;
+	align-items: center !important;
+	gap: 6px !important;
+	margin: 0 !important;
+	text-decoration: none !important;
+	transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+	box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04) !important;
+	cursor: pointer !important;
+}
+
+.dash-header .header-nav-btn:hover,
+.dash-header .drp-language a.dash-head-link:hover,
+.dash-header .header-nav-btn:focus,
+.dash-header .drp-language a.dash-head-link:focus,
+.dash-header .drp-language.show a.dash-head-link {
+	background: #f8fafc !important;
+	border-color: #cbd5e1 !important;
+	color: #0f172a !important;
+	box-shadow: 0 2px 5px rgba(15, 23, 42, 0.08) !important;
+}
+
+.dash-header .header-nav-btn i.ti-world,
+.dash-header .drp-language a.dash-head-link i.ti-world {
+	font-size: 16px !important;
+	color: #64748b !important;
+}
+
+.dash-header .header-nav-btn .drp-arrow,
+.dash-header .drp-language a.dash-head-link .drp-arrow,
+.dash-header .drp-company a.dash-head-link .drp-arrow {
+	font-size: 11px !important;
+	color: #94a3b8 !important;
+	margin-left: 2px !important;
+	transition: transform 0.2s ease !important;
+}
+
+.dash-header .drp-language.show .drp-arrow,
+.dash-header .drp-company.show .drp-arrow {
+	transform: rotate(180deg) !important;
+}
+
+/* 8.2 Impersonate Action Button */
+.dash-header .header-impersonate-btn {
+	height: 38px !important;
+	min-height: 38px !important;
+	padding: 0 14px !important;
+	border-radius: 9px !important;
+	border: none !important;
+	font-size: 13px !important;
+	font-weight: 600 !important;
+	letter-spacing: -0.01em !important;
+	display: inline-flex !important;
+	align-items: center !important;
+	gap: 7px !important;
+	cursor: pointer !important;
+	text-decoration: none !important;
+	transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+	background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%) !important;
+	color: #ffffff !important;
+	box-shadow: 0 2px 6px rgba(79, 70, 229, 0.28), 0 1px 2px rgba(79, 70, 229, 0.15) !important;
+}
+
+.dash-header .header-impersonate-btn:hover {
+	transform: translateY(-1px) !important;
+	background: linear-gradient(135deg, #4338ca 0%, #3730a3 100%) !important;
+	box-shadow: 0 4px 12px rgba(79, 70, 229, 0.38) !important;
+	color: #ffffff !important;
+}
+
+.dash-header .header-impersonate-btn:active {
+	transform: translateY(0) !important;
+	box-shadow: 0 1px 3px rgba(79, 70, 229, 0.2) !important;
+}
+
+.dash-header .header-impersonate-btn i {
+	font-size: 16px !important;
+	line-height: 1 !important;
+}
+
+/* Active Impersonating Live Indicator Button */
+.dash-header .header-impersonating-active-btn {
+	height: 38px !important;
+	min-height: 38px !important;
+	padding: 0 14px !important;
+	border-radius: 9px !important;
+	border: none !important;
+	font-size: 13px !important;
+	font-weight: 600 !important;
+	display: inline-flex !important;
+	align-items: center !important;
+	gap: 7px !important;
+	cursor: pointer !important;
+	text-decoration: none !important;
+	transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+	background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
+	color: #ffffff !important;
+	box-shadow: 0 2px 6px rgba(245, 158, 11, 0.3) !important;
+}
+
+.dash-header .header-impersonating-active-btn:hover {
+	transform: translateY(-1px) !important;
+	background: linear-gradient(135deg, #d97706 0%, #b45309 100%) !important;
+	box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4) !important;
+	color: #ffffff !important;
+}
+
+/* 8.2.1 Black Theme "Back to Super Admin" Header Toolbar Controls */
+.dash-header .header-back-superadmin-btn {
+	height: 38px !important;
+	min-height: 38px !important;
+	padding: 0 14px !important;
+	border-radius: 9px !important;
+	border: 1px solid #27272a !important;
+	font-size: 13px !important;
+	font-weight: 600 !important;
+	letter-spacing: -0.01em !important;
+	display: inline-flex !important;
+	align-items: center !important;
+	gap: 7px !important;
+	cursor: pointer !important;
+	text-decoration: none !important;
+	transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+	background: #09090b !important;
+	color: #ffffff !important;
+	box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4) !important;
+}
+
+.dash-header .header-back-superadmin-btn:hover {
+	transform: translateY(-1px) !important;
+	background: #000000 !important;
+	border-color: #3f3f46 !important;
+	color: #ffffff !important;
+	box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6) !important;
+}
+
+.dash-header .header-back-superadmin-btn:active {
+	transform: translateY(0) !important;
+}
+
+.dash-header .header-back-superadmin-btn i {
+	font-size: 16px !important;
+	color: #f87171 !important;
+}
+
+.dash-header .header-switch-user-btn {
+	height: 38px !important;
+	min-height: 38px !important;
+	padding: 0 12px !important;
+	border-radius: 9px !important;
+	border: 1px solid #e2e8f0 !important;
+	font-size: 13px !important;
+	font-weight: 500 !important;
+	display: inline-flex !important;
+	align-items: center !important;
+	gap: 6px !important;
+	cursor: pointer !important;
+	text-decoration: none !important;
+	transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+	background: #ffffff !important;
+	color: #334155 !important;
+	box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04) !important;
+}
+
+.dash-header .header-switch-user-btn:hover {
+	background: #f8fafc !important;
+	border-color: #cbd5e1 !important;
+	color: #0f172a !important;
+	transform: translateY(-1px) !important;
+	box-shadow: 0 2px 5px rgba(15, 23, 42, 0.08) !important;
+}
+
+/* 8.2.2 Sleek Black Impersonation Top Banner */
+.impersonate-top-black-banner {
+	background: #09090b !important;
+	color: #ffffff !important;
+	border-bottom: 1px solid #18181b !important;
+	box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3) !important;
+	position: relative !important;
+	z-index: 1030 !important;
+}
+
+.impersonate-banner-container {
+	width: 100% !important;
+	padding: 8px 24px !important;
+	display: flex !important;
+	align-items: center !important;
+	justify-content: space-between !important;
+	flex-wrap: wrap !important;
+	gap: 10px !important;
+}
+
+.impersonate-banner-left {
+	display: inline-flex !important;
+	align-items: center !important;
+	gap: 10px !important;
+	flex-wrap: wrap !important;
+	font-size: 13px !important;
+}
+
+.impersonate-live-badge {
+	background: rgba(239, 68, 68, 0.18) !important;
+	color: #fca5a5 !important;
+	border: 1px solid rgba(239, 68, 68, 0.35) !important;
+	padding: 2px 9px !important;
+	border-radius: 6px !important;
+	font-size: 11px !important;
+	font-weight: 700 !important;
+	letter-spacing: 0.06em !important;
+	display: inline-flex !important;
+	align-items: center !important;
+	gap: 6px !important;
+}
+
+.impersonate-banner-text {
+	color: #cbd5e1 !important;
+	display: inline-flex !important;
+	align-items: center !important;
+	gap: 6px !important;
+	flex-wrap: wrap !important;
+}
+
+.impersonate-banner-type-badge {
+	background: #27272a !important;
+	color: #38bdf8 !important;
+	border: 1px solid #3f3f46 !important;
+	font-size: 11px !important;
+	font-weight: 600 !important;
+	padding: 1px 7px !important;
+	border-radius: 5px !important;
+	text-transform: capitalize !important;
+}
+
+.impersonate-banner-email {
+	color: #94a3b8 !important;
+	font-size: 12px !important;
+}
+
+.impersonate-banner-right {
+	display: inline-flex !important;
+	align-items: center !important;
+	gap: 8px !important;
+}
+
+.btn-banner-switch {
+	background: #18181b !important;
+	color: #e4e4e7 !important;
+	border: 1px solid #27272a !important;
+	padding: 4px 12px !important;
+	border-radius: 7px !important;
+	font-size: 12.5px !important;
+	font-weight: 500 !important;
+	display: inline-flex !important;
+	align-items: center !important;
+	gap: 6px !important;
+	cursor: pointer !important;
+	transition: all 0.15s ease !important;
+}
+
+.btn-banner-switch:hover {
+	background: #27272a !important;
+	color: #ffffff !important;
+	border-color: #3f3f46 !important;
+}
+
+.btn-banner-back-admin {
+	background: #dc2626 !important;
+	color: #ffffff !important;
+	border: none !important;
+	padding: 4px 14px !important;
+	border-radius: 7px !important;
+	font-size: 12.5px !important;
+	font-weight: 600 !important;
+	display: inline-flex !important;
+	align-items: center !important;
+	gap: 6px !important;
+	cursor: pointer !important;
+	text-decoration: none !important;
+	transition: all 0.15s ease !important;
+	box-shadow: 0 1px 3px rgba(220, 38, 38, 0.4) !important;
+}
+
+.btn-banner-back-admin:hover {
+	background: #b91c1c !important;
+	color: #ffffff !important;
+	box-shadow: 0 2px 6px rgba(220, 38, 38, 0.6) !important;
+}
+
+.header-pulse-dot {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: #ef4444;
+	box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+	animation: headerPulse 1.8s infinite;
+}
+
+@keyframes headerPulse {
+	0% {
+		transform: scale(0.95);
+		box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+	}
+	70% {
+		transform: scale(1);
+		box-shadow: 0 0 0 6px rgba(239, 68, 68, 0);
+	}
+	100% {
+		transform: scale(0.95);
+		box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+	}
+}
+
+/* 8.3 User Profile Dropdown Pill */
+.dash-header .drp-company a.dash-head-link,
+.dash-header .header-profile-btn {
+	height: 38px !important;
+	min-height: 38px !important;
+	background: #ffffff !important;
+	border: 1px solid #e2e8f0 !important;
+	border-radius: 9px !important;
+	padding: 0 12px 0 5px !important;
+	display: inline-flex !important;
+	align-items: center !important;
+	gap: 8px !important;
+	color: #1e293b !important;
+	font-size: 13px !important;
+	font-weight: 600 !important;
+	margin: 0 !important;
+	text-decoration: none !important;
+	transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+	box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04) !important;
+	cursor: pointer !important;
+}
+
+.dash-header .drp-company a.dash-head-link:hover,
+.dash-header .header-profile-btn:hover,
+.dash-header .drp-company a.dash-head-link:focus,
+.dash-header .header-profile-btn:focus,
+.dash-header .drp-company.show a.dash-head-link {
+	background: #f8fafc !important;
+	border-color: #cbd5e1 !important;
+	color: #0f172a !important;
+	box-shadow: 0 2px 5px rgba(15, 23, 42, 0.08) !important;
+}
+
+.dash-header .drp-company .theme-avtar,
+.dash-header .header-profile-avatar {
+	width: 28px !important;
+	height: 28px !important;
+	min-width: 28px !important;
+	border-radius: 50% !important;
+	display: flex !important;
+	align-items: center !important;
+	justify-content: center !important;
+	overflow: hidden !important;
+	background: #f1f5f9 !important;
+	border: 1.5px solid #e2e8f0 !important;
+}
+
+.dash-header .drp-company .header-avtar {
+	width: 100% !important;
+	height: 100% !important;
+	object-fit: cover !important;
+	border-radius: 50% !important;
+}
+
+.dash-header .header-profile-name {
+	font-size: 13px !important;
+	font-weight: 600 !important;
+	color: #1e293b !important;
+	white-space: nowrap !important;
+	max-width: 140px !important;
+	overflow: hidden !important;
+	text-overflow: ellipsis !important;
+}
+
+/* 8.4 Notification Icon Button */
+.dash-header .drp-notification a.dash-head-link,
+.dash-header .header-btn-icon {
+	width: 38px !important;
+	height: 38px !important;
+	min-width: 38px !important;
+	padding: 0 !important;
+	display: inline-flex !important;
+	align-items: center !important;
+	justify-content: center !important;
+	border: 1px solid #e2e8f0 !important;
+	border-radius: 9px !important;
+	background: #ffffff !important;
+	color: #64748b !important;
+	position: relative !important;
+	margin: 0 !important;
+	box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04) !important;
+	transition: all 0.2s ease !important;
+	cursor: pointer !important;
+}
+
+.dash-header .drp-notification a.dash-head-link:hover,
+.dash-header .drp-notification.show a.dash-head-link,
+.dash-header .header-btn-icon:hover {
+	background: #f8fafc !important;
+	border-color: #cbd5e1 !important;
+	color: #0f172a !important;
+	box-shadow: 0 2px 5px rgba(15, 23, 42, 0.08) !important;
+}
+
+.dash-header .drp-notification a.dash-head-link i,
+.dash-header .header-btn-icon i {
+	font-size: 16px !important;
+}
+
+.dash-header .drp-notification .dash-h-badge {
+	position: absolute !important;
+	top: -2px !important;
+	right: -2px !important;
+	min-width: 18px !important;
+	height: 18px !important;
+	padding: 0 4px !important;
+	border-radius: 9px !important;
+	font-size: 10px !important;
+	font-weight: 700 !important;
+	display: inline-flex !important;
+	align-items: center !important;
+	justify-content: center !important;
+	background-color: #ef4444 !important;
+	color: #ffffff !important;
+	border: 2px solid #ffffff !important;
+	box-shadow: 0 1px 3px rgba(239, 68, 68, 0.4) !important;
+}
+
+/* 8.5 Polished Modern Dropdown Menus */
+.dash-header .dropdown-menu.dash-h-dropdown {
+	border: 1px solid #edf2f7 !important;
+	border-radius: 12px !important;
+	box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.12), 0 8px 10px -6px rgba(15, 23, 42, 0.06) !important;
+	padding: 6px !important;
+	margin-top: 8px !important;
+	min-width: 190px !important;
+	animation: headerFadeIn 0.15s ease !important;
+	background: #ffffff !important;
+}
+
+@keyframes headerFadeIn {
+	from {
+		opacity: 0;
+		transform: translateY(-4px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+.dash-header .dropdown-menu.dash-h-dropdown .dropdown-item {
+	border-radius: 8px !important;
+	padding: 8px 12px !important;
+	font-size: 13px !important;
+	font-weight: 500 !important;
+	color: #334155 !important;
+	display: flex !important;
+	align-items: center !important;
+	gap: 8px !important;
+	transition: all 0.15s ease !important;
+}
+
+.dash-header .dropdown-menu.dash-h-dropdown .dropdown-item:hover {
+	background-color: #f1f5f9 !important;
+	color: #0f172a !important;
+}
+
+.dash-header .dropdown-menu.dash-h-dropdown .dropdown-item.active,
+.dash-header .dropdown-menu.dash-h-dropdown .dropdown-item:active {
+	background-color: #eef2ff !important;
+	color: #4f46e5 !important;
+	font-weight: 600 !important;
+}
+
+.dash-header .dropdown-menu.dash-h-dropdown .dropdown-item i {
+	font-size: 15px !important;
+	width: 18px !important;
+	text-align: center !important;
+	color: #64748b !important;
+}
+
+.dash-header .dropdown-menu.dash-h-dropdown .dropdown-item:hover i {
+	color: #0f172a !important;
+}
+
+.dash-header .dropdown-menu.dash-h-dropdown .dropdown-item.text-danger {
+	color: #ef4444 !important;
+}
+
+.dash-header .dropdown-menu.dash-h-dropdown .dropdown-item.text-danger i {
+	color: #ef4444 !important;
+}
+
+.dash-header .dropdown-menu.dash-h-dropdown .dropdown-item.text-danger:hover {
+	background-color: #fef2f2 !important;
+	color: #dc2626 !important;
+}
+
+.dash-header .dropdown-menu.dash-h-dropdown .dropdown-divider {
+	margin: 4px 0 !important;
+	border-color: #f1f5f9 !important;
+}
+
+.dash-header .dropdown-user-header {
+	padding: 8px 10px 10px 10px !important;
+	background: #f8fafc !important;
+	border-radius: 8px !important;
+	margin-bottom: 4px !important;
+	display: flex !important;
+	align-items: center !important;
+	gap: 10px !important;
+}
+
+.dash-header .dropdown-user-avatar {
+	width: 34px !important;
+	height: 34px !important;
+	min-width: 34px !important;
+	border-radius: 50% !important;
+	object-fit: cover !important;
+	border: 1px solid #e2e8f0 !important;
+}
+
+.dash-header .dropdown-user-name {
+	font-size: 13px !important;
+	font-weight: 600 !important;
+	color: #0f172a !important;
+	line-height: 1.2 !important;
+}
+
+.dash-header .dropdown-user-badge {
+	display: inline-block !important;
+	margin-top: 2px !important;
+	font-size: 10.5px !important;
+	font-weight: 600 !important;
+	color: #4f46e5 !important;
+	background: #eef2ff !important;
+	border: 1px solid #e0e7ff !important;
+	border-radius: 5px !important;
+	padding: 1px 6px !important;
+	text-transform: capitalize !important;
+}
+/* ===== CRM Company Invoices (desktop / laptop) ===== */
+.crm-invoice-module .crm-stat-card {
+	border: 1px solid #e8edf3;
+	box-shadow: none;
+}
+.crm-invoice-module .crm-stat-card .card-body {
+	padding: 0.9rem 1rem;
+}
+.crm-invoice-module .crm-detail-grid {
+	display: grid;
+	gap: 0.55rem;
+}
+.crm-invoice-module .crm-detail-row {
+	display: flex;
+	justify-content: space-between;
+	gap: 1rem;
+	padding: 0.35rem 0;
+	border-bottom: 1px dashed #eef2f6;
+	font-size: 0.925rem;
+}
+.crm-invoice-module .crm-detail-row span {
+	color: #6c757d;
+}
+.crm-invoice-module .crm-note-box {
+	background: #f8fafc;
+	border: 1px solid #e8edf3;
+	border-radius: 8px;
+	padding: 0.85rem 1rem;
+	height: 100%;
+}
+.crm-invoice-module .crm-invoice-lines th,
+.crm-invoice-module .crm-invoice-lines td {
+	vertical-align: middle;
+	padding: 0.9rem 1rem !important;
+}
+.crm-invoice-module .crm-invoice-lines th.crm-col-desc,
+.crm-invoice-module .crm-invoice-lines td.crm-col-desc {
+	padding-left: 1.75rem !important;
+	padding-right: 1.5rem !important;
+	line-height: 1.55;
+}
+.crm-invoice-module .crm-invoice-lines tfoot th {
+	padding-top: 0.75rem !important;
+	padding-bottom: 0.75rem !important;
+}
+.crm-invoice-module .crm-invoice-lines tfoot th:first-child {
+	padding-right: 1.25rem !important;
+}
+.crm-invoice-module .crm-email-log-item {
+	background: #fcfdff;
+	border: 1px solid #eef2f6;
+	border-radius: 8px;
+	padding: 0.9rem 1rem;
+}
+.crm-invoice-module .crm-invoice-list td,
+.crm-invoice-module .crm-invoice-list th {
+	vertical-align: middle;
+}
+.crm-invoice-actions {
+	max-width: 100%;
+}
+.crm-invoice-actions .btn {
+	white-space: nowrap;
+}
+@media (max-width: 991.98px) {
+	.crm-invoice-module .crm-detail-row {
+		flex-direction: column;
+		gap: 0.15rem;
 	}
 }

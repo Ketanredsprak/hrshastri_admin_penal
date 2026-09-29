@@ -423,7 +423,7 @@ class AttendanceEmployeeController extends Controller
      }
      public function show(Request $request)
      {
-          return redirect()->route('attendance.index');
+          return redirect()->route('attendanceemployee.index');
      }
      public function edit($id)
      {

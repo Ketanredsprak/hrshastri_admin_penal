@@ -1,0 +1,75 @@
+-- Subscription Point Changes Start --
+-- Date : 18-09-2026 --
+
+ALTER TABLE `users`
+  ADD COLUMN `custom_max_users` INT NULL DEFAULT NULL AFTER `plan`,
+  ADD COLUMN `custom_max_employees` INT NULL DEFAULT NULL AFTER `custom_max_users`;
+
+http://127.0.0.1:8000/sync-subscription-limits?action=sync_all
+
+-- Subscription Point Changes End --
+
+Employee Before and After Change Logs
+new table for log: employee_data_change_logs
+
+-- =============================================================================
+-- CRM Invoice CGST / SGST (percentage) - Date: 28-09-2026
+-- Full file: docs/SQL_CRM_INVOICE_CGST_SGST.sql
+-- =============================================================================
+
+ALTER TABLE `crm_invoice_settings`
+  ADD COLUMN `cgst_percent` DECIMAL(8,2) NOT NULL DEFAULT 0 AFTER `price_per_employee`;
+
+ALTER TABLE `crm_invoice_settings`
+  ADD COLUMN `sgst_percent` DECIMAL(8,2) NOT NULL DEFAULT 0 AFTER `cgst_percent`;
+
+ALTER TABLE `crm_invoices`
+  ADD COLUMN `cgst_percent` DECIMAL(8,2) NOT NULL DEFAULT 0 AFTER `subtotal`;
+
+ALTER TABLE `crm_invoices`
+  ADD COLUMN `sgst_percent` DECIMAL(8,2) NOT NULL DEFAULT 0 AFTER `cgst_percent`;
+
+ALTER TABLE `crm_invoices`
+  ADD COLUMN `cgst_amount` DECIMAL(14,2) NOT NULL DEFAULT 0 AFTER `sgst_percent`;
+
+ALTER TABLE `crm_invoices`
+  ADD COLUMN `sgst_amount` DECIMAL(14,2) NOT NULL DEFAULT 0 AFTER `cgst_amount`;
+
+-- =============================================================================
+-- Zoho-style TAX INVOICE fields - Date: 29-09-2026
+-- Full file: docs/SQL_CRM_TAX_INVOICE_ZOHO.sql
+-- =============================================================================
+
+ALTER TABLE `crm_invoice_settings`
+  ADD COLUMN `seller_gstin` VARCHAR(20) NULL AFTER `seller_phone`,
+  ADD COLUMN `seller_state` VARCHAR(100) NULL AFTER `seller_gstin`,
+  ADD COLUMN `seller_state_code` VARCHAR(10) NULL AFTER `seller_state`,
+  ADD COLUMN `bank_name` VARCHAR(150) NULL AFTER `payment_instructions`,
+  ADD COLUMN `bank_account_no` VARCHAR(50) NULL AFTER `bank_name`,
+  ADD COLUMN `bank_ifsc` VARCHAR(30) NULL AFTER `bank_account_no`,
+  ADD COLUMN `bank_swift` VARCHAR(30) NULL AFTER `bank_ifsc`,
+  ADD COLUMN `default_hsn_sac` VARCHAR(20) NULL AFTER `bank_swift`,
+  ADD COLUMN `default_terms` VARCHAR(100) NULL AFTER `default_hsn_sac`,
+  ADD COLUMN `default_notes` TEXT NULL AFTER `default_terms`,
+  ADD COLUMN `signature_path` VARCHAR(255) NULL AFTER `logo_path`,
+  ADD COLUMN `use_fy_numbering` TINYINT(1) NOT NULL DEFAULT 1 AFTER `next_number`;
+
+ALTER TABLE `crm_invoices`
+  ADD COLUMN `company_gstin` VARCHAR(20) NULL AFTER `company_phone`,
+  ADD COLUMN `ship_to_name` VARCHAR(255) NULL AFTER `company_gstin`,
+  ADD COLUMN `ship_to_address` TEXT NULL AFTER `ship_to_name`,
+  ADD COLUMN `place_of_supply` VARCHAR(100) NULL AFTER `ship_to_address`,
+  ADD COLUMN `place_of_supply_code` VARCHAR(10) NULL AFTER `place_of_supply`,
+  ADD COLUMN `terms` VARCHAR(100) NULL AFTER `place_of_supply_code`,
+  ADD COLUMN `total_in_words` VARCHAR(500) NULL AFTER `total_amount`,
+  ADD COLUMN `seller_gstin` VARCHAR(20) NULL AFTER `total_in_words`,
+  ADD COLUMN `seller_name_snapshot` VARCHAR(255) NULL AFTER `seller_gstin`,
+  ADD COLUMN `seller_address_snapshot` TEXT NULL AFTER `seller_name_snapshot`;
+
+ALTER TABLE `crm_invoice_items`
+  ADD COLUMN `hsn_sac` VARCHAR(20) NULL AFTER `description`,
+  ADD COLUMN `unit` VARCHAR(20) NULL DEFAULT 'Nos' AFTER `hsn_sac`,
+  ADD COLUMN `cgst_percent` DECIMAL(8,2) NOT NULL DEFAULT 0 AFTER `line_total`,
+  ADD COLUMN `cgst_amount` DECIMAL(14,2) NOT NULL DEFAULT 0 AFTER `cgst_percent`,
+  ADD COLUMN `sgst_percent` DECIMAL(8,2) NOT NULL DEFAULT 0 AFTER `cgst_amount`,
+  ADD COLUMN `sgst_amount` DECIMAL(14,2) NOT NULL DEFAULT 0 AFTER `sgst_percent`;

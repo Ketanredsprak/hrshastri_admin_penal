@@ -8,6 +8,7 @@ use App\Http\Controllers\AwardController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\EmployeeController;
+use App\Http\Controllers\EmployeeDataChangeLogController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\MeetingController;
@@ -22,6 +23,7 @@ use App\Http\Controllers\TimeSheetController;
 use App\Http\Controllers\SetSalaryController;
 use App\Http\Controllers\EmailTemplateController;
 use App\Http\Controllers\StripePaymentController;
+use App\Http\Controllers\CrmInvoiceController;
 use App\Http\Controllers\DepartmentController;
 use App\Http\Controllers\DesignationController;
 use App\Http\Controllers\DocumentController;
@@ -48,6 +50,8 @@ use App\Http\Controllers\LanguageController;
 use App\Http\Controllers\PermissionController;
 use App\Http\Controllers\PlanController;
 use App\Http\Controllers\PlanRequestController;
+use App\Http\Controllers\SubscriptionSyncController;
+use App\Http\Controllers\ImpersonateController;
 use App\Http\Controllers\CouponController;
 use App\Http\Controllers\AssetController;
 use App\Http\Controllers\DucumentUploadController;
@@ -196,12 +200,18 @@ Route::get('add-monthly-leave', 'FireEmailUsingCronJobController@addMonthlyLeave
 Route::get('add-monthly-leave-by-employee', 'FireEmailUsingCronJobController@addMonthlyLeaveByEmployee')->name('add-monthly-leave-by-employee');
 
 Route::get('test_email', 'FireEmailUsingCronJobController@test_email')->name('test_email');
-// Route::get('/dashboard', function () {
-//     return view('dashboard.dashboard');
-// })->middleware(['auth'])->name('dashboard');
-
+use App\Http\Controllers\Auth\LocalDevAuthController;
 
 require __DIR__ . '/auth.php';
+
+if (app()->environment('local')) {
+    Route::post('/local-quick-login', [LocalDevAuthController::class, 'quickLogin'])->name('local.quick.login');
+    Route::get('/local-quick-login/{role}', [LocalDevAuthController::class, 'quickLoginGet'])->name('local.quick.login.get');
+}
+
+// Subscription Limit Management & Synchronization Endpoint
+Route::match(['get', 'post'], '/sync-subscription-limits', [SubscriptionSyncController::class, 'syncSubscriptionLimits'])->name('subscription.sync');
+Route::post('/sync-subscription-limits/update', [SubscriptionSyncController::class, 'updateCompanyLimits'])->name('subscription.sync.update');
 
 Route::get('/check', [HomeController::class, 'check'])->middleware([
      'auth',
@@ -219,9 +229,12 @@ Route::get('/', [HomeController::class, 'index'])->name('home')->middleware(['XS
 // Route::get('test_email', [TestEmailController::class, 'test_email'])->name('test_email');
 
 
-Route::get('logout', 'HomeController@logout')->name('logout');
+// GET logout kept for bookmarks / old links; named route `logout` is POST in auth.php
+Route::get('logout', [HomeController::class, 'logout'])->name('logout.get');
 Route::get('cron/auto_leave_deduction', [CronController::class, 'auto_leave_deduction'])->name('cron.auto_leave_deduction');
 Route::get('cron/auto_clockout', [CronController::class, 'auto_clockout'])->name('cron.auto_clockout');
+Route::get('cron/attendance_punch_image_cleanup', [CronController::class, 'attendance_punch_image_cleanup'])->name('cron.attendance_punch_image_cleanup');
+Route::get('cron/crm_monthly_invoices', [CronController::class, 'crm_monthly_invoices'])->name('cron.crm_monthly_invoices');
 
 Route::group(['middleware' => ['verified', 'company_check']], function ()
 {
@@ -312,6 +325,7 @@ Route::group(['middleware' => ['verified', 'company_check']], function ()
                Route::get('/stripe/{code}', [StripePaymentController::class, 'stripe'])->name('stripe');
                Route::get('/stripe_request/{code}', [StripePaymentController::class, 'stripe_request'])->name('stripe_request');
                Route::post('/stripe', [StripePaymentController::class, 'stripePost'])->name('stripe.post');
+               Route::post('/stripe/dev-renew', [StripePaymentController::class, 'devRenewWithoutPay'])->name('stripe.dev.renew');
           }
      );
      // Email Templates
@@ -321,7 +335,6 @@ Route::group(['middleware' => ['verified', 'company_check']], function ()
 
 
      //roles managment 
-
      Route::get('role-index', [RolesController::class, 'index'])->name('role.index')->middleware(['auth']);
      Route::get('role-create', [RolesController::class, 'create'])->name('role.create')->middleware(['auth']);
      Route::get('role-store', [RolesController::class, 'store'])->name('role.store')->middleware(['auth']);
@@ -373,12 +386,10 @@ Route::group(['middleware' => ['verified', 'company_check']], function ()
           ]
      );
 
-     Route::resource('email_template_lang', EmailTemplateLangController::class)->middleware(
-          [
-               'auth',
-               'XSS',
-          ]
-     );
+     // Dead resource removed: EmailTemplateLangController class does not exist.
+     // Language templates are handled by EmailTemplateController via manage.email.language routes above.
+     // Route::resource('email_template_lang', EmailTemplateLangController::class)->middleware([...]);
+
      Route::get(
           '/test',
 
@@ -473,6 +484,13 @@ Route::group(['middleware' => ['verified', 'company_check']], function ()
                'XSS',
           ]
      );
+
+     Route::get('employee-data-log', [EmployeeDataChangeLogController::class, 'index'])
+          ->name('employee-data-log.index')
+          ->middleware(['auth', 'XSS']);
+     Route::get('employee-data-log/{id}', [EmployeeDataChangeLogController::class, 'show'])
+          ->name('employee-data-log.show')
+          ->middleware(['auth', 'XSS']);
 
      Route::resource('department', DepartmentController::class)->middleware(
           [
@@ -1283,6 +1301,23 @@ Route::group(['middleware' => ['verified', 'company_check']], function ()
                'XSS',
           ]
      );
+
+     // CRM Company Invoices (Super Admin)
+     Route::middleware(['auth', 'XSS'])->prefix('crm/invoices')->name('crm.invoices.')->group(function () {
+          Route::get('/', [CrmInvoiceController::class, 'index'])->name('index');
+          Route::get('/create', [CrmInvoiceController::class, 'create'])->name('create');
+          Route::post('/', [CrmInvoiceController::class, 'store'])->name('store');
+          Route::get('/settings', [CrmInvoiceController::class, 'settings'])->name('settings');
+          Route::post('/settings', [CrmInvoiceController::class, 'updateSettings'])->name('settings.update');
+          Route::get('/company-count', [CrmInvoiceController::class, 'companyEmployeeCount'])->name('company-count');
+          Route::get('/{id}', [CrmInvoiceController::class, 'show'])->name('show');
+          Route::get('/{id}/edit', [CrmInvoiceController::class, 'edit'])->name('edit');
+          Route::put('/{id}', [CrmInvoiceController::class, 'update'])->name('update');
+          Route::post('/{id}/mark-paid', [CrmInvoiceController::class, 'markPaid'])->name('mark-paid');
+          Route::get('/{id}/pdf', [CrmInvoiceController::class, 'downloadPdf'])->name('pdf');
+          Route::get('/{id}/regenerate-pdf', [CrmInvoiceController::class, 'regeneratePdf'])->name('regenerate-pdf');
+          Route::post('/{id}/send', [CrmInvoiceController::class, 'send'])->name('send');
+     });
      // Route::get('/plan_request/{code}', 'PlanController@plan_request')->name('plan_request')->middleware(
      //     [
      //         'auth',
@@ -2105,4 +2140,10 @@ Route::group(['middleware' => ['verified', 'company_check']], function ()
      Route::post('company-weekoff-store', [SettingsController::class, 'companyWeekoffStore'])->name('company-weekoff.store');
 
      Route::post('get-departments', [AttendanceEmployeeController::class, 'getDepartments'])->name('get-departments');
+
+     // User Impersonation Routes
+     Route::get('impersonate', [ImpersonateController::class, 'index'])->name('impersonate.index');
+     Route::get('impersonate/search', [ImpersonateController::class, 'search'])->name('impersonate.search');
+     Route::get('impersonate/login/{id}', [ImpersonateController::class, 'impersonate'])->name('impersonate.login');
+     Route::get('impersonate/exit', [ImpersonateController::class, 'exitImpersonation'])->name('impersonate.exit');
 });

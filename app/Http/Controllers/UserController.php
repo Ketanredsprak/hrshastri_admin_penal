@@ -114,15 +114,20 @@ class UserController extends Controller
 
           if (Auth::user()->type == 'super admin')
           {
-               $validator = Validator::make(
-                    $request->all(),
-                    [
-                         'name' => 'required',
-                         'email' => 'required|unique:users',
-                         'password' => 'required',
-                         'plan_id' => 'required',
-                    ]
-               );
+               $billingMode = $request->input('billing_mode', 'global');
+               $rules = [
+                    'name' => 'required',
+                    'email' => 'required|unique:users',
+                    'password' => 'required',
+                    'billing_mode' => 'required|in:global,custom',
+               ];
+               if ($billingMode === 'custom') {
+                    $rules['price_per_employee'] = 'required|numeric|min:0';
+                    $rules['price_per_user'] = 'required|numeric|min:0';
+               } else {
+                    $rules['plan_id'] = 'required|integer|exists:plans,id';
+               }
+               $validator = Validator::make($request->all(), $rules);
           }
           else
           {
@@ -150,8 +155,26 @@ class UserController extends Controller
                     if (Auth::user()->type == 'super admin')
                     {
                          $date = date("Y-m-d H:i:s");
+                         $billingMode = $request->input('billing_mode', 'global');
+                         $isCustom = $billingMode === 'custom';
 
-                         $plan = Plan::find($request['plan_id']);
+                         if ($isCustom) {
+                              $plan = Plan::find(\App\Models\CompanyBillingProfile::CUSTOM_PLAN_ID);
+                              if (!$plan) {
+                                   DB::rollBack();
+                                   return redirect()->back()->with('error', __('Custom billing plan (#9) was not found. Please create/update plan id 9 first.'));
+                              }
+                         } else {
+                              $plan = Plan::find($request['plan_id']);
+                              if (!$plan) {
+                                   DB::rollBack();
+                                   return redirect()->back()->with('error', __('Selected plan not found.'));
+                              }
+                              if ((int) $plan->id === \App\Models\CompanyBillingProfile::CUSTOM_PLAN_ID) {
+                                   DB::rollBack();
+                                   return redirect()->back()->with('error', __('Plan #9 is reserved for Custom Employee/User billing. Choose Custom billing mode instead.'));
+                              }
+                         }
 
                          $user = User::create(
                               [
@@ -163,11 +186,34 @@ class UserController extends Controller
                                    'lang' => !empty($default_language) ? $default_language->value : '',
                                    'created_by' => Auth::user()->id,
                                    'email_verified_at' => $date,
+                                   'custom_max_users' => $isCustom ? -1 : null,
+                                   'custom_max_employees' => $isCustom ? -1 : null,
                               ]
                          );
 
                          $assignPlan = $user->assignPlan($plan->id);
                          $price      = $plan->price;
+
+                         \App\Models\CompanyBillingProfile::updateOrCreate(
+                              ['company_id' => $user->id],
+                              [
+                                   'billing_mode' => $isCustom
+                                        ? \App\Models\CompanyBillingProfile::MODE_CUSTOM
+                                        : \App\Models\CompanyBillingProfile::MODE_GLOBAL,
+                                   'price_per_employee' => $isCustom ? (float) $request->price_per_employee : null,
+                                   'price_per_user' => $isCustom ? (float) $request->price_per_user : null,
+                                   'invoice_plan_id' => $isCustom ? \App\Models\CompanyBillingProfile::CUSTOM_PLAN_ID : null,
+                                   'manual_invoice_only' => $isCustom,
+                              ]
+                         );
+
+                         // Re-apply unlimited caps after assignPlan for custom companies
+                         if ($isCustom) {
+                              $user->custom_max_users = -1;
+                              $user->custom_max_employees = -1;
+                              $user->save();
+                         }
+
                          $user->userDefaultData();
                          $user->userDefaultDataRegister($user->id);
                          GenerateOfferLetter::defaultOfferLetterRegister($user->id);
@@ -191,10 +237,12 @@ class UserController extends Controller
                                    'card_exp_year' => null,
                                    'plan_name' => $plan->name,
                                    'plan_id' => $plan->id,
-                                   'price' => $price,
+                                   'price' => $isCustom ? 0 : $price,
                                    'price_currency' => !empty(env('CURRENCY_CODE')) ? env('CURRENCY_CODE') : 'usd',
                                    'txn_id' => '',
-                                   'payment_type' => __('Manually Upgrade By Super Admin'),
+                                   'payment_type' => $isCustom
+                                        ? __('Custom Employee/User Billing By Super Admin')
+                                        : __('Manually Upgrade By Super Admin'),
                                    'payment_status' => 'succeeded',
                                    'receipt' => null,
                                    'user_id' => $user->id,
@@ -239,20 +287,17 @@ class UserController extends Controller
 
                          // Auth::user()->created_by
 
-                         $objUser    = User::where("id", $checkUserId)->first();
-                         $total_user = $objUser->countUsers();
-                         $plan       = Plan::find($objUser->plan);
+                          $objUser    = User::where("id", $checkUserId)->first();
+                          $total_user = $objUser->countUsers();
+                          $max_users  = $objUser->getMaxUsers();
 
-                         // dd($objUser, $objUser->plan_expire_date, date('Y-m-d'), ($objUser->plan_expire_date <= date('Y-m-d')));
+                          if ($objUser->plan_expire_date && $objUser->plan_expire_date < date('Y-m-d'))
+                          {
+                               return redirect()->back()->with('error', __('Your subscription is overdue, Please upgrade plan.'));
+                          }
 
-                         if ($objUser->plan_expire_date <= date('Y-m-d'))
-                         {
-                              return redirect()->back()->with('error', __('Your subscription is overdue, Please upgrade plan.'));
-                         }
-
-
-                         if ($total_user < $plan->max_users || $plan->max_users == -1)
-                         {
+                          if ($max_users == -1 || $total_user < $max_users)
+                          {
 
                               $role_r = Role::findById($request->role);
                               $date = date("Y-m-d H:i:s");
@@ -343,7 +388,8 @@ class UserController extends Controller
                }
                $employees  = Employee::where('user_id', '!=', $user->id)->where('created_by', Auth::user()->creatorId())->get();
                $plans = Plan::pluck('name', 'id')->toArray();
-               return view('user.edit', compact('user', 'roles', 'employees', 'selectemployees', 'plans'));
+               $billingProfile = $user->billingProfile;
+               return view('user.edit', compact('user', 'roles', 'employees', 'selectemployees', 'plans', 'billingProfile'));
           }
           else
           {
@@ -355,13 +401,18 @@ class UserController extends Controller
      {
           if (Auth::user()->type == 'super admin')
           {
-               $validator = Validator::make(
-                    $request->all(),
-                    [
-                         'name' => 'required',
-                         'plan_id' => 'required',
-                    ]
-               );
+               $billingMode = $request->input('billing_mode', 'global');
+               $rules = [
+                    'name' => 'required',
+                    'billing_mode' => 'required|in:global,custom',
+               ];
+               if ($billingMode === 'custom') {
+                    $rules['price_per_employee'] = 'required|numeric|min:0';
+                    $rules['price_per_user'] = 'required|numeric|min:0';
+               } else {
+                    $rules['plan_id'] = 'required|integer|exists:plans,id';
+               }
+               $validator = Validator::make($request->all(), $rules);
           }
           else
           {
@@ -382,35 +433,92 @@ class UserController extends Controller
 
           if (Auth::user()->type == 'super admin')
           {
-               $plan = Plan::find($request['plan_id']);
+               $user = User::findOrFail($id);
+               $previousPlanId = $user->plan;
+               $billingMode = $request->input('billing_mode', 'global');
+               $isCustom = $billingMode === 'custom';
 
-               $input = $request->all();
-               $user  = User::findOrFail($id);
+               if ($isCustom) {
+                    $plan = Plan::find(\App\Models\CompanyBillingProfile::CUSTOM_PLAN_ID);
+                    if (!$plan) {
+                         return redirect()->back()->with('error', __('Custom billing plan (#9) was not found.'));
+                    }
+               } else {
+                    $plan = Plan::find($request['plan_id']);
+                    if (!$plan) {
+                         return redirect()->back()->with('error', __('Selected plan not found.'));
+                    }
+               }
+
+               $input = $request->only(['name']);
+               $input['custom_max_users'] = ($request->has('custom_max_users') && $request->custom_max_users !== '' && $request->custom_max_users !== null)
+                    ? (int) $request->custom_max_users
+                    : ($isCustom ? -1 : null);
+               $input['custom_max_employees'] = ($request->has('custom_max_employees') && $request->custom_max_employees !== '' && $request->custom_max_employees !== null)
+                    ? (int) $request->custom_max_employees
+                    : ($isCustom ? -1 : null);
+
+               if ($isCustom) {
+                    $input['custom_max_users'] = -1;
+                    $input['custom_max_employees'] = -1;
+               }
 
                $user->fill($input)->save();
-               $assignPlan = $user->assignPlan($plan->id);
-               $price      = $plan->price;
-               if ($assignPlan['is_success'] == true && !empty($plan))
+
+               \App\Models\CompanyBillingProfile::updateOrCreate(
+                    ['company_id' => $user->id],
+                    [
+                         'billing_mode' => $isCustom
+                              ? \App\Models\CompanyBillingProfile::MODE_CUSTOM
+                              : \App\Models\CompanyBillingProfile::MODE_GLOBAL,
+                         'price_per_employee' => $isCustom ? (float) $request->price_per_employee : null,
+                         'price_per_user' => $isCustom ? (float) $request->price_per_user : null,
+                         'invoice_plan_id' => $isCustom ? \App\Models\CompanyBillingProfile::CUSTOM_PLAN_ID : null,
+                         'manual_invoice_only' => $isCustom,
+                    ]
+               );
+
+               if (!empty($plan) && (int) $previousPlanId !== (int) $plan->id)
                {
-                    $orderID = strtoupper(str_replace('.', '', uniqid('', true)));
-                    Order::create([
-                         'order_id' => $orderID,
-                         'name' => null,
-                         'email' => null,
-                         'card_number' => null,
-                         'card_exp_month' => null,
-                         'card_exp_year' => null,
-                         'plan_name' => $plan->name,
-                         'plan_id' => $plan->id,
-                         'price' => $price,
-                         'price_currency' => !empty(env('CURRENCY_CODE')) ? env('CURRENCY_CODE') : 'usd',
-                         'txn_id' => '',
-                         'payment_type' => __('Manually Upgrade By Super Admin'),
-                         'payment_status' => 'succeeded',
-                         'receipt' => null,
-                         'user_id' => $user->id,
-                    ]);
+                    $assignPlan = $user->assignPlan($plan->id);
+                    $price      = $plan->price;
+                    if ($isCustom) {
+                         $user->custom_max_users = -1;
+                         $user->custom_max_employees = -1;
+                         $user->save();
+                    }
+                    if ($assignPlan['is_success'] == true)
+                    {
+                         $orderID = strtoupper(str_replace('.', '', uniqid('', true)));
+                         Order::create([
+                              'order_id' => $orderID,
+                              'name' => null,
+                              'email' => null,
+                              'card_number' => null,
+                              'card_exp_month' => null,
+                              'card_exp_year' => null,
+                              'plan_name' => $plan->name,
+                              'plan_id' => $plan->id,
+                              'price' => $isCustom ? 0 : $price,
+                              'price_currency' => !empty(env('CURRENCY_CODE')) ? env('CURRENCY_CODE') : 'usd',
+                              'txn_id' => '',
+                              'payment_type' => $isCustom
+                                   ? __('Custom Employee/User Billing By Super Admin')
+                                   : __('Manually Upgrade By Super Admin'),
+                              'payment_status' => 'succeeded',
+                              'receipt' => null,
+                              'user_id' => $user->id,
+                         ]);
+                    }
                }
+
+               if (!$isCustom && $request->filled('plan_expire_date'))
+               {
+                    $user->plan_expire_date = $request->plan_expire_date;
+                    $user->save();
+               }
+
+               return redirect()->route('user.index')->with('success', __('Company details & capacity limits successfully updated.'));
           }
           else
           {
@@ -652,7 +760,7 @@ class UserController extends Controller
      {
 
           $user       = User::find($user_id);
-          $assignPlan = $user->assignPlan($plan_id);
+          $assignPlan = $user->assignPlan($plan_id, true);
           $plan       = Plan::find($plan_id);
           if ($assignPlan['is_success'] == true && !empty($plan))
           {

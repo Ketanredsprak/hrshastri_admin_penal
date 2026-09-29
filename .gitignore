@@ -10,3 +10,6 @@
 .ftpquota
 /public/assets/json/file-upload.php
 /public/assets/json/uploads
+# Local archives (too large for GitHub)
+/resources.zip
+/admin_code_22_9_2026.zip

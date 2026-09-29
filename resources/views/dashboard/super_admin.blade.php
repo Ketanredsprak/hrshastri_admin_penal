@@ -13,60 +13,86 @@
 
         <div class="row">
 
-            <div class="col-lg-4 col-6">
-                <a href="{{ route('user.index')}}">
-                    <div class="card" style="height: 226px">
+            <div class="col-lg-4 col-md-6 col-12">
+                <a href="{{ route('user.index')}}" class="text-decoration-none">
+                    <div class="card dashboard-stat-card">
                         <div class="card-body">
-                            <div class="theme-avtar bg-primary">
-                                <i class="ti ti-users"></i>
+                            <div class="d-flex align-items-center justify-content-between">
+                                <div class="d-flex align-items-center">
+                                    <div class="stat-icon-wrapper stat-icon-primary">
+                                        <i class="ti ti-users"></i>
+                                    </div>
+                                    <div class="ms-3">
+                                        <div class="stat-label-caption">{{ __('Total Users') }} : {{$user->total_user}}</div>
+                                        <h6 class="stat-title">{{ __('Paid Users') }}</h6>
+                                    </div>
+                                </div>
+                                <div class="text-end">
+                                    <h4 class="stat-number text-primary">{{$user['total_paid_user'] }}</h4>
+                                </div>
                             </div>
-                            <p class="text-muted text-sm mt-4 mb-2">{{ __('Total Users') }} : {{$user->total_user}}</p>
-                            <h6 class="mb-3">{{ __('Paid Users') }}</h6>
-                            <h3 class="mb-0">{{$user['total_paid_user'] }}</h3>
                         </div>
                     </div>
                 </a>
             </div>
-            <div class="col-lg-4 col-6">
-                <a href="{{ route('order.index')}}">
-                <div class="card" style="height: 226px">
-                    <div class="card-body">
-                        <div class="theme-avtar bg-info">
-                            <i class="ti ti-shopping-cart"></i>
+            <div class="col-lg-4 col-md-6 col-12">
+                <a href="{{ route('order.index')}}" class="text-decoration-none">
+                    <div class="card dashboard-stat-card">
+                        <div class="card-body">
+                            <div class="d-flex align-items-center justify-content-between">
+                                <div class="d-flex align-items-center">
+                                    <div class="stat-icon-wrapper stat-icon-info">
+                                        <i class="ti ti-shopping-cart"></i>
+                                    </div>
+                                    <div class="ms-3">
+                                        <div class="stat-label-caption">{{ __('Total Orders') }}: {{ $user->total_orders}}</div>
+                                        <h6 class="stat-title">{{ __('Total Order Amount') }}</h6>
+                                    </div>
+                                </div>
+                                <div class="text-end">
+                                    <h4 class="stat-number text-info">{{ (!empty(env('CURRENCY_SYMBOL')) ? env('CURRENCY_SYMBOL') : '$') . $user['total_orders_price'] }}</h4>
+                                </div>
+                            </div>
                         </div>
-                        <p class="text-muted text-sm mt-4 mb-2">{{ __('Total Orders') }}:{{ $user->total_orders}}</p>
-                        <h6 class="mb-3">{{ __('Total Order Amount') }}</h6>
-                        <h3 class="mb-0">{{ (!empty(env('CURRENCY_SYMBOL')) ? env('CURRENCY_SYMBOL') : '$') . $user['total_orders_price'] }}</h3>
                     </div>
-                </div>
-            </a>
+                </a>
             </div>
-            <div class="col-lg-4 col-6">
-                <a href="{{ route('plans.index')}}">
-                <div class="card" style="height: 226px">
-                    <div class="card-body">
-                        <div class="theme-avtar bg-warning">
-                            <i class="ti ti-trophy"></i>
+            <div class="col-lg-4 col-md-6 col-12">
+                <a href="{{ route('plans.index')}}" class="text-decoration-none">
+                    <div class="card dashboard-stat-card">
+                        <div class="card-body">
+                            <div class="d-flex align-items-center justify-content-between">
+                                <div class="d-flex align-items-center">
+                                    <div class="stat-icon-wrapper stat-icon-warning">
+                                        <i class="ti ti-trophy"></i>
+                                    </div>
+                                    <div class="ms-3">
+                                        <div class="stat-label-caption">{{ __('Total Plan') }}: {{$user['total_plan']}}</div>
+                                        <h6 class="stat-title">{{ __('Most Purchase Plan') }}</h6>
+                                    </div>
+                                </div>
+                                <div class="text-end">
+                                    <h4 class="stat-number text-warning">{{ $user['most_purchese_plan'] }}</h4>
+                                </div>
+                            </div>
                         </div>
-                        <p class="text-muted text-sm mt-4 mb-2">{{ __('Total Plan') }}: {{$user['total_plan']}}</p>
-                        <h6 class="mb-3">{{ __('Most Purchase Plan') }}</h6>
-                        <h3 class="mb-0">{{ $user['most_purchese_plan'] }}</h3>
                     </div>
-                </div>
-            </a>
+                </a>
             </div>
 
         </div>
    </div>
+
+    @include('dashboard.partials.login_analytics')
+
     <div class="col-sm-12">
-        <div class="card">
+        <div class="card dashboard-table-card">
             <div class="card-header">
-                <h5>{{ __('Recent Order') }}</h5>
+                <h5><i class="ti ti-chart-area-line text-primary"></i> {{ __('Recent Order') }}</h5>
             </div>
             <div class="card-body">
-                <div id="chart-sales" height="300" class="p-3"></canvas>
+                <div id="chart-sales" height="300" class="p-3"></div>
             </div>
-
         </div>
     </div>
 

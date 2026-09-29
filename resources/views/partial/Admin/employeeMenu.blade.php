@@ -49,7 +49,7 @@
             <li class="dash-item dash-hasmenu {{ Request::segment(1) == 'setsalary' ? 'dash-trigger active' : '' }}">
                 <a href="{{ route('my-payslip.index') }}" class="dash-link"><span class="dash-micon"><i
                             class="ti ti-receipt"></i></span><span
-                        class="dash-mtext">{{ __('My Payslip') }}</span></span></a>
+                        class="dash-mtext">{{ __('My Payslip') }}</span></a>
             </li>
 
             <!-- timesheet-->
@@ -82,7 +82,7 @@
                                 <a class="dash-link"
                                     href="{{ route('leave.my_leave_balance') }}">{{ __('My Leave Balance') }}</a>
                             </li>
-                        @endcan
+                        @endif
 
 
                         @if (\Auth::user()->type == 'employee')
@@ -100,20 +100,26 @@
                         @endif
 
                         @can('Manage Apply WFH')
-                            <li class="dash-item">
-                                <a class="dash-link" href="{{ route('applywfm.index') }}">{{ __('Apply WFH') }}</a>
-                            </li>
+                            @if (\Auth::user()->type != 'employee')
+                                <li class="dash-item">
+                                    <a class="dash-link" href="{{ route('applywfm.index') }}">{{ __('Apply WFH') }}</a>
+                                </li>
+                            @endif
                         @endcan
                         @can('Manage Early & Late Comming')
-                            <li class="dash-item">
-                                <a class="dash-link"
-                                    href="{{ route('earlyandlate_leave.index') }}">{{ __('Short Leave') }}</a>
-                            </li>
+                            @if (\Auth::user()->type != 'employee')
+                                <li class="dash-item">
+                                    <a class="dash-link"
+                                        href="{{ route('earlyandlate_leave.index') }}">{{ __('Short Leave') }}</a>
+                                </li>
+                            @endif
                         @endcan
                         @can('Manage Gate Pass')
-                            <li class="dash-item">
-                                <a class="dash-link" href="{{ route('getpass.index') }}">{{ __('Gate Pass') }}</a>
-                            </li>
+                            @if (\Auth::user()->type != 'employee')
+                                <li class="dash-item">
+                                    <a class="dash-link" href="{{ route('getpass.index') }}">{{ __('Gate Pass') }}</a>
+                                </li>
+                            @endif
                         @endcan
 
                         @can('Manage Attendance')

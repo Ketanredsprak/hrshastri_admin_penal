@@ -38,6 +38,8 @@ use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\Route;
+use App\Services\EmployeeDataChangeLogService;
+use App\Services\EmployeeDataSnapshotService;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
@@ -2109,6 +2111,18 @@ class UserAuthController extends Controller
                     // 3 dependent
                     // 4 documents
 
+                    $auditBefore = [];
+                    $auditEnabled = false;
+                    try {
+                         $auditLogService = app(EmployeeDataChangeLogService::class);
+                         $auditEnabled = $auditLogService->isEnabled((int) Auth::user()->creatorId());
+                         if ($auditEnabled) {
+                              $auditBefore = app(EmployeeDataSnapshotService::class)->capture((int) $employee->id);
+                         }
+                    } catch (Throwable $auditEx) {
+                         $auditEnabled = false;
+                    }
+
                     if ($profile_data_type == 0) // 0  = save personal details
                     {
                          $validator = \Validator::make(
@@ -2350,6 +2364,22 @@ class UserAuthController extends Controller
                     $employee->save();
 
                     DB::commit();
+
+                    if ($auditEnabled) {
+                         try {
+                              app(EmployeeDataChangeLogService::class)->recordFromEmployee(
+                                   (int) $employee->id,
+                                   $auditBefore,
+                                   [
+                                        'source' => 'mobile_api',
+                                        'company_id' => (int) Auth::user()->creatorId(),
+                                        'profile_data_type' => $profile_data_type,
+                                   ]
+                              );
+                         } catch (Throwable $auditEx) {
+                              // Never break API response
+                         }
+                    }
 
 
                     $profileData = Employee::select("*", "employee_profile as employee_profile_image")

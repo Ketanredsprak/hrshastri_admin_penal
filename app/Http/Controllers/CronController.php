@@ -837,4 +837,65 @@ class CronController extends Controller
                }
           }
      }
+
+     /**
+      * HTTP cron entry for attendance punch image cleanup.
+      * Respects each company setting before deleting any files/columns.
+      */
+     public function attendance_punch_image_cleanup()
+     {
+          try {
+               $summary = app(\App\Services\AttendancePunchImageCleanupService::class)->runAll();
+
+               return response()->json([
+                    'status' => 1,
+                    'message' => 'Attendance punch image cleanup completed.',
+                    'data' => $summary,
+               ]);
+          } catch (Throwable $e) {
+               Log::channel('attendance_punch_image_cleanup')->error('HTTP cron failed: ' . $e->getMessage());
+
+               return response()->json([
+                    'status' => 0,
+                    'message' => $e->getMessage(),
+               ], 500);
+          }
+     }
+
+     /**
+      * HTTP cron entry for CRM monthly company invoice generation.
+      * Query: ?year=&month=&company=&dry_run=1&no_email=1
+      */
+     public function crm_monthly_invoices(\Illuminate\Http\Request $request)
+     {
+          try {
+               $now = \Carbon\Carbon::now('Asia/Kolkata');
+               $year = (int) ($request->get('year') ?: $now->year);
+               $month = (int) ($request->get('month') ?: $now->month);
+               $companyId = (int) $request->get('company');
+               $dryRun = $request->boolean('dry_run');
+               $sendEmail = !$request->boolean('no_email');
+
+               $summary = app(\App\Services\CrmInvoiceService::class)->generateMonthly(
+                    $year,
+                    $month,
+                    $companyId > 0 ? $companyId : null,
+                    $dryRun,
+                    $sendEmail
+               );
+
+               return response()->json([
+                    'status' => 1,
+                    'message' => 'CRM monthly invoice generation completed.',
+                    'data' => $summary,
+               ]);
+          } catch (Throwable $e) {
+               \Illuminate\Support\Facades\Log::error('CRM invoice HTTP cron failed: ' . $e->getMessage());
+
+               return response()->json([
+                    'status' => 0,
+                    'message' => $e->getMessage(),
+               ], 500);
+          }
+     }
 }

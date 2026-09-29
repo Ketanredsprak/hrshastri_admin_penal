@@ -25,16 +25,16 @@
 
 
     <a href="#" data-url="{{ route('employee.file.import') }}" data-ajax-popup="true"
-        data-title="{{ __('Import  Employee CSV File') }}" data-bs-toggle="tooltip" title=""
-        class="btn btn-sm btn-primary" data-bs-original-title="{{ __('Import') }}">
+        data-title="{{ __('Import  Employee CSV File') }}" data-bs-toggle="tooltip" title="" class="btn btn-sm btn-primary"
+        data-bs-original-title="{{ __('Import') }}">
 
         <i class="ti ti-file"></i>
 
     </a>
 
     @can('Create Employee')
-        <a href="{{ route('employee.create') }}" data-title="{{ __('Create New Employee') }}" data-bs-toggle="tooltip"
-            title="" class="btn btn-sm btn-primary" data-bs-original-title="{{ __('Create') }}">
+        <a href="{{ route('employee.create') }}" data-title="{{ __('Create New Employee') }}" data-bs-toggle="tooltip" title=""
+            class="btn btn-sm btn-primary" data-bs-original-title="{{ __('Create') }}">
 
             <i class="ti ti-plus"></i>
 
@@ -93,23 +93,15 @@
 
                                     <th>{{ __('Date Of Joining') }}</th>
 
-
-
-
-
                                     <th>{{ __('Status') }}</th>
 
-                                    @if (Gate::check('Edit Employee') || Gate::check('Delete Employee'))
-                                        <th width="200px">{{ __('Action') }}</th>
-                                    @endif
+                                    <th width="200px">{{ __('Action') }}</th>
 
                                 </tr>
 
                             </thead>
 
                             <tbody>
-
-
 
                             </tbody>
 
@@ -122,24 +114,11 @@
         </div>
 
     </div>
+@endsection
 
-
-
-    </div>
-
-
-
+@push('script-page')
     <script type="text/javascript">
-        $(document).ready(function() {
-
-            // Initialize select2 for status filter (same pattern as create.blade.php)
-            //   $('#status_filter').select2({
-            //       placeholder: '{{ __('Select Status') }}',
-            //       allowClear: false
-            //   });
-
-            // Set default selection to "all"
-            $('#status_filter').val('all').trigger('change');
+        $(document).ready(function () {
 
             var table = $('.data-table').DataTable({
 
@@ -155,21 +134,16 @@
                 ajax: {
                     url: "{{ route('employee.index') }}",
                     type: 'GET',
-                    data: function(d) {
-                        // Get the current filter value (single selection now)
+                    data: function (d) {
                         var statusFilter = $('#status_filter').val() || 'all';
 
-                        // Always send status_filter parameter as array for backend compatibility
                         if (statusFilter) {
                             d.status_filter = [statusFilter];
                         } else {
-                            // Default to "all" if nothing is selected
                             d.status_filter = ['all'];
                         }
                     }
                 },
-
-
 
                 columns: [
 
@@ -192,43 +166,59 @@
 
                     {
                         data: 'branch_id',
-                        name: 'branch_id'
+                        name: 'branch_id',
+                        orderable: false,
+                        searchable: false
                     },
 
                     {
                         data: 'department_id',
-                        name: 'department_id'
+                        name: 'department_id',
+                        orderable: false,
+                        searchable: false
                     },
 
                     {
                         data: 'designation_id',
-                        name: 'designation_id'
+                        name: 'designation_id',
+                        orderable: false,
+                        searchable: false
                     },
 
                     {
                         data: 'playslab',
-                        name: 'playslab'
+                        name: 'playslab',
+                        orderable: false,
+                        searchable: false
                     },
 
                     {
                         data: 'salary',
                         name: 'salary',
-                        className: 'text-right'
+                        className: 'text-right',
+                        orderable: false,
+                        searchable: false
                     },
 
                     {
                         data: 'company_doj',
-                        name: 'company_doj'
+                        name: 'company_doj',
+                        orderable: false,
+                        searchable: false
                     },
 
                     {
                         data: 'delete_employe',
-                        name: 'delete_employe'
+                        name: 'delete_employe',
+                        orderable: false,
+                        searchable: false
                     },
 
                     {
                         data: 'edit_employe',
-                        name: 'edit_employe'
+                        name: 'edit_employe',
+                        orderable: false,
+                        searchable: false
                     },
 
                 ]
@@ -236,30 +226,26 @@
             });
 
             // Handle status filter change (single selection)
-            $('#status_filter').on('change', function() {
+            $('#status_filter').on('change', function () {
                 var selectedValue = $(this).val() || 'all';
 
-                // If nothing is selected, default to "all"
                 if (!selectedValue) {
                     $(this).val('all').trigger('change');
-                    table.ajax.reload(); // Reset pagination to first page
+                    table.ajax.reload();
                     return;
                 }
 
-                // Reload datatable with new filter and reset pagination to first page
-                table.ajax.reload(); // Reset pagination when filter changes
+                table.ajax.reload();
             });
 
             // Handle export button click - export with current filter
-            $('#export_employees_btn').on('click', function(e) {
+            $('#export_employees_btn').on('click', function (e) {
                 e.preventDefault();
 
-                // Check if datatable has any data
                 var tableInfo = table.page.info();
                 var totalRecords = tableInfo.recordsTotal;
 
                 if (totalRecords === 0) {
-                    // Show error message if no data
                     if (typeof show_toastr !== 'undefined') {
                         show_toastr('Error', 'No data to export', 'error');
                     } else if (typeof toastr !== 'undefined') {
@@ -278,4 +264,4 @@
 
         });
     </script>
-@endsection
+@endpush

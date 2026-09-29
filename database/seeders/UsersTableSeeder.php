@@ -1251,6 +1251,12 @@ class UsersTableSeeder extends Seeder
                 "updated_at" => date('Y-m-d H:i:s'),
             ],
             [
+                "name" => 'View Employee Data Log',
+                "guard_name" => "web",
+                "created_at" => date('Y-m-d H:i:s'),
+                "updated_at" => date('Y-m-d H:i:s'),
+            ],
+            [
                 "name" => 'Manage Indicator',
                 "guard_name" => "web",
                 "created_at" => date('Y-m-d H:i:s'),
@@ -2080,6 +2086,7 @@ class UsersTableSeeder extends Seeder
             ["name" => 'Manage Employee Profile'],
             ["name" => 'Show Employee Profile'],
             ["name" => 'Manage Employee Last Login'],
+            ["name" => 'View Employee Data Log'],
             ["name" => 'Manage Indicator'],
             ["name" => 'Create Indicator'],
             ["name" => 'Edit Indicator'],
@@ -2347,6 +2354,7 @@ class UsersTableSeeder extends Seeder
             ["name" => 'Manage Employee Profile'],
             ["name" => 'Show Employee Profile'],
             ["name" => 'Manage Employee Last Login'],
+            ["name" => 'View Employee Data Log'],
             ["name" => 'Manage Indicator'],
             ["name" => 'Create Indicator'],
             ["name" => 'Edit Indicator'],

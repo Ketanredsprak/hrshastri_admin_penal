@@ -1,11 +1,13 @@
 @extends('layouts.auth')
+
 @section('page-title')
     {{ __('Login') }}
 @endsection
+
 @php
-    // $logo=asset(Storage::url('uploads/logo/'));
     $logo = \App\Models\Utility::get_file('uploads/logo/');
-    
+    $company_logo = \App\Models\Utility::GetLogo();
+    $logoFile = isset($company_logo) && !empty($company_logo) ? $company_logo : 'logo-dark.png';
 @endphp
 
 @push('custom-scripts')
@@ -14,134 +16,158 @@
     @endif
 @endpush
 
-<style>
-    .form-group {
-        position: relative;
-    }
-
-    .icon_password {
-        position: absolute;
-        top: 40px;
-        right: 13px;
-    }
-</style>
-
 @section('language-bar')
-    <li class="nav-item">
-        <select name="language" id="language" class="lang-dropdown btn btn-primary my-1 me-2"
-            onchange="this.options[this.selectedIndex].value && (window.location = this.options[this.selectedIndex].value);">
-            @foreach (\App\Models\Utility::languages() as $language)
-                <option @if ($lang == $language) selected @endif value="{{ route('login', $language) }}">
-                    {{ Str::upper($language) }}</option>
-            @endforeach
-        </select>
-    </li>
+    <select name="language" id="language" class="hs-lang-select"
+        onchange="this.options[this.selectedIndex].value && (window.location = this.options[this.selectedIndex].value);">
+        @foreach (\App\Models\Utility::languages() as $language)
+            <option @if ($lang == $language) selected @endif value="{{ route('login', $language) }}">
+                {{ Str::upper($language) }}
+            </option>
+        @endforeach
+    </select>
 @endsection
 
 @section('content')
-    {{-- <div class="row"> --}}
-    <div class="card">
-        <div class="row align-items-center text-start">
-            <div class="col-xl-6">
-                <div class="card-body">
-                    <div class="">
-                        <h2 class="mb-3 f-w-600">{{ __('Login') }}</h2>
-                        @if (session()->has('message'))
-                            <div class="alert alert-danger">
-                                {{ session()->get('message') }}
-                            </div>
-                        @endif
+    <main class="hs-login">
+        <section class="hs-login-hero" aria-label="{{ __('HR Shastri') }}">
+            <div class="hs-login-orb hs-login-orb--a" aria-hidden="true"></div>
+            <div class="hs-login-orb hs-login-orb--b" aria-hidden="true"></div>
+
+            <div class="hs-login-hero-inner">
+                <div class="hs-brand-mark">
+                    <img src="{{ $logo . '/' . $logoFile }}" alt="HR Shastri"
+                        onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                    <span class="hs-brand-fallback" style="display:none;">HR <span>Shastri</span></span>
+                </div>
+                <p class="hs-lead">
+                    {{ __('People, payroll, and attendance — one calm workplace for your whole team.') }}
+                </p>
+            </div>
+        </section>
+
+        <section class="hs-login-panel">
+            <div class="hs-login-panel-card">
+                <h2>{{ __('Welcome back') }}</h2>
+                <p class="hs-sub">{{ __('Sign in to continue to your dashboard.') }}</p>
+
+                @if (session()->has('message'))
+                    <div class="hs-alert hs-alert-danger">{{ session()->get('message') }}</div>
+                @endif
+                @if (session()->has('error'))
+                    <div class="hs-alert hs-alert-danger">{{ session()->get('error') }}</div>
+                @endif
+                @if (session()->has('success'))
+                    <div class="hs-alert hs-alert-success">{{ session()->get('success') }}</div>
+                @endif
+
+                <form method="POST" action="{{ route('login') }}" class="needs-validation" novalidate id="form_data">
+                    @csrf
+
+                    <div class="hs-field">
+                        <label for="email">{{ __('Email') }}</label>
+                        <input id="email" type="email" name="email" value="{{ old('email') }}" required
+                            autocomplete="email" autofocus placeholder="{{ __('Enter your email') }}"
+                            class="@error('email') is-invalid @enderror">
+                        @error('email')
+                            <span class="hs-field-error" role="alert">{{ $message }}</span>
+                        @enderror
                     </div>
-                    <form method="POST" action="{{ route('login') }}" class="needs-validation" novalidate=""
-                        id="form_data">
-                        @csrf
-                        <div>
-                            <div class="form-group mb-3">
-                                <label class="form-label">{{ __('Email') }}</label>
-                                <input class="form-control @error('email') is-invalid @enderror" id="email"
-                                    type="email" name="email" value="{{ old('email') }}" required autocomplete="email"
-                                    autofocus placeholder="{{ __('Enter Your Email') }}">
-                                @error('email')
-                                    <span class="error invalid-email text-danger" role="alert">
-                                        <small>{{ $message }}</small>
-                                    </span>
-                                @enderror
-                            </div>
-                            <div class="form-group mb-3">
-                                <label class="form-label">{{ __('Password') }}</label>
-                                <input class="form-control enterpassword @error('password') is-invalid @enderror"
-                                    id="password" type="password" name="password" required autocomplete="current-password"
-                                    placeholder="{{ __('Enter Your Password') }}">
-                                <div class="fa fa-eye icon_password"></div>
-                                @error('password')
-                                    <span class="error invalid-password text-danger" role="alert">
-                                        <small>{{ $message }}</small>
-                                    </span>
-                                @enderror
 
-                                @if (Route::has('password.request'))
-                                    <div class="mb-2 mt-2 text-end">
-                                        <a href="{{ route('password.request') }}"
-                                            class="text-primary">{{ __('Forgot Your Password?') }}</a>
-                                    </div>
-                                @endif
-                            </div>
-                            @if (env('RECAPTCHA_MODULE') == 'yes')
-                                <div class="form-group col-lg-12 col-md-12 mt-3">
-                                    {!! NoCaptcha::display() !!}
-                                    @error('g-recaptcha-response')
-                                        <span class="error small text-danger" role="alert">
-                                            <strong>{{ $message }}</strong>
-                                        </span>
-                                    @enderror
-                                </div>
-                            @endif
-
-                            <div class="d-grid">
-                                <button type="submit" class="login-do-btn btn btn-primary btn-block mt-2"
-                                    tabindex="4">{{ __('Login') }}</button>
-                            </div>
-
-                            @if (\App\Models\Utility::getValByName('disable_signup_button') == 'on')
-                                <p class="my-4 text-center">{{ __("Don't have an account?") }}
-                                    <a href="{{ route('register', $lang) }}"
-                                        class="my-4 text-primary">{{ __('Register') }}</a>
-                                </p>
-                            @endif
+                    <div class="hs-field">
+                        <label for="password">{{ __('Password') }}</label>
+                        <div class="hs-password-wrap">
+                            <input id="password" type="password" name="password" required
+                                autocomplete="current-password" placeholder="{{ __('Enter your password') }}"
+                                class="enterpassword @error('password') is-invalid @enderror">
+                            <button type="button" class="hs-toggle-pass icon_password" aria-label="{{ __('Show password') }}">
+                                <i class="fa fa-eye"></i>
+                            </button>
                         </div>
-                    </form>
+                        @error('password')
+                            <span class="hs-field-error" role="alert">{{ $message }}</span>
+                        @enderror
+                    </div>
 
-                </div>
+                    @if (Route::has('password.request'))
+                        <div class="hs-field-row">
+                            <a href="{{ route('password.request') }}">{{ __('Forgot Your Password?') }}</a>
+                        </div>
+                    @endif
+
+                    @if (env('RECAPTCHA_MODULE') == 'yes')
+                        <div class="hs-field">
+                            {!! NoCaptcha::display() !!}
+                            @error('g-recaptcha-response')
+                                <span class="hs-field-error" role="alert">{{ $message }}</span>
+                            @enderror
+                        </div>
+                    @endif
+
+                    <button type="submit" class="hs-btn-login login-do-btn" id="login_button" tabindex="4">
+                        {{ __('Login') }}
+                    </button>
+
+                    @if (\App\Models\Utility::getValByName('disable_signup_button') == 'on')
+                        <p class="hs-auth-meta">
+                            {{ __("Don't have an account?") }}
+                            <a href="{{ route('register', $lang) }}">{{ __('Register') }}</a>
+                        </p>
+                    @endif
+                </form>
+
+                @if (app()->environment('local'))
+                    <div class="hs-dev-box">
+                        <div class="hs-dev-box-head">
+                            <span class="hs-dev-badge"><i class="ti ti-terminal"></i> Local only</span>
+                            <span class="hs-dev-badge" style="background:#ede9fe;color:#51459d;">1-click login</span>
+                        </div>
+                        <p>{{ __('Switch instantly to a testing role:') }}</p>
+                        <div class="hs-dev-grid">
+                            <form method="POST" action="{{ route('local.quick.login') }}">
+                                @csrf
+                                <input type="hidden" name="role" value="Super Admin">
+                                <button type="submit" class="hs-dev-btn" title="superadmin@redspark.com">
+                                    <strong>Super Admin</strong>
+                                    <small>superadmin@redspark.com</small>
+                                </button>
+                            </form>
+                            <form method="POST" action="{{ route('local.quick.login') }}">
+                                @csrf
+                                <input type="hidden" name="role" value="Company">
+                                <button type="submit" class="hs-dev-btn" title="company@redspark.com">
+                                    <strong>Company</strong>
+                                    <small>company@redspark.com</small>
+                                </button>
+                            </form>
+                            <form method="POST" action="{{ route('local.quick.login') }}">
+                                @csrf
+                                <input type="hidden" name="role" value="Employee">
+                                <button type="submit" class="hs-dev-btn" title="viral@redsparkinfo.co.in">
+                                    <strong>Employee</strong>
+                                    <small>viral@redsparkinfo.co.in</small>
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                @endif
             </div>
-            <div class="col-xl-6 img-card-side">
-                <div class="auth-img-content">
-                    <img src="{{ asset('assets/images/auth/img-auth-3.svg') }}" alt="" class="img-fluid">
-                    <h3 class="text-white mb-4 mt-5"> {{ __('“Attention is the new currency”') }}</h3>
-                    <p class="text-white">
-                        {{ __('The more effortless the writing looks, the more effort the writer
-                                                                    actually put into the process.') }}
-                    </p>
-                </div>
-            </div>
-        </div>
-    </div>
-    {{-- </div> --}}
+        </section>
+    </main>
 @endsection
-<script src="{{ asset('js/jquery.min.js') }}"></script>
-<script>
-    $(document).ready(function() {
 
-        $('.icon_password').click(function() {
-            if ($('.enterpassword').attr('type') == 'text') {
-                $('.enterpassword').attr('type', 'password');
-            } else {
-                $('.enterpassword').attr('type', 'text');
-            }
-        });
+@push('script')
+    <script>
+        $(document).ready(function() {
+            $('.icon_password').on('click', function() {
+                var $input = $('.enterpassword');
+                var showing = $input.attr('type') === 'text';
+                $input.attr('type', showing ? 'password' : 'text');
+                $(this).find('i').toggleClass('fa-eye fa-eye-slash');
+            });
 
-        $("#form_data").submit(function(e) {
-            $("#login_button").attr("disabled", true);
-            return true;
+            $('#form_data').on('submit', function() {
+                $('#login_button').prop('disabled', true);
+            });
         });
-    });
-</script>
+    </script>
+@endpush

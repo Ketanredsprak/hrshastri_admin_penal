@@ -53,6 +53,8 @@ class User extends Authenticatable implements MustVerifyEmail
           'weekoffs_data',
           'custom_weekoffs_employees_ids',
           'user_device_configurations',
+          'custom_max_users',
+          'custom_max_employees',
      ];
 
      /**
@@ -1945,33 +1947,28 @@ class User extends Authenticatable implements MustVerifyEmail
           return $this->hasOne('App\Models\Plan', 'id', 'plan');
      }
 
-     public function assignPlan($planID)
+     public function assignPlan($planID, $force = false)
      {
           $plan = Plan::find($planID);
           if ($plan)
           {
+               if (!$force && $this->type == 'company' && $this->isPlanDowngrade($plan))
+               {
+                    return [
+                         'is_success' => false,
+                         'error' => __('Downgrade is not allowed. You can renew your current plan or upgrade to a higher plan.'),
+                    ];
+               }
+
                $this->plan = $plan->id;
-               $this->syncRoles([$plan->role_id]);
-               if ($plan->duration == 'month')
+               if (!empty($plan->role_id))
                {
-                    $this->plan_expire_date = Carbon::now()->addMonths(1)->isoFormat('YYYY-MM-DD');
-                    $this->plan_start_date = Carbon::now()->isoFormat('YYYY-MM-DD');
+                    $this->syncRoles([$plan->role_id]);
                }
-               elseif ($plan->duration == 'year')
-               {
-                    $this->plan_expire_date = Carbon::now()->addYears(1)->isoFormat('YYYY-MM-DD');
-                    $this->plan_start_date = Carbon::now()->isoFormat('YYYY-MM-DD');
-               }
-               elseif ($plan->duration == 'Unlimited')
-               {
-                    $this->plan_expire_date = Carbon::now()->addYears(10)->isoFormat('YYYY-MM-DD');
-                    $this->plan_start_date = Carbon::now()->isoFormat('YYYY-MM-DD');
-               }
-               else
-               {
-                    $this->plan_start_date = null;
-                    $this->plan_expire_date = null;
-               }
+
+               $this->plan_start_date = Carbon::now()->isoFormat('YYYY-MM-DD');
+               $this->plan_expire_date = $this->calculateNextPlanExpireDate($plan);
+
                $this->save();
                // dd($this->plan_expire_date);
                $users     = User::where('created_by', '=', \Auth::user()->creatorId())->where('type', '!=', 'super admin')->where('type', '!=', 'company')->where('type', '!=', 'employee')->get();
@@ -2040,12 +2037,317 @@ class User extends Authenticatable implements MustVerifyEmail
      }
      public function countUsers()
      {
-          return User::where('type', '!=', 'super admin')->where('type', '!=', 'company')->where('type', '!=', 'employee')->where('created_by', '=', $this->creatorId())->count();
+          return User::where('type', '!=', 'super admin')
+                     ->where('type', '!=', 'company')
+                     ->where('type', '!=', 'employee')
+                     ->where('created_by', '=', $this->creatorId())
+                     ->where('is_active', 1)
+                     ->count();
      }
 
      public function countEmployees()
      {
-          return Employee::where('created_by', '=', $this->creatorId())->count();
+          return Employee::where('created_by', '=', $this->creatorId())
+                         ->where('employee_exit', 0)
+                         ->count();
+     }
+
+     public function getMaxUsers(): int
+     {
+          if (!is_null($this->custom_max_users))
+          {
+               return (int) $this->custom_max_users;
+          }
+          $plan = $this->currentPlan;
+          if ($plan)
+          {
+               return (int) $plan->max_users;
+          }
+          return 0;
+     }
+
+     public function getMaxEmployees(): int
+     {
+          if (!is_null($this->custom_max_employees))
+          {
+               return (int) $this->custom_max_employees;
+          }
+          $plan = $this->currentPlan;
+          if ($plan)
+          {
+               return (int) $plan->max_employees;
+          }
+          return 0;
+     }
+
+     public function hasActiveSubscription(): bool
+     {
+          if ($this->type == 'super admin')
+          {
+               return true;
+          }
+
+          $company = ($this->type == 'company') ? $this : User::find($this->creatorId());
+          if (!$company || empty($company->plan))
+          {
+               return false;
+          }
+
+          $plan = Plan::find($company->plan);
+          if (!$plan)
+          {
+               return false;
+          }
+
+          // Custom/unlimited billing (plan 9) never locks — admin bills manually.
+          if ((int) $company->plan === \App\Models\CompanyBillingProfile::CUSTOM_PLAN_ID
+               || $plan->duration == 'Unlimited'
+               || $company->isCustomBilling())
+          {
+               return true;
+          }
+
+          if (empty($company->plan_expire_date))
+          {
+               return false;
+          }
+
+          return $company->plan_expire_date >= date('Y-m-d');
+     }
+
+     /**
+      * Company account for subscription checks (company self or parent company).
+      */
+     public function companyAccount(): ?User
+     {
+          if ($this->type === 'super admin')
+          {
+               return null;
+          }
+
+          return ($this->type === 'company') ? $this : User::find($this->creatorId());
+     }
+
+     public function isExemptFromPlanExpiry(): bool
+     {
+          $company = $this->companyAccount();
+          if (!$company || empty($company->plan))
+          {
+               return false;
+          }
+
+          $plan = Plan::find($company->plan);
+          if (!$plan)
+          {
+               return false;
+          }
+
+          return (int) $company->plan === \App\Models\CompanyBillingProfile::CUSTOM_PLAN_ID
+               || $plan->duration == 'Unlimited'
+               || $company->isCustomBilling();
+     }
+
+     /**
+      * Days until plan expiry. Negative = already expired. Null = N/A.
+      */
+     public function daysUntilPlanExpiry(): ?int
+     {
+          $company = $this->companyAccount();
+          if (!$company || $company->isExemptFromPlanExpiry() || empty($company->plan_expire_date))
+          {
+               return null;
+          }
+
+          return (int) Carbon::today()->diffInDays(Carbon::parse($company->plan_expire_date)->startOfDay(), false);
+     }
+
+     public function isSubscriptionExpiringSoon(int $withinDays = 5): bool
+     {
+          $days = $this->daysUntilPlanExpiry();
+          if ($days === null)
+          {
+               return false;
+          }
+
+          return $days >= 0 && $days <= $withinDays;
+     }
+
+     /**
+      * Next expiry date when renewing/upgrading — extends from current expiry day
+      * (e.g. expires 29th → next cycle still ends on the 29th).
+      */
+     public function calculateNextPlanExpireDate(Plan $plan): ?string
+     {
+          if ($plan->duration == 'Unlimited')
+          {
+               return Carbon::now()->addYears(10)->toDateString();
+          }
+
+          if (!in_array($plan->duration, ['month', 'year'], true))
+          {
+               return null;
+          }
+
+          $base = !empty($this->plan_expire_date)
+               ? Carbon::parse($this->plan_expire_date)->startOfDay()
+               : Carbon::today();
+
+          $expire = $plan->duration === 'year'
+               ? $base->copy()->addYears(1)
+               : $base->copy()->addMonths(1);
+
+          // Late renewals: keep adding periods until expiry is in the future.
+          $guard = 0;
+          while ($expire->lt(Carbon::today()) && $guard < 120)
+          {
+               if ($plan->duration === 'year')
+               {
+                    $expire->addYears(1);
+               }
+               else
+               {
+                    $expire->addMonths(1);
+               }
+               $guard++;
+          }
+
+          return $expire->toDateString();
+     }
+
+     /**
+      * True when target plan is a downgrade vs company's current plan.
+      * Same plan = renew (allowed). Higher/equal price with higher capacity = upgrade.
+      */
+     public function isPlanDowngrade(Plan $target): bool
+     {
+          if (empty($this->plan))
+          {
+               return false;
+          }
+
+          if ((int) $this->plan === (int) $target->id)
+          {
+               return false;
+          }
+
+          $current = Plan::find($this->plan);
+          if (!$current)
+          {
+               return false;
+          }
+
+          if ((float) $target->price < (float) $current->price)
+          {
+               return true;
+          }
+
+          if ((float) $target->price == (float) $current->price)
+          {
+               $curEmp = (int) $current->max_employees;
+               $newEmp = (int) $target->max_employees;
+               if ($curEmp === -1 && $newEmp !== -1)
+               {
+                    return true;
+               }
+               if ($curEmp !== -1 && $newEmp !== -1 && $newEmp < $curEmp)
+               {
+                    return true;
+               }
+
+               $curUsers = (int) $current->max_users;
+               $newUsers = (int) $target->max_users;
+               if ($curUsers === -1 && $newUsers !== -1)
+               {
+                    return true;
+               }
+               if ($curUsers !== -1 && $newUsers !== -1 && $newUsers < $curUsers)
+               {
+                    return true;
+               }
+          }
+
+          return false;
+     }
+
+     public function canUpgradeOrRenewPlan($plan): bool
+     {
+          if (is_numeric($plan))
+          {
+               $plan = Plan::find($plan);
+          }
+          if (!$plan)
+          {
+               return false;
+          }
+          if ($this->isPlanDowngrade($plan))
+          {
+               return false;
+          }
+
+          return $this->canSubscribePlan($plan);
+     }
+
+     /**
+      * Check if the company can subscribe to a given plan based on active employee & user counts.
+      *
+      * @param  \App\Models\Plan|int  $plan
+      * @return bool
+      */
+     public function canSubscribePlan($plan): bool
+     {
+          if (is_numeric($plan)) {
+               $plan = Plan::find($plan);
+          }
+          if (!$plan) {
+               return false;
+          }
+          return $plan->isEligibleForCompany($this);
+     }
+
+     /**
+      * Recommend the optimal subscription plan tier based on company's active employees and sub-users.
+      *
+      * @return \App\Models\Plan|null
+      */
+     public function getSuggestedPlan(): ?Plan
+     {
+          $activeEmployees = $this->countEmployees();
+          $activeUsers = $this->countUsers();
+
+          // Get all plans that can accommodate the company's active counts
+          $eligiblePlans = Plan::all()->filter(function ($plan) use ($activeEmployees, $activeUsers) {
+               $empOk = ($plan->max_employees == -1) || ($plan->max_employees >= $activeEmployees);
+               $userOk = ($plan->max_users == -1) || ($plan->max_users >= $activeUsers);
+               return $empOk && $userOk;
+          });
+
+          if ($eligiblePlans->isEmpty()) {
+               return null;
+          }
+
+          // Prioritize alternate tiers over current plan if available
+          $alternatePlans = $eligiblePlans->filter(function ($plan) {
+               return $plan->id != $this->plan;
+          });
+
+          $candidates = $alternatePlans->isNotEmpty() ? $alternatePlans : $eligiblePlans;
+
+          // Pick the closest fitting tier (minimum capacity overhead above active counts)
+          return $candidates->sort(function ($a, $b) use ($activeEmployees, $activeUsers) {
+               $aEmpCap = $a->max_employees == -1 ? 1000000 : (int) $a->max_employees;
+               $bEmpCap = $b->max_employees == -1 ? 1000000 : (int) $b->max_employees;
+               $aUserCap = $a->max_users == -1 ? 1000000 : (int) $a->max_users;
+               $bUserCap = $b->max_users == -1 ? 1000000 : (int) $b->max_users;
+
+               $aOverhead = ($aEmpCap - $activeEmployees) + ($aUserCap - $activeUsers);
+               $bOverhead = ($bEmpCap - $activeEmployees) + ($bUserCap - $activeUsers);
+
+               if ($aOverhead != $bOverhead) {
+                    return $aOverhead <=> $bOverhead;
+               }
+
+               return (float) $a->price <=> (float) $b->price;
+          })->first();
      }
 
      public function countCompany()
@@ -2096,6 +2398,25 @@ class User extends Authenticatable implements MustVerifyEmail
      public function currentPlan()
      {
           return $this->hasOne('App\Models\Plan', 'id', 'plan');
+     }
+
+     public function billingProfile()
+     {
+          return $this->hasOne(\App\Models\CompanyBillingProfile::class, 'company_id');
+     }
+
+     public function isCustomBilling(): bool
+     {
+          $profile = $this->relationLoaded('billingProfile')
+               ? $this->billingProfile
+               : $this->billingProfile()->first();
+
+          return $profile && $profile->isCustom();
+     }
+
+     public function isGlobalBilling(): bool
+     {
+          return !$this->isCustomBilling();
      }
 
 

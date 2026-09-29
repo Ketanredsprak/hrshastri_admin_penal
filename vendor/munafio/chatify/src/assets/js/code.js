@@ -91,22 +91,22 @@ function listItemLoading(items) {
   let template = "";
   for (let i = 0; i < items; i++) {
     template += `
-    <div class="loadingPlaceholder">
-      <div class="loadingPlaceholder-wrapper">
-        <div class="loadingPlaceholder-body">
-          <table class="loadingPlaceholder-header">
-            <tr>
-              <td style="width: 45px;"><div class="loadingPlaceholder-avatar"></div></td>
-              <td>
-                <div class="loadingPlaceholder-name"></div>
-                <div class="loadingPlaceholder-date"></div>
-              </td>
-            </tr>
-          </table>
-        </div>
-      </div>
-    </div>
-    `;
+<div class="loadingPlaceholder">
+<div class="loadingPlaceholder-wrapper">
+<div class="loadingPlaceholder-body">
+<table class="loadingPlaceholder-header">
+<tr>
+<td style="width: 45px;"><div class="loadingPlaceholder-avatar"></div></td>
+<td>
+  <div class="loadingPlaceholder-name"></div>
+      <div class="loadingPlaceholder-date"></div>
+</td>
+</tr>
+</table>
+</div>
+</div>
+</div>
+`;
   }
   return template;
 }
@@ -117,22 +117,22 @@ function avatarLoading(items) {
   for (let i = 0; i < items; i++) {
     template += `
 <div class="loadingPlaceholder">
-  <div class="loadingPlaceholder-wrapper">
-    <div class="loadingPlaceholder-body">
-      <table class="loadingPlaceholder-header">
-        <tr>
-          <td style="width: 45px;">
+<div class="loadingPlaceholder-wrapper">
+<div class="loadingPlaceholder-body">
+<table class="loadingPlaceholder-header">
+    <tr>
+        <td style="width: 45px;">
             <div class="loadingPlaceholder-avatar" style="margin: 2px;"></div>
-          </td>
-        </tr>
-      </table>
-    </div>
-  </div>
+        </td>
+    </tr>
+</table>
+</div>
+</div>
 </div>
 `;
   }
   return template;
-} 
+}
 
 // While sending a message, show this temporary message card.
 function sendTempMessageCard(message, id) {
@@ -843,8 +843,6 @@ function getContacts() {
   }
 }
 
-
-
 /**
  *-------------------------------------------------------------
  * Update contact item
@@ -911,7 +909,7 @@ function star(user_id) {
  * Get favorite list
  *-------------------------------------------------------------
  */
- function getFavoritesList() {
+function getFavoritesList() {
   $(".messenger-favorites").html(avatarLoading(4));
   $.ajax({
     url: url + "/favorites",
@@ -1411,7 +1409,7 @@ $(document).ready(function () {
     $.trim($(this).val()).length > 0
       ? $(".messenger-search").trigger("focus") + messengerSearch($(this).val())
       : $(".messenger-tab").hide() +
-      $('.messenger-listView-tabs a[data-view="users"]').trigger("click");
+        $('.messenger-listView-tabs a[data-view="users"]').trigger("click");
   });
 
   // Delete Conversation button

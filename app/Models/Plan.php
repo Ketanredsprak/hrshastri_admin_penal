@@ -55,4 +55,47 @@ class Plan extends Model
     public function plansModule(){
         return $this->hasMany(PlansModule::class,'plans_id','id');
     }
+
+    /**
+     * Check if the given company is eligible to subscribe to this plan.
+     *
+     * @param  \App\Models\User  $user
+     * @return bool
+     */
+    public function isEligibleForCompany(User $user): bool
+    {
+        $activeEmployees = $user->countEmployees();
+        $activeUsers = $user->countUsers();
+
+        $empLimitOk = ($this->max_employees == -1) || ($activeEmployees <= (int)$this->max_employees);
+        $userLimitOk = ($this->max_users == -1) || ($activeUsers <= (int)$this->max_users);
+
+        return $empLimitOk && $userLimitOk;
+    }
+
+    /**
+     * Get human-readable ineligibility reason if company exceeds plan limits.
+     *
+     * @param  \App\Models\User  $user
+     * @return string|null
+     */
+    public function getIneligibilityReason(User $user): ?string
+    {
+        $activeEmployees = $user->countEmployees();
+        $activeUsers = $user->countUsers();
+
+        $empExceeded = ($this->max_employees != -1) && ($activeEmployees > (int)$this->max_employees);
+        $userExceeded = ($this->max_users != -1) && ($activeUsers > (int)$this->max_users);
+
+        if ($empExceeded && $userExceeded) {
+            return "You have {$activeEmployees} active employees and {$activeUsers} active sub-users, which exceeds this plan's capacity ({$this->max_employees} employees, {$this->max_users} users).";
+        } elseif ($empExceeded) {
+            return "You have {$activeEmployees} active employees, which exceeds this plan's limit of {$this->max_employees} employees.";
+        } elseif ($userExceeded) {
+            return "You have {$activeUsers} active sub-users, which exceeds this plan's limit of {$this->max_users} users.";
+        }
+
+        return null;
+    }
+
 }

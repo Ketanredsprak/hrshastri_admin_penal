@@ -8,7 +8,13 @@
     <li class="breadcrumb-item">{{ __('Manage Employee') }}</li>
 @endsection
 @section('action-button')
-    <div class="float-end">
+    <div class="float-end d-flex gap-2">
+        @if (Gate::check('View Employee Data Log') || \Auth::user()->type == 'company')
+            <a href="{{ route('employee-data-log.index', ['employee_id' => $employee->id]) }}"
+                data-bs-toggle="tooltip" title="{{ __('Change History') }}" class="btn btn-sm btn-primary">
+                <i class="ti ti-history"></i> {{ __('Change History') }}
+            </a>
+        @endif
         @can('edit employee')
             <a href="{{ route('employee.edit', \Illuminate\Support\Facades\Crypt::encrypt($employee->id)) }}"
                 data-bs-toggle="tooltip" title="{{ __('Edit') }}"class="btn btn-sm btn-primary">

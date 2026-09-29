@@ -219,17 +219,20 @@ class EarlyLateCommingLeaveController extends Controller
                     $leavetypes_days = LeaveType::where('created_by', '=', Auth::user()->creatorId())->get();
                     $users           = User::where('type', '!=', 'employee')->where('created_by', '=', Auth::user()->creatorId())->get()->pluck('name', 'id',);
                }
+               // Short-leave monthly limit applies to employee self-service only
                $employee = Employee::where('user_id', '=', Auth::id())->first();
-
-               $short_leave_count = EarlyLateCommingLeave::where('employee_id', $employee->id)
-                    ->where('status', '!=', 2)
-                    ->whereRaw('YEAR(date) = ?', [now()->year])
-                    ->whereRaw('MONTH(date) = ?', [now()->month])
-                    ->count();
-
-               if ($short_leave_limit <= $short_leave_count)
+               if ($employee)
                {
-                    return response()->json(['error' => __('You can take up to ' . $short_leave_limit . ' short leaves per month. Otherwise, please apply for Half/Full Day leave.')], 401);
+                    $short_leave_count = EarlyLateCommingLeave::where('employee_id', $employee->id)
+                         ->where('status', '!=', 2)
+                         ->whereRaw('YEAR(date) = ?', [now()->year])
+                         ->whereRaw('MONTH(date) = ?', [now()->month])
+                         ->count();
+
+                    if ($short_leave_limit <= $short_leave_count)
+                    {
+                         return response()->json(['error' => __('You can take up to ' . $short_leave_limit . ' short leaves per month. Otherwise, please apply for Half/Full Day leave.')], 401);
+                    }
                }
                return view('EarlyLateComming.create', compact('employees', 'leavetypes', 'leavetypes_days', 'users'));
           }

@@ -10,11 +10,13 @@
 @endsection
 
 @section('action-button')
-    <a href="#" data-url="{{ route('my_claim.create') }}" data-ajax-popup="true" data-title="{{ __('Create New claim') }}"
-        data-size="lg" data-bs-toggle="tooltip" title="" class="btn btn-sm btn-primary"
-        data-bs-original-title="{{ __('Create') }}">
-        <i class="ti ti-plus"></i>
-    </a>
+    @if (\Auth::user()->type == 'employee')
+        <a href="#" data-url="{{ route('my_claim.create') }}" data-ajax-popup="true" data-title="{{ __('Create New claim') }}"
+            data-size="lg" data-bs-toggle="tooltip" title="" class="btn btn-sm btn-primary"
+            data-bs-original-title="{{ __('Create') }}">
+            <i class="ti ti-plus"></i>
+        </a>
+    @endif
 @endsection
 @section('breadcrumb')
     <li class="breadcrumb-item active" aria-current="page">{{ __('Category Type') }}</li>

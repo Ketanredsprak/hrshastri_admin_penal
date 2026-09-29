@@ -5,6 +5,8 @@
     $SITE_RTL = \App\Models\Utility::getValByName('SITE_RTL');
     $setting = \App\Models\Utility::colorset();
     $color = !empty($setting['theme_color']) ? $setting['theme_color'] : 'theme-3';
+    $hasActiveSub = \Auth::check() ? \Auth::user()->hasActiveSubscription() : true;
+    $isCompanyWithoutSub = (\Auth::check() && \Auth::user()->type == 'company' && !$hasActiveSub);
 @endphp
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}" dir="{{ $SITE_RTL == 'on' ? 'rtl' : '' }}">
@@ -43,19 +45,17 @@
     <link rel="stylesheet" href="{{ asset('assets/fonts/material.css') }}">
     <!-- vendor css -->
     {{-- @if ($setting['SITE_RTL'] == 'on')
-        <link rel="stylesheet" href="{{ asset('assets/css/style-rtl.css') }}" id="main-style-link">
-     @else
-     @if ($dark_mode == 'on')
-     <link rel="stylesheet" href="{{ asset('assets/css/style-dark.css') }}">
-     @else
-     <link rel="stylesheet" href="{{ asset('assets/css/style.css') }}" id="main-style-link">
-     @endif
-     @endif --}}
+    <link rel="stylesheet" href="{{ asset('assets/css/style-rtl.css') }}" id="main-style-link">
+    @else
+    @if ($dark_mode == 'on')
+    <link rel="stylesheet" href="{{ asset('assets/css/style-dark.css') }}">
+    @else
+    <link rel="stylesheet" href="{{ asset('assets/css/style.css') }}" id="main-style-link">
+    @endif
+    @endif --}}
 
-    <meta name="url" content="{{ url('') . '/' . config('chatify.routes.prefix') }}"
-        data-user="{{ Auth::user()->id }}">
+    <meta name="url" content="{{ url('') . '/' . config('chatify.routes.prefix') }}" data-user="{{ Auth::user()->id }}">
     <link rel="stylesheet" href="{{ asset('assets/css/customizer.css') }}">
-    <link rel="stylesheet" href="{{ asset('css/custom.css') }}">
     <link rel='stylesheet' href='https://unpkg.com/nprogress@0.2.0/nprogress.css' />
     @if ($SITE_RTL == 'on')
         <link rel="stylesheet" href="{{ asset('assets/css/style-rtl.css') }}">
@@ -66,6 +66,7 @@
         <link rel="stylesheet" href="{{ asset('assets/css/style.css') }}" id="main-style-link">
     @endif
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/css/toastr.min.css" />
+    <link rel="stylesheet" href="{{ asset('css/custom.css') }}?v={{ filemtime(public_path('css/custom.css')) }}">
     @stack('css-page')
 
     @yield('header-section')
@@ -75,7 +76,7 @@
 
 </head>
 
-<body class="{{ $color }}">
+<body class="{{ $color }} {{ $isCompanyWithoutSub ? 'no-sidebar is-sub-inactive' : '' }}">
     <div id="overlay">
         <div class="cv-spinner">
             <span class="spinner"></span>
@@ -95,16 +96,19 @@
     <!-- [ Header ] start -->
 
 
-    {{-- Load Menu Based On User --}}
-    @if (\Auth::user()->type == 'super admin')
-        @include('partial.Admin.superAdminMenu')
-    @elseif (\Auth::user()->type == 'employee')
-        @include('partial.Admin.employeeMenu')
-    @else
-        @include('partial.Admin.companyMenu')
+    {{-- Load Menu Based On User (Hidden for Company when subscription is inactive) --}}
+    @if (!$isCompanyWithoutSub)
+        @if (\Auth::user()->type == 'super admin')
+            @include('partial.Admin.superAdminMenu')
+        @elseif (\Auth::user()->type == 'employee')
+            @include('partial.Admin.employeeMenu')
+        @else
+            @include('partial.Admin.companyMenu')
+        @endif
     @endif
 
-    @include('partial.Admin.header')
+    @include('partial.Admin.header', ['isCompanyWithoutSub' => $isCompanyWithoutSub])
+    @include('partial.subscription_expiry_alert')
 
     <!-- Modal -->
     <div class="modal notification-modal fade" id="notification-modal" tabindex="-1" role="dialog" aria-hidden="true">
@@ -177,7 +181,7 @@
 
             <div class="page-header">
                 <div class="page-block">
-                    <div class="row align-items-center">
+                    <div class="row align-items-start">
                         <div class="col-auto">
                             <div class="page-header-title">
                                 <h4 class="m-b-10">
@@ -189,8 +193,7 @@
                             </ul>
                         </div>
                         <div class="col-sm-auto col-md">
-                            <div class="float-end "
-                                @if ($SITE_RTL == 'on') style=" float: left !important;" @endif>
+                            <div class="float-end " @if ($SITE_RTL == 'on') style=" float: left !important;" @endif>
                                 @yield('action-button')
 
 
@@ -283,8 +286,9 @@
 
 
 
-    {{-- <script>
-        if($("#pc-dt-simple").lenght > 0) {
+    {{--
+    <script>
+        if ($("#pc-dt-simple").lenght > 0) {
             const dataTable = new simpleDatatables.DataTable("#pc-dt-simple");
         }
     </script> --}}
@@ -299,12 +303,12 @@
         }
 
         function hideLoader() {
-            setTimeout(function() {
+            setTimeout(function () {
                 $("#overlay").fadeOut(300);
             }, 500);
         }
 
-        $(document).on('click', '.local_calender .fc-daygrid-event', function(e) {
+        $(document).on('click', '.local_calender .fc-daygrid-event', function (e) {
             // if (!$(this).hasClass('project')) {
             e.preventDefault();
             var event = $(this);
@@ -316,14 +320,14 @@
             $("#commonModal .modal-dialog").addClass('modal-' + size);
             $.ajax({
                 url: url,
-                success: function(data) {
+                success: function (data) {
                     $('#commonModal .body').html(data);
                     $("#commonModal").modal('show');
                     if ($(".d_week").length > 0) {
-                        $($(".d_week")).each(function(index, element) {
+                        $($(".d_week")).each(function (index, element) {
                             var id = $(element).attr('id');
 
-                            (function() {
+                            (function () {
                                 const d_week = new Datepicker(document.querySelector('#' +
                                     id), {
                                     buttonClass: 'btn',
@@ -335,51 +339,12 @@
                     }
 
                 },
-                error: function(data) {
+                error: function (data) {
                     data = data.responseJSON;
                     toastrs('Error', data.error, 'error')
                 }
             });
-            // }
         });
-
-        // //model ajax fire
-        // $("#commonModal").on("submit", 'form', function(event) {
-        //     event.preventDefault();
-        //     var form_cust = this;
-        //     var formData = new FormData(form_cust);
-        //     var url = $(this).attr('action');
-        //     var type = "POST";
-        //     $.ajax({
-        //         context: 'commonModal',
-        //         type: type,
-        //         url: url,
-        //         data: formData,
-        //         processData: false,
-        //         contentType: false,
-        //         success: function(response) {
-        //             if (response.status == 1) {
-        //                 toastr.success(response.message);
-        //                 $("#commonModal").modal('hide');
-        //                 location.reload();
-        //             }
-        //             if (response.status == 0) {
-        //                 $.each(response.message, function(key, value) {
-        //                     toastr.error(value)
-        //                 });
-        //             }
-        //         },
-        //         // error: function(response) {
-        //         //     var errors = response.responseJSON;
-        //         //     $.each(errors.errors, function(key, value) {
-        //         //         var ele = "#" + key;
-        //         //         $(ele).addClass('is-invalid');
-        //         //         toastrs('Error', value, 'error')
-        //         //     });
-        //         // }
-        //     })
-        //     return false;
-        // });
     </script>
 
     <script src="https://js.pusher.com/5.0/pusher.min.js"></script>
@@ -418,19 +383,18 @@
 
 
 
-        {{-- <script type="module"> import Turbo from 'https://cdn.skypack.dev/@hotwired/turbo'; </script>
+        {{--
+        <script type="module"> import Turbo from 'https://cdn.skypack.dev/@hotwired/turbo'; </script>
 
-    <script src="https://cdn.skypack.dev/@hotwired/turbo"></script> --}}
+        <script src="https://cdn.skypack.dev/@hotwired/turbo"></script> --}}
     @endif
-
     @if (\Auth::user()->type != 'super admin')
         <script>
-            $(document).ready(function() {
+            $(document).ready(function () {
                 pushNotification('{{ Auth::id() }}');
             });
 
             function pushNotification(id) {
-
                 // ajax setup form csrf token
                 $.ajaxSetup({
                     headers: {
@@ -441,17 +405,14 @@
                 // Enable pusher logging - don't include this in production
                 Pusher.logToConsole = false;
 
-                var pusher = new Pusher(
-                    '{{ env('
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            PUSHER_APP_KEY ') }}', {
-                        cluster: '{{ env('
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     PUSHER_APP_CLUSTER ') }}',
-                        forceTLS: true
-                    });
+                var pusher = new Pusher('{{ env('PUSHER_APP_KEY') }}', {
+                    cluster: '{{ env('PUSHER_APP_CLUSTER') }}',
+                    forceTLS: true
+                });
 
                 // Pusher Notification
                 var channel = pusher.subscribe('send_notification');
-                channel.bind('notification', function(data) {
+                channel.bind('notification', function (data) {
                     if (id == data.user_id) {
                         $(".notification-toggle").addClass('beep');
                         $(".notification-dropdown #notification-list").prepend(data.html);
@@ -460,18 +421,14 @@
 
                 // Pusher Message
                 var msgChannel = pusher.subscribe('my-channel');
-                msgChannel.bind('my-chat', function(data) {
-
+                msgChannel.bind('my-chat', function (data) {
                     if (id == data.to) {
                         getChat();
                     }
                 });
             }
-
-            // Get chat for top ox
         </script>
     @endif
-
 
     @if ($message = Session::get('success'))
         <script>
@@ -484,14 +441,9 @@
         </script>
     @endif
 
-
     @stack('script-page')
-
     @stack('scripts')
     @include('Chatify::layouts.footerLinks')
-
-
-
 
 </body>
 

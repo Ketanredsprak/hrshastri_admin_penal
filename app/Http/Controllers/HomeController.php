@@ -84,7 +84,7 @@ class HomeController extends Controller
           // dd(Auth::user()->roles);
           if (Auth::check())
           {
-               if (!str_contains(request()->getRequestUri(), 'public')) {
+               if (!str_contains(request()->getRequestUri(), 'public') && !app()->environment('local') && str_contains(config('app.url'), 'public')) {
                     return redirect('public/dashboard');
                }
                
@@ -280,7 +280,8 @@ class HomeController extends Controller
                     $user['total_plan']         = Plan::total_plan();
                     $user['most_purchese_plan'] = (!empty(Plan::most_purchese_plan()) ? Plan::most_purchese_plan()->name : '');
                     $chartData = $this->getOrderChart(['duration' => 'week']);
-                    return view('dashboard.super_admin', compact('user', 'chartData'));
+                    $loginAnalytics = $this->buildLoginAnalytics();
+                    return view('dashboard.super_admin', compact('user', 'chartData', 'loginAnalytics'));
                }
                else
                {
@@ -416,7 +417,9 @@ class HomeController extends Controller
                     $workAnniversaryList = getWorkAnniversaryList([$employeeId]);
                     $marriageAnniversaryList = getMarriageAnniversaryList([$employeeId]);
 
-                    return view('dashboard.dashboard', compact('officeTime', 'employeees', 'employeesData', 'arrEvents', 'employeeAttendance', 'announcements', 'employees', 'activeJob', 'inActiveJOb', 'meetings', 'countEmployee', 'countUser', 'countTicket', 'countOpenTicket', 'countCloseTicket', 'notClockIns', 'countEmployee', 'accountBalance', 'totalPayee', 'totalPayer', 'employeesBirthdayList', 'workAnniversaryList', 'marriageAnniversaryList', 'employeeDetails', 'checkLastAttendance'));
+                    $loginAnalytics = $this->buildLoginAnalytics(\Auth::user()->creatorId());
+
+                    return view('dashboard.dashboard', compact('officeTime', 'employeees', 'employeesData', 'arrEvents', 'employeeAttendance', 'announcements', 'employees', 'activeJob', 'inActiveJOb', 'meetings', 'countEmployee', 'countUser', 'countTicket', 'countOpenTicket', 'countCloseTicket', 'notClockIns', 'countEmployee', 'accountBalance', 'totalPayee', 'totalPayer', 'employeesBirthdayList', 'workAnniversaryList', 'marriageAnniversaryList', 'employeeDetails', 'checkLastAttendance', 'loginAnalytics'));
                }
           }
           else
@@ -435,14 +438,14 @@ class HomeController extends Controller
                          $get_section = LandingPageSection::orderBy('section_order', 'ASC')->get();
 
                          // return view('layouts.landing', compact('plans','get_section'));
-                         if (str_contains(request()->getRequestUri(), '/public')) {
+                         if (str_contains(request()->getRequestUri(), '/public') || app()->environment('local') || !str_contains(config('app.url'), 'public')) {
                               return redirect('login');
                          }
                          return redirect('public/login');
                     }
                     else
                     {
-                         if (str_contains(request()->getRequestUri(), '/public')) {
+                         if (str_contains(request()->getRequestUri(), '/public') || app()->environment('local') || !str_contains(config('app.url'), 'public')) {
                               return redirect('login');
                          }
                          return redirect('public/login');
@@ -514,6 +517,56 @@ class HomeController extends Controller
           }
 
           return $arrTask;
+     }
+
+     /**
+      * Build last-login analytics for dashboards.
+      * Super admin: platform-wide company + employee stats.
+      * Company/HR: employee (and staff) stats for that company only.
+      */
+     protected function buildLoginAnalytics($companyId = null)
+     {
+          $today = Carbon::today()->toDateString();
+          $weekAgo = Carbon::now()->subDays(7)->startOfDay();
+          $monthAgo = Carbon::now()->subDays(30)->startOfDay();
+
+          $employeeBase = User::query()->where('type', 'employee');
+          if (!empty($companyId)) {
+               $employeeBase->where('created_by', $companyId);
+          }
+
+          $employeeStats = [
+               'total' => (clone $employeeBase)->count(),
+               'today' => (clone $employeeBase)->whereDate('last_login', $today)->count(),
+               'week' => (clone $employeeBase)->where('last_login', '>=', $weekAgo)->count(),
+               'never' => (clone $employeeBase)->whereNull('last_login')->count(),
+               'inactive_30' => (clone $employeeBase)->whereNotNull('last_login')->where('last_login', '<', $monthAgo)->count(),
+               'recent' => (clone $employeeBase)->whereNotNull('last_login')
+                    ->orderBy('last_login', 'desc')
+                    ->limit(8)
+                    ->get(['id', 'name', 'email', 'last_login', 'type', 'created_by']),
+          ];
+
+          $companyStats = null;
+          if (empty($companyId)) {
+               $companyBase = User::query()->where('type', 'company');
+               $companyStats = [
+                    'total' => (clone $companyBase)->count(),
+                    'today' => (clone $companyBase)->whereDate('last_login', $today)->count(),
+                    'week' => (clone $companyBase)->where('last_login', '>=', $weekAgo)->count(),
+                    'never' => (clone $companyBase)->whereNull('last_login')->count(),
+                    'inactive_30' => (clone $companyBase)->whereNotNull('last_login')->where('last_login', '<', $monthAgo)->count(),
+                    'recent' => (clone $companyBase)->whereNotNull('last_login')
+                         ->orderBy('last_login', 'desc')
+                         ->limit(8)
+                         ->get(['id', 'name', 'email', 'last_login', 'type']),
+               ];
+          }
+
+          return [
+               'employees' => $employeeStats,
+               'companies' => $companyStats,
+          ];
      }
 
      function logout()

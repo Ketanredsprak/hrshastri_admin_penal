@@ -13,88 +13,88 @@ use Illuminate\Support\Facades\Route;
 /*
 * This is the main app route [Chatify Messenger]
 */
-Route::get('/', 'MessagesController@index')->name(config('chatify.routes.prefix'))->middleware(['auth','XSS']);
+Route::get('/', 'MessagesController@index')->name(config('chatify.routes.prefix'));
 
 /**
  *  Fetch info for specific id [user/group]
  */
-Route::post('/idInfo', 'MessagesController@idFetchData')->middleware(['auth','XSS']);
+Route::post('/idInfo', 'MessagesController@idFetchData');
 
 /**
  * Send message route
  */
-Route::post('/sendMessage', 'MessagesController@send')->name('send.message')->middleware(['auth','XSS']);
+Route::post('/sendMessage', 'MessagesController@send')->name('send.message');
 
 /**
  * Fetch messages
  */
-Route::post('/fetchMessages', 'MessagesController@fetch')->name('fetch.messages')->middleware(['auth','XSS']);
+Route::post('/fetchMessages', 'MessagesController@fetch')->name('fetch.messages');
 
 /**
  * Download attachments route to create a downloadable links
  */
-Route::get('/download/{fileName}', 'MessagesController@download')->name(config('chatify.attachments.download_route_name'))->middleware(['auth','XSS']);
+Route::get('/download/{fileName}', 'MessagesController@download')->name(config('chatify.attachments.download_route_name'));
 
 /**
  * Authentication for pusher private channels
  */
-Route::post('/chat/auth', 'MessagesController@pusherAuth')->name('pusher.auth')->middleware(['auth','XSS']);
+Route::post('/chat/auth', 'MessagesController@pusherAuth')->name('pusher.auth');
 
 /**
  * Make messages as seen
  */
-Route::post('/makeSeen', 'MessagesController@seen')->name('messages.seen')->middleware(['auth','XSS']);
+Route::post('/makeSeen', 'MessagesController@seen')->name('messages.seen');
 
 /**
  * Get contacts
  */
-Route::get('/getContacts', 'MessagesController@getContacts')->name('contacts.get')->middleware(['auth','XSS']);
+Route::get('/getContacts', 'MessagesController@getContacts')->name('contacts.get');
 
 /**
  * Update contact item data
  */
-Route::post('/updateContacts', 'MessagesController@updateContactItem')->name('contacts.update')->middleware(['auth','XSS']);
+Route::post('/updateContacts', 'MessagesController@updateContactItem')->name('contacts.update');
 
 
 /**
  * Star in favorite list
  */
-Route::post('/star', 'MessagesController@favorite')->name('star')->middleware(['auth','XSS']);
+Route::post('/star', 'MessagesController@favorite')->name('star');
 
 /**
  * get favorites list
  */
-Route::post('/favorites', 'MessagesController@getFavorites')->name('favorites')->middleware(['auth','XSS']);
+Route::post('/favorites', 'MessagesController@getFavorites')->name('favorites');
 
 /**
  * Search in messenger
  */
-Route::get('/search', 'MessagesController@search')->name('search')->middleware(['auth','XSS']);
+Route::get('/search', 'MessagesController@search')->name('search');
 
 /**
  * Get shared photos
  */
-Route::post('/shared', 'MessagesController@sharedPhotos')->name('shared')->middleware(['auth','XSS']);
+Route::post('/shared', 'MessagesController@sharedPhotos')->name('shared');
 
 /**
  * Delete Conversation
  */
-Route::post('/deleteConversation', 'MessagesController@deleteConversation')->name('conversation.delete')->middleware(['auth','XSS']);
+Route::post('/deleteConversation', 'MessagesController@deleteConversation')->name('conversation.delete');
 
 /**
  * Delete Message
  */
-Route::post('/deleteMessage', 'MessagesController@deleteMessage')->name('message.delete')->middleware(['auth','XSS']);
+Route::post('/deleteMessage', 'MessagesController@deleteMessage')->name('message.delete');
 
 /**
  * Update setting
  */
-Route::post('/updateSettings', 'MessagesController@updateSettings')->name('avatar.update')->middleware(['auth','XSS']);
+Route::post('/updateSettings', 'MessagesController@updateSettings')->name('avatar.update');
 
 /**
  * Set active status
  */
-Route::post('/setActiveStatus', 'MessagesController@setActiveStatus')->name('activeStatus.set')->middleware(['auth','XSS']);
+Route::post('/setActiveStatus', 'MessagesController@setActiveStatus')->name('activeStatus.set');
 
 
 
@@ -104,7 +104,7 @@ Route::post('/setActiveStatus', 'MessagesController@setActiveStatus')->name('act
 /*
 * [Group] view by id
 */
-Route::get('/group/{id}', 'MessagesController@index')->name('group')->middleware(['auth','XSS']);
+Route::get('/group/{id}', 'MessagesController@index')->name('group');
 
 /*
 * user view by id.
@@ -114,5 +114,5 @@ Route::get('/group/{id}', 'MessagesController@index')->name('group')->middleware
 * e.g. - The commented routes below :
 */
 // Route::get('/route', function(){ return 'Munaf'; }); // works as a route
-Route::get('/{id}', 'MessagesController@index')->name('user')->middleware(['auth','XSS']);
+Route::get('/{id}', 'MessagesController@index')->name('user');
 // Route::get('/route', function(){ return 'Munaf'; }); // works as a user id

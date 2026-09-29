@@ -43,13 +43,18 @@
             <div class="form-group">
                 {{ Form::label('leave_type_id', __('Leave Type'), ['class' => 'col-form-label']) }} <span
                     class="text-danger pl-1">*</span>
-                <select name="leave_type_id" id="leave_type_id" class="form-control select">
-                    @foreach ($leavetypes as $leave)
+                <select name="leave_type_id" id="leave_type_id" class="form-control select" @if($leavetypes->isEmpty()) disabled @endif>
+                    @forelse ($leavetypes as $leave)
                         <option value="{{ $leave->id }}">{{ $leave->title }} (<p class="float-right pr-5">
                                 {{ $leave->used_leaved }}
                             </p>)</option>
-                    @endforeach
+                    @empty
+                        <option value="">{{ __('No leave types configured for your pay slab. Please contact HR.') }}</option>
+                    @endforelse
                 </select>
+                @if($leavetypes->isEmpty())
+                    <small class="text-danger">{{ __('No leave types are available. Ask your company admin to configure Leave Types for your pay slab.') }}</small>
+                @endif
             </div>
         </div>
     </div>
@@ -114,7 +119,7 @@
 </div>
 <div class="modal-footer">
     <button type="button" class="btn  btn-light" data-bs-dismiss="modal">{{ __('Close') }}</button>
-    <input type="submit" value="{{ __('Create') }}" class="btn  btn-primary">
+    <input type="submit" value="{{ __('Create') }}" class="btn  btn-primary" @if($leavetypes->isEmpty()) disabled @endif>
 </div>
 {{ Form::close() }}
 

@@ -41,7 +41,7 @@
                                     <td>{{ $employee->name }}</td>
                                     <td>{{ $employee->salary_type() }}</td>
                                     <td>{{ \Auth::user()->priceFormat($employee->salary) }}</td>
-                                    <td>{{ !empty($employee->get_net_salary()) ? \Auth::user()->priceFormat($employee->get_net_salary()) : '' }}
+                                    <td>{{ !empty($employee->get_net_salary(date('Y-m'))) ? \Auth::user()->priceFormat($employee->get_net_salary(date('Y-m'))) : '' }}
                                     </td>
                                     <td class="Action">
                                         <span>

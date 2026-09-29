@@ -1,88 +1,93 @@
-
-
-
 @extends('layouts.auth')
-@section('page-title')
-    {{__('Forgot Password')}}
-@endsection
-@php
-    // $logo=asset(Storage::url('uploads/logo/'));
-$logo=\App\Models\Utility::get_file('uploads/logo/');
 
+@section('page-title')
+    {{ __('Forgot Password') }}
+@endsection
+
+@php
+    $logo = \App\Models\Utility::get_file('uploads/logo/');
+    $company_logo = \App\Models\Utility::GetLogo();
+    $logoFile = isset($company_logo) && !empty($company_logo) ? $company_logo : 'logo-dark.png';
 @endphp
 
 @push('custom-scripts')
-@if(env('RECAPTCHA_MODULE') == 'yes')
+    @if (env('RECAPTCHA_MODULE') == 'yes')
         {!! NoCaptcha::renderJs() !!}
-@endif
+    @endif
 @endpush
 
 @section('language-bar')
-{{-- @dd($lang) --}}
-    <li class="nav-item">
-        <select name="language" id="language" class="lang-dropdown btn btn-primary my-1 me-2" onchange="this.options[this.selectedIndex].value && (window.location = this.options[this.selectedIndex].value);">
-            @foreach(\App\Models\Utility::languages() as $language)
-                <option @if($lang == $language) selected @endif value="{{ route('password.request',$language) }}">{{Str::upper($language)}}</option>
-            @endforeach
-        </select>
-    </li>
+    <select name="language" id="language" class="hs-lang-select"
+        onchange="this.options[this.selectedIndex].value && (window.location = this.options[this.selectedIndex].value);">
+        @foreach (\App\Models\Utility::languages() as $language)
+            <option @if (($lang ?? 'en') == $language) selected @endif
+                value="{{ route('password.request', $language) }}">
+                {{ Str::upper($language) }}
+            </option>
+        @endforeach
+    </select>
 @endsection
 
 @section('content')
-<div class="card">
-    <div class="row align-items-center text-start">
-        <div class="col-xl-6">
-            <div class="card-body">
-                <div class="">
-                    <h2 class="mb-3 f-w-600">{{ __('Forgot Password') }}</h2>
-                    {{-- @dd(session('status')) --}}
-                    @if (session('status'))
-                        <div class="alert alert-primary">
-                            {{ session('status') }}
-                        </div>
-                    @endif
+    <main class="hs-login">
+        <section class="hs-login-hero" aria-label="{{ __('HR Shastri') }}">
+            <div class="hs-login-orb hs-login-orb--a" aria-hidden="true"></div>
+            <div class="hs-login-orb hs-login-orb--b" aria-hidden="true"></div>
+
+            <div class="hs-login-hero-inner">
+                <div class="hs-brand-mark">
+                    <img src="{{ $logo . '/' . $logoFile }}" alt="HR Shastri"
+                        onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                    <span class="hs-brand-fallback" style="display:none;">HR <span>Shastri</span></span>
                 </div>
+                <p class="hs-lead">
+                    {{ __('Reset access securely and get back to your workplace in minutes.') }}
+                </p>
+            </div>
+        </section>
+
+        <section class="hs-login-panel">
+            <div class="hs-login-panel-card">
+                <h2>{{ __('Forgot password') }}</h2>
+                <p class="hs-sub">{{ __('Enter your email and we will send a reset link.') }}</p>
+
+                @if (session('status'))
+                    <div class="hs-alert hs-alert-success">{{ session('status') }}</div>
+                @endif
+
                 <form method="POST" action="{{ route('password.email') }}" id="form_data">
                     @csrf
-                    <div class="">
-                        <div class="form-group mb-3">
-                            <label for="email" class="form-label">{{ __('Email') }}</label>
-                            <input id="email" type="email" class="form-control @error('email') is-invalid @enderror" name="email" value="{{ old('email') }}" placeholder="Enter Yore Email"        autocomplete="email" autofocus>                        
-                            @foreach ($errors->all() as $key => $error)
-                                <span class="error invalid-email text-danger" role="alert">
-                                    <small>{{ $error }}</small>
-                                </span>                                
-                            @endforeach
-                        </div>                      
-                        @if(env('RECAPTCHA_MODULE') == 'yes')
-                            <div class="form-group col-lg-12 col-md-12 mt-3">
-                                {!! NoCaptcha::display() !!}
-                                @error('g-recaptcha-response')
-                                <span class="error small text-danger" role="alert">
-                                    <strong>{{ $message }}</strong>
-                                </span>
-                                @enderror
-                            </div>
-                        @endif
-                            
-                        <div class="d-grid">
-                            <button class="btn btn-primary btn-submit btn-block mt-2">{{ __('Send Password Reset Link') }}  </button>
-                        </div>
-                        <p class="my-4 text-center">{{__('Back to ')}}
-                            <a href="{{route('login',$lang)}}" class="my-4 text-primary">{{ __('Login') }}</a>
-                        </p>
+
+                    <div class="hs-field">
+                        <label for="email">{{ __('Email') }}</label>
+                        <input id="email" type="email"
+                            class="@error('email') is-invalid @enderror"
+                            name="email" value="{{ old('email') }}"
+                            placeholder="{{ __('Enter your email') }}" autocomplete="email" autofocus required>
+                        @foreach ($errors->all() as $error)
+                            <span class="hs-field-error" role="alert">{{ $error }}</span>
+                        @endforeach
                     </div>
+
+                    @if (env('RECAPTCHA_MODULE') == 'yes')
+                        <div class="hs-field">
+                            {!! NoCaptcha::display() !!}
+                            @error('g-recaptcha-response')
+                                <span class="hs-field-error" role="alert">{{ $message }}</span>
+                            @enderror
+                        </div>
+                    @endif
+
+                    <button type="submit" class="hs-btn-login btn-submit">
+                        {{ __('Send Password Reset Link') }}
+                    </button>
+
+                    <p class="hs-auth-meta">
+                        {{ __('Back to') }}
+                        <a href="{{ route('login', $lang ?? 'en') }}">{{ __('Login') }}</a>
+                    </p>
                 </form>
             </div>
-        </div>
-        <div class="col-xl-6 img-card-side">
-            <div class="auth-img-content">
-                <img src="{{ asset('assets/images/auth/img-auth-3.svg') }}" alt="" class="img-fluid">
-                <h3 class="text-white mb-4 mt-5">“Attention is the new currency”</h3>
-                <p class="text-white">The more effortless the writing looks, the more effort the writer
-                    actually put into the process.</p>
-            </div>
-        </div>
-    </div>
-</div>
+        </section>
+    </main>
 @endsection

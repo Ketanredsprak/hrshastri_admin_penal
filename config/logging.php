@@ -139,6 +139,11 @@ return [
                'path' => storage_path("logs/leave_log.log"),
                'level' => 'debug',
           ],
+          'attendance_punch_image_cleanup' => [
+               'driver' => 'single',
+               'path' => storage_path('logs/attendance_punch_image_cleanup.log'),
+               'level' => 'debug',
+          ],
      ],
 
 ];

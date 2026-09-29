@@ -53,17 +53,14 @@ return [
                // 'bucket' => env('AWS_BUCKET'),
                // 'url' => env('AWS_URL'),
                // 'endpoint' => env('AWS_ENDPOINT'),
-               'use_path_style_endpoint' => env('AWS_USE_PATH_STYLE_ENDPOINT', false),
-
-
                'driver' => 's3',
-               'key' => "AKIAY5XEINC6P4ZESNWO",
-               'secret' => "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",
-               'region' => "ap-south-1",
-               'bucket' => "hrshastri",
-
-               'url' => "https://s3.ap-south-1.amazonaws.com/",
-               'endpoint' => "https://s3.ap-south-1.amazonaws.com/",
+               'key' => env('AWS_ACCESS_KEY_ID'),
+               'secret' => env('AWS_SECRET_ACCESS_KEY'),
+               'region' => env('AWS_DEFAULT_REGION'),
+               'bucket' => env('AWS_BUCKET'),
+               'url' => env('AWS_URL', "https://s3.ap-south-1.amazonaws.com/"), //s3 url
+               'endpoint' => env('AWS_ENDPOINT', "https://s3.ap-south-1.amazonaws.com/"),
+               'use_path_style_endpoint' => env('AWS_USE_PATH_STYLE_ENDPOINT', false),
           ],
 
           'wasabi' => [
@@ -90,6 +87,7 @@ return [
 
      'links' => [
           public_path('storage') => storage_path('app/public'),
+          public_path('storage/uploads') => storage_path('uploads'),
      ],
 
 ];

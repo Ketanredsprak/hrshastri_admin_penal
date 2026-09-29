@@ -1,0 +1,616 @@
+================================================================================
+HR SHASTRI — PRODUCT MASTER DOCUMENT
+================================================================================
+Purpose:     Marketing website, sales decks, onboarding, product overview
+Product:     Multi-tenant cloud HRMS (Human Resource Management System)
+Platform:    Laravel web application + mobile API (Laravel Passport)
+Audience:    Website copywriters, sales, implementation team, product owner
+Generated:   Based on hrshashtri codebase (menus, routes, roles, modules)
+================================================================================
+
+
+================================================================================
+SECTION 1 — EXECUTIVE SUMMARY (Homepage / Hero)
+================================================================================
+
+HR Shastri is an all-in-one Human Resource Management System for growing
+businesses. It unifies employee records, attendance, leave, Indian payroll,
+recruitment, performance, training, finance tracking, and employee self-service
+in one secure, role-based platform — available on web and mobile.
+
+TAGLINE OPTIONS
+---------------
+• Complete HR, payroll, and people operations — built for Indian businesses.
+• From hire to retire — attendance, leave, payroll, and compliance in one place.
+• Empower HR. Simplify payroll. Engage every employee.
+
+WHO IT IS FOR
+-------------
+• SMEs and mid-size companies with multiple branches and departments
+• HR teams, finance/payroll administrators, and line managers
+• Employees who need self-service (leave, payslip, WFH, claims, support tickets)
+• SaaS operators managing multiple customer companies on one platform (Super Admin)
+
+CORE ADVANTAGES
+---------------
+1. Single source of truth — One employee master linked to attendance, leave,
+   salary slab, documents, and exit.
+
+2. India-ready payroll — Pay slabs, allowances, loans, statutory deductions
+   (EPF, ESI, PT), payslip PDF, wage and ESIC-oriented reports.
+
+3. Flexible access control — Super Admin, Company owner, HR, custom staff roles,
+   and Employee — each sees only what they should.
+
+4. Modern workforce operations — WFH, short leave, gate pass, field visits,
+   expense claims, geofencing and advanced attendance reporting.
+
+5. Hire to retire — Recruitment, onboarding, performance, training, promotion,
+   transfer, resignation, and termination.
+
+6. Actionable reporting — Attendance, leave, timesheet, claims, birthdays,
+   anniversaries, new joinees, late coming, resigned employees, and more.
+
+7. Multi-company SaaS ready — Subscription plans, plan requests, coupons,
+   orders/invoices, platform email templates.
+
+8. Mobile workforce — API for mobile login, attendance punch, and HR workflows
+   on the go.
+
+
+================================================================================
+SECTION 2 — KEY FEATURE PILLARS (Website sections)
+================================================================================
+
+Pillar                    | What it delivers
+--------------------------|--------------------------------------------------
+People & organization     | Branches, departments, designations, profiles,
+                          | documents, HR letters
+Time & attendance         | Punch, bulk attendance, timesheets, week-offs,
+                          | shifts, attendance reports
+Leave & flexibility       | Leave types/balances, approvals, WFH, short leave,
+                          | gate pass
+Payroll & compliance      | Salary components, payroll run, payslips,
+                          | statutory deductions
+Talent                    | Jobs, applications, interviews, onboarding, career page
+Growth                    | Performance indicators, appraisals, goals, training
+Employee experience       | Announcements, holidays, events, policies, grievances
+Finance & assets          | Accounts, expenses, deposits, approved claims, assets
+Insights                  | HR and payroll reports and exports
+Platform                  | Multi-tenant companies, plans, billing, super admin tools
+
+
+================================================================================
+SECTION 3 — FULL FEATURE LIST (Detail + Benefits)
+================================================================================
+
+3.1 DASHBOARD
+-------------
+What:    Role-aware home with HR visibility, calendars, and quick insights.
+Benefit: Leaders and HR see workforce status without opening many modules.
+
+3.2 ORGANIZATION SETUP (HR Setup / System Setup)
+------------------------------------------------
+Features:
+  • Branch, department, designation
+  • Leave types, document types, pay slab (payslip types)
+  • Goal types, training types, award types, termination types
+  • Job category and job stage
+  • Performance types, competencies
+  • Expense, income, and payment types
+  • Contract types, commuting types, city tier
+  • Reimbursement expense categories, grade assignment
+  • Company onboarding wizard for new tenants
+Benefit: Structure matches how your company runs before you add employees.
+
+3.3 STAFF, USERS & ROLES
+-----------------------
+Features:
+  • Create staff user accounts
+  • Assign Spatie roles and granular permissions
+  • Separate navigation for Company, HR, Employee, and custom roles
+Benefit: Delegate HR work without giving full admin access; control who can
+         change salary or approve leave.
+
+3.4 EMPLOYEE MANAGEMENT
+-----------------------
+Features:
+  • Full employee lifecycle — profile, documents, salary linkage
+  • Pay slab assignment, statutory configuration
+  • Manager assignment, web/app login control, exit status
+Benefit: One record drives attendance, leave balance, payroll, and self-service.
+
+3.5 ATTENDANCE & TIME
+---------------------
+Features:
+  • Marked attendance, my attendance (for eligible staff)
+  • Bulk attendance, company week-off configuration
+  • Timesheets and timesheet approval requests
+  • Monthly attendance and advanced monthly (geofencing) reports
+  • Late-coming report
+Benefit: Accurate time data feeds leave logic and payroll; supports office
+         and field/mobile punch patterns.
+
+3.6 LEAVE MANAGEMENT
+--------------------
+Features:
+  • Apply leave, leave request queues, approvals
+  • Leave balances including employee “my leave balance”
+  • Leave types tied to pay slabs
+  • Automated monthly leave credit (scheduled jobs)
+  • Extra/unpaid day handling connected to payroll
+Benefit: Policy-driven leave with less manual tracking; connects to pay run.
+
+3.7 WORK FLEXIBILITY (Custom operations)
+----------------------------------------
+WFH (Work from home):
+  • Apply and approve work-from-home requests
+Short leave:
+  • Early/late coming (partial day) apply and approve
+Gate pass:
+  • Out-of-office gate pass apply and approve
+Benefit: Covers real office patterns beyond full-day leave only.
+
+3.8 VISITS & CLAIMS (Reimbursement)
+-----------------------------------
+Features:
+  • Visit list and claim list for employees
+  • Visit and claim request queues for approvers
+  • Approved claims in finance module
+  • Claim reporting
+Benefit: Travel and expense workflow inside HR instead of email chains.
+
+3.9 PAYROLL (Indian-focused)
+----------------------------
+Features:
+  • Allowance, commission, loan, other payment, deduction options
+  • Statutory deductions (EPF, ESI, PT, and related configuration)
+  • Generate payroll and payslip PDF
+  • My payslip for employees
+  • Loans with installment handling
+  • Salary tied to pay slab
+Benefit: Run monthly pay with components and compliance-oriented reporting
+         (e.g. wage reports, ESIC register reports).
+
+3.10 ANNOUNCEMENTS & CULTURE
+----------------------------
+Features:
+  • Office announcements, holiday calendar, events
+  • Company policy library
+Benefit: Keeps distributed teams aligned on policies and important dates.
+
+3.11 GRIEVANCE DESK
+-------------------
+Features:
+  • Employee complaints and support tickets
+Benefit: Structured employee issues with HR traceability.
+
+3.12 HR MOVEMENTS
+-----------------
+Features:
+  • Promotion and transfer (inter-branch/role changes)
+Benefit: Documented career and location changes for records and reporting.
+
+3.13 PERFORMANCE MANAGEMENT
+---------------------------
+Features:
+  • Indicators, appraisals, goal tracking
+Benefit: Connects daily work to review cycles and development plans.
+
+3.14 TRAINING
+-------------
+Features:
+  • Training list, trainers, training types
+  • Employees see assigned training
+Benefit: Compliance and upskilling tracked alongside HR data.
+
+3.15 RECRUITMENT & ONBOARDING
+-----------------------------
+Features:
+  • Job posts and job creation
+  • Applications, candidate/archive views
+  • Job onboarding, custom application questions
+  • Interview scheduling
+  • Public career page
+  • Employee reference list
+Benefit: End-to-end hiring pipeline without a separate ATS for many SMBs.
+
+3.16 EMPLOYEE EXIT
+------------------
+Features:
+  • Resignation (including resignation request workflows)
+  • Termination
+  • Letter settings: offer, joining, increment, relieving, experience
+    certificate, NOC
+Benefit: Consistent offboarding and document generation.
+
+3.17 FINANCE (Company-level)
+----------------------------
+Features:
+  • Account list, account balance
+  • Payees, payers, deposits, expenses
+  • Transfer balance, approved claims
+Benefit: Basic finance visibility alongside HR claim approvals.
+
+3.18 ASSETS
+-----------
+Features:
+  • Asset register and assignment (permission-based)
+Benefit: Track laptops, IDs, and equipment tied to employees.
+
+3.19 REPORTS & ANALYTICS
+------------------------
+Features:
+  • Income vs expense
+  • Monthly attendance, advanced/geofencing attendance
+  • Leave, account statement, timesheet, claim
+  • ESIC register, wage reports
+  • Birthday list, work anniversary, marriage anniversary
+  • Late coming, new joinee, resigned employee
+Benefit: HR, payroll, and management reporting from live data.
+
+3.20 SETTINGS & NOTIFICATIONS
+-----------------------------
+Features:
+  • Business, system, and company settings
+  • Email notification settings, Google Calendar integration
+  • Leave settings, IP restrictions (where configured)
+  • Multilingual support hooks
+Benefit: Branding, mail, and policy configuration per company.
+
+3.21 STAFF REQUEST HUB (Managers / HR)
+--------------------------------------
+Features:
+  Central approval queues for:
+  • Timesheet, leave, WFH, short leave, gate pass
+  • Resignation, visit, and claim requests
+Benefit: One place to approve daily employee requests.
+
+3.22 PLATFORM / SAAS (Super Admin & Company billing)
+----------------------------------------------------
+Features:
+  • Manage customer companies (tenants)
+  • Subscription plans (user and employee limits)
+  • Plan requests, coupons, orders/invoices
+  • Platform email templates, mobile menu configuration
+Benefit: Operate HR Shastri as a product selling plans to many organizations.
+
+3.23 MOBILE APP & API
+---------------------
+Features:
+  • Laravel Passport API for authentication and attendance punch
+  • GPS/image punch patterns supported in application code
+Benefit: Frontline and remote staff use HR without a desktop.
+
+3.24 AUTOMATION (Background)
+----------------------------
+Features:
+  • Birthday and work anniversary emails
+  • Monthly leave credit, auto leave deduction, auto clock-out (cron)
+Benefit: Less manual HR admin on recurring tasks.
+Note: Production must secure cron and public URLs appropriately.
+
+3.25 PAYMENTS (SaaS subscriptions)
+----------------------------------
+Features:
+  • Multiple payment gateway integrations for plan purchase
+    (Stripe, Razorpay, PayPal, Paytm, and others in codebase)
+Benefit: Monetize subscriptions; enable only gateways you use live.
+
+
+================================================================================
+SECTION 4 — COMPETITIVE ADVANTAGES (Marketing bullets)
+================================================================================
+
+• All-in-one: HR + attendance + leave + payroll + recruitment + performance
+• Built for India: Slabs, statutory deductions, wage/ESIC style reports,
+  city tier, grade, visit and claim patterns
+• Granular permissions: Hundreds of permission flags, not just admin vs user
+• Employee self-service: Payslip, leave balance, WFH, gate pass, claims, policies
+• Multi-branch: Branches, week-offs, branch-aware holiday patterns
+• Scalable tenancy: Many companies on one installation with plan caps
+• Extensible roles: Custom roles for Payroll Manager, Recruiter, Department Head, etc.
+
+
+================================================================================
+SECTION 5 — SUGGESTED WEBSITE PAGE OUTLINE
+================================================================================
+
+1. Home — Hero, three pillars (HR / Payroll / Employee app), demo CTA
+2. Features — Module summaries with icons (Section 3)
+3. Payroll & compliance — Deep dive on payroll and statutory reports
+4. For HR / For employees / For leadership — Role benefits (Section 6)
+5. Pricing — Plans (max users, max employees, billing duration)
+6. Mobile app — Punch, leave, payslip
+7. Security & multi-tenant — Login, permissions, company data isolation
+8. Contact / Book demo
+
+
+================================================================================
+SECTION 6 — USER ROLES: WHO CAN DO WHAT
+================================================================================
+
+The system uses TWO layers of access control:
+
+  (1) users.type — super admin | company | hr (HR) | employee
+  (2) Spatie permissions — e.g. Manage Leave, Manage Pay Slip, Manage Employee
+
+In production, DATABASE permissions are the source of truth. Companies can
+create custom staff users with custom roles (Staff → User / Role).
+
+--------------------------------------------------------------------------------
+6.1 SUPER ADMIN (Platform owner)
+--------------------------------------------------------------------------------
+
+Typical menu / scope:
+  • Dashboard
+  • Company list (all tenant organizations)
+  • Mobile menu configuration
+  • Plans (subscription plans and limits)
+  • Plan requests (approve/reject upgrades)
+  • Coupons (if permitted)
+  • Orders
+  • Platform roles
+  • Email templates (system-wide)
+  • Impersonate / login as company or user (support feature)
+
+Can do:
+  • Onboard and manage customer companies
+  • Define pricing and plan caps (users/employees)
+  • Manage platform messaging templates and billing orders
+  • Does NOT run day-to-day HR inside a company unless impersonating
+
+Best for: Product owner, SaaS operator, platform support lead.
+
+--------------------------------------------------------------------------------
+6.2 COMPANY (Tenant admin / Business owner)
+--------------------------------------------------------------------------------
+
+Identity:
+  • type = company
+  • Owns tenant; company data scoped under this account
+
+Typical access (full company role — as seeded; live may differ):
+  • All major HR modules when permissions granted
+  • System setup: business, system, company settings
+  • Email notifications, Google Calendar, leave settings
+  • Full HR setup masters and letter settings
+  • Subscription plan setup and invoice/order for their tenant
+  • Organization-wide reports (Manage Report)
+  • Finance modules when permitted
+
+Special behavior:
+  • Company wizard until branch/profile is complete
+  • Subscription checks may restrict access without active plan
+
+Can do:
+  • Configure the entire organization
+  • Create HR users and custom roles
+  • Approve request queues
+  • Run payroll generation (if permitted)
+  • Full reporting and company settings
+
+Best for: Founder, HR head, organization IT/admin owner.
+
+--------------------------------------------------------------------------------
+6.3 HR USER (type = hr / HR)
+--------------------------------------------------------------------------------
+
+Identity:
+  • Staff user under a company (created_by = company id)
+  • Usually assigned HR Spatie role with large permission set
+
+Typical access (seeded HR role — live may differ):
+  • Manage users (often), employees (full CRUD)
+  • Payroll: salary components, payslip generation, allowance/loan/deduction
+  • Attendance, leave, timesheets
+  • Recruitment: jobs, applications, interviews, onboarding, career
+  • Performance: indicators, appraisals, goals
+  • Training: trainers, training programs
+  • Promotion, transfer, resignation, termination
+  • Complaints, tickets, announcements, holidays, events, policies
+  • Assets (if permitted)
+  • Org masters: branch, department, designation, document types, etc.
+
+Usually cannot (unless extra permissions added):
+  • Super Admin company/plan management across tenants
+  • Some company-only subscription screens
+  • Full system settings (depends on assigned permissions)
+
+Can do:
+  • Run daily HR operations for the company
+  • Process leave, attendance, payroll, recruitment without owning the SaaS platform
+
+Best for: HR manager, HR executive, payroll officer (permissions adjustable).
+
+--------------------------------------------------------------------------------
+6.4 CUSTOM STAFF / “USER” (Managers and specialists)
+--------------------------------------------------------------------------------
+
+Identity:
+  • Users under Staff → User with custom Spatie roles
+  • Examples: Department Manager, Recruiter only, Payroll viewer
+
+Access:
+  • ONLY permissions assigned to that role
+
+Examples:
+  • Manage Leave Request — approve team leave only
+  • Manage Attendance — mark or view team attendance
+  • Manage Job Application — recruitment only
+  • Manage Report — analytics without employee delete or settings
+
+Marketing message:
+  “Give managers exactly the access they need — nothing more.”
+
+--------------------------------------------------------------------------------
+6.5 EMPLOYEE (type = employee)
+--------------------------------------------------------------------------------
+
+Identity:
+  • Linked to employees table row
+  • Subject to web_login, app_login, employee_exit, login_status
+
+Typical menu:
+  • Dashboard
+  • Employee details (own profile)
+  • My payslip
+  • Attendance & leaves: timesheet, leave, my leave balance
+  • Apply WFH, short leave, gate pass
+  • My visit and my claim
+  • Announcements, holidays, events (per permissions)
+  • Company policy (view)
+  • Complaints and tickets (if permitted)
+  • Promotion / transfer (view if permitted)
+  • Training list
+  • Resignation flows where allowed
+
+Usually cannot:
+  • View other employees’ salary (unless misconfigured)
+  • Generate payroll or change company settings
+  • Manage staff users or full HR reports
+
+Best for: Every employee — self-service and transparency.
+
+--------------------------------------------------------------------------------
+6.6 ROLE COMPARISON TABLE
+--------------------------------------------------------------------------------
+
+Capability                    | Super | Company | HR | Custom | Employee
+                              | Admin |         |    | staff  |
+------------------------------|-------|---------|----|---------|---------
+Manage all companies / plans  |  Yes  |   No    | No |   No    |   No
+Company & HR setup            |  No*  |  Yes    |Part|  Rare   |   No
+Employee master (all staff)   |  No*  |  Yes    |Yes | If perm |  Own
+Approve leave/WFH/claims      |  No*  |  Yes    |Yes | If perm | Apply
+Generate payroll              |  No*  |  Yes    |Yes | If perm |   No
+View own payslip              |  No*  | If perm |If  | If perm |  Yes
+Recruitment pipeline          |  No*  |  Yes    |Yes | If perm | Train
+Org-wide reports              | Plat. |  Yes    |Oft.| If perm |   No
+Mobile punch / app            |  No   | If link |If  | Varies  |  Yes
+
+* Super Admin acts inside a tenant only when impersonating or via a staff account there.
+
+
+================================================================================
+SECTION 7 — PERMISSION MODEL (For technical buyers)
+================================================================================
+
+• Permissions use action names such as:
+  Manage Employee, Create Pay Slip, Manage Leave Request,
+  Manage Gate Pass Request, Approved Claims, Manage Company Settings, etc.
+
+• Navigation hides unauthorized menu items (@can / Gate::check).
+
+• Company administrators define custom roles and assign them to staff users.
+
+• Implementation note: Always align marketing claims with permissions enabled
+  in the customer’s live database.
+
+
+================================================================================
+SECTION 8 — SUBSCRIPTION & LIMITS (Pricing page)
+================================================================================
+
+Plan attributes (from application model):
+  • name, price, duration (month / year / unlimited)
+  • max_users, max_employees
+  • description
+
+Eligibility:
+  • Active employee count and user count checked against plan caps
+
+Marketing copy:
+  “Choose a plan that scales with your headcount — upgrade when you grow.”
+
+
+================================================================================
+SECTION 9 — INTERNAL NOTES (Optional — omit from public website)
+================================================================================
+
+• Product includes HRMGo SaaS heritage; some modules (Zoom, Chatify, awards/
+  travel) may be disabled in UI — list on website only what you enable in prod.
+
+• Codebase documents dual payroll calculation paths; unify before claiming
+  a single payroll engine in marketing if not yet merged.
+
+• Live database permissions may differ from seed defaults — document per customer.
+
+
+================================================================================
+SECTION 10 — READY-TO-PASTE WEBSITE COPY
+================================================================================
+
+META DESCRIPTION (~155 characters):
+HR Shastri is a cloud HRMS for Indian businesses: employee management,
+attendance, leave, payroll, statutory reports, recruitment, and mobile
+self-service.
+
+ELEVATOR PITCH (~50 words):
+HR Shastri replaces spreadsheets and scattered tools with one HR platform.
+Manage employees, track attendance and leave, run payroll with Indian statutory
+components, and give staff a mobile-friendly self-service experience — while
+you control access by role from HR executive to company owner.
+
+CALL-TO-ACTION EXAMPLES:
+  • Start free trial
+  • Book a demo
+  • See payroll features
+  • Download mobile app
+
+
+================================================================================
+SECTION 11 — MODULE LIST (Quick reference for sales)
+================================================================================
+
+Dashboard
+Staff (Users, Roles)
+Employees
+Payroll (Allowance, Commission, Loan, Other Payment, Deduction, Statutory,
+         Generate Payroll, My Payslip)
+Attendance & Leaves (Timesheet, Leave, My Leave Balance, WFH, Short Leave,
+                   Gate Pass, Attendance, Bulk Attendance, Week-off)
+My Visit & Claim
+Announcement (Office Announcement, Holidays, Event)
+Company Policy
+Grievance Desk (Complaints, Ticket)
+Promotion
+Transfer
+Performance (Indicator, Appraisal, Goal Tracking)
+Training (Training List, Trainer)
+Recruitment (Jobs, Job Create, Job Application, Archive, Job On-Boarding,
+             Custom Question, Interview Schedule, Career, Reference List)
+Finance (Account List, Account Balance, Payees, Payers, Deposit, Expense,
+         Transfer Balance, Approved Claims)
+Assets
+Employee Exit (Resignation, Termination)
+Staff Request (Timesheet, Leave, WFH, Short Leave, Gate Pass, Resignation,
+               Visit, Claim requests)
+Report (Income Vs Expense, Monthly Attendance, Advance Monthly Attendance,
+        Leave, Account Statement, Timesheet, Claim, ESIC Register, Wage Reports,
+        Birthday List, Work Anniversary, Marriage Anniversary, Late Coming,
+        New Joinee, Resigned Employee)
+Settings / System Setup (Business, System, Company, Email Notification,
+                         Google Calendar, Leave setting, HR Setup masters,
+                         Letter settings, Subscription Plan, Invoice)
+
+Super Admin only:
+  Company, Mobile Menu, Plan, Plan Request, Coupon, Order, Role, Email Templates
+
+
+================================================================================
+SECTION 12 — DOCUMENT METADATA
+================================================================================
+
+File name:     HR-SHASTRI-PRODUCT-MASTER.txt
+Location:      docs/HR-SHASTRI-PRODUCT-MASTER.txt (project repository)
+Related audit: docs/HR-SHASTRI-TAKEOVER-AUDIT.md (technical deep dive)
+Source refs:   resources/views/partial/Admin/companyMenu.blade.php
+               resources/views/partial/Admin/employeeMenu.blade.php
+               resources/views/partial/Admin/superAdminMenu.blade.php
+               routes/web.php
+               database/seeders/UsersTableSeeder.php
+
+================================================================================
+END OF DOCUMENT
+================================================================================

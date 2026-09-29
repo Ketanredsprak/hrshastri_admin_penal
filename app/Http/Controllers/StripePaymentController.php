@@ -106,12 +106,20 @@ class StripePaymentController extends Controller
         $admin_payment_setting = Utility::getAdminPaymentSetting();
         if(isset($admin_payment_setting['is_stripe_enabled']) && $admin_payment_setting['is_stripe_enabled'] == 'on' && !empty($admin_payment_setting['stripe_key']) && !empty($admin_payment_setting['stripe_secret']))
         {
-            if(\Auth::user()->can('Manage Company Settings'))
+            if(\Auth::user()->can('Manage Company Settings') || \Auth::user()->type == 'company')
             {
                 $plan_id = \Illuminate\Support\Facades\Crypt::decrypt($code);
                 $plan    = Plan::find($plan_id);
                 if($plan)
                 {
+                    if(!\Auth::user()->canSubscribePlan($plan))
+                    {
+                        return redirect()->route('plans.index')->with('error', $plan->getIneligibilityReason(\Auth::user()) ?? __('Your current active employee/user count exceeds this plan\'s capacity.'));
+                    }
+                    if(\Auth::user()->isPlanDowngrade($plan))
+                    {
+                        return redirect()->route('plans.index')->with('error', __('Downgrade is not allowed. You can renew your current plan or upgrade to a higher plan.'));
+                    }
                     return view('stripe', compact('plan','admin_payment_setting'));
                 }
                 else
@@ -130,11 +138,79 @@ class StripePaymentController extends Controller
         }
     }
 
+    /**
+     * Local/dev helper: renew or upgrade plan without charging payment.
+     */
+    public function devRenewWithoutPay(Request $request)
+    {
+        if (!(config('app.env') === 'local' || config('app.debug'))) {
+            abort(404);
+        }
+
+        if (!(\Auth::user()->type == 'company' || \Auth::user()->can('Manage Company Settings'))) {
+            return redirect()->back()->with('error', __('Permission denied.'));
+        }
+
+        try {
+            $planId = Crypt::decrypt($request->plan_id);
+        } catch (\Throwable $e) {
+            return redirect()->route('plans.index')->with('error', __('Invalid plan.'));
+        }
+
+        $plan = Plan::find($planId);
+        $user = \Auth::user();
+
+        if (!$plan) {
+            return redirect()->route('plans.index')->with('error', __('Plan is deleted.'));
+        }
+
+        if (!$user->canSubscribePlan($plan)) {
+            return redirect()->route('plans.index')->with('error', $plan->getIneligibilityReason($user) ?? __('Your current active employee/user count exceeds this plan\'s capacity.'));
+        }
+
+        if ($user->isPlanDowngrade($plan)) {
+            return redirect()->route('plans.index')->with('error', __('Downgrade is not allowed. You can renew your current plan or upgrade to a higher plan.'));
+        }
+
+        $oldExpire = $user->plan_expire_date;
+        $assignPlan = $user->assignPlan($plan->id);
+
+        if (empty($assignPlan['is_success'])) {
+            return redirect()->route('plans.index')->with('error', __($assignPlan['error'] ?? 'Plan activation failed.'));
+        }
+
+        $orderID = strtoupper(str_replace('.', '', uniqid('', true)));
+        Order::create([
+            'order_id' => $orderID,
+            'name' => $user->name,
+            'email' => $user->email,
+            'card_number' => null,
+            'card_exp_month' => null,
+            'card_exp_year' => null,
+            'plan_name' => $plan->name,
+            'plan_id' => $plan->id,
+            'price' => 0,
+            'price_currency' => !empty(env('CURRENCY_CODE')) ? env('CURRENCY_CODE') : 'INR',
+            'txn_id' => 'DEV-FREE-' . $orderID,
+            'payment_type' => __('DEV Renew Without Pay'),
+            'payment_status' => 'succeeded',
+            'receipt' => null,
+            'user_id' => $user->id,
+        ]);
+
+        $user->refresh();
+        $msg = __('Dev renew applied without payment.')
+            . ' ' . __('Previous expiry:') . ' ' . ($oldExpire ?: '-')
+            . ' → ' . __('New expiry:') . ' ' . ($user->plan_expire_date ?: '-');
+
+        return redirect()->route('plans.index')->with('success', $msg);
+    }
+
     public function stripePost(Request $request)
     {
         $admin_payment_setting = Utility::getAdminPaymentSetting();
 
-        if(\Auth::user()->can('Manage Company Settings') && (isset($admin_payment_setting['is_stripe_enabled']) && $admin_payment_setting['is_stripe_enabled']== 'on' && !empty($admin_payment_setting['stripe_key']) && !empty($admin_payment_setting['stripe_secret'])))
+        if((\Auth::user()->can('Manage Company Settings') || \Auth::user()->type == 'company') && (isset($admin_payment_setting['is_stripe_enabled']) && $admin_payment_setting['is_stripe_enabled']== 'on' && !empty($admin_payment_setting['stripe_key']) && !empty($admin_payment_setting['stripe_secret'])))
         {
             $objUser = \Auth::user();
             $planID  = \Illuminate\Support\Facades\Crypt::decrypt($request->plan_id);
@@ -142,6 +218,14 @@ class StripePaymentController extends Controller
 
             if($plan)
             {
+                if(!$objUser->canSubscribePlan($plan))
+                {
+                    return redirect()->route('plans.index')->with('error', $plan->getIneligibilityReason($objUser) ?? __('Your current active employee/user count exceeds this plan\'s capacity.'));
+                }
+                if($objUser->isPlanDowngrade($plan))
+                {
+                    return redirect()->route('plans.index')->with('error', __('Downgrade is not allowed. You can renew your current plan or upgrade to a higher plan.'));
+                }
                 try
                 {
                     $price = $plan->price;

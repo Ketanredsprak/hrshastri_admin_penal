@@ -22,11 +22,27 @@ class PlanController extends Controller
 {
     public function index()
     {
-        if (Auth::user()->can('Manage Plan')) {
+        // Companies must always be able to view plans (renew/activate), even without "Manage Plan"
+        // and even when subscription is expired (Isactive/CheckPlan redirects them here).
+        $user = Auth::user();
+        if ($user->can('Manage Plan') || $user->type == 'company') {
             $plans                 = Plan::get();
             $admin_payment_setting = Utility::getAdminPaymentSetting();
 
-            return view('plan.index', compact('plans', 'admin_payment_setting'));
+            $activeEmployees = 0;
+            $activeUsers     = 0;
+            $suggestedPlan   = null;
+
+            if ($user->type == 'company' || $user->type != 'super admin') {
+                $companyUser     = ($user->type == 'company') ? $user : User::find($user->creatorId());
+                if ($companyUser) {
+                    $activeEmployees = $companyUser->countEmployees();
+                    $activeUsers     = $companyUser->countUsers();
+                    $suggestedPlan   = $companyUser->getSuggestedPlan();
+                }
+            }
+
+            return view('plan.index', compact('plans', 'admin_payment_setting', 'activeEmployees', 'activeUsers', 'suggestedPlan'));
         } else {
             return redirect()->back()->with('error', __('Permission denied.'));
         }
@@ -372,7 +388,8 @@ class PlanController extends Controller
 
     public function userPlan(Request $request)
     {
-        if (Auth::user()->can('Buy Plan')) {
+        // Company accounts must be able to activate free plans even without "Buy Plan" permission
+        if (Auth::user()->can('Buy Plan') || Auth::user()->type == 'company') {
             try {
                 DB::beginTransaction();
                 $objUser = Auth::user();

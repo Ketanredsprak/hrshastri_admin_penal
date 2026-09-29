@@ -836,6 +836,31 @@
                                                 for="auto_leave_deduction">{{ __('Auto Leave Deduction') }}</label>
                                         </div>
                                     </div>
+                                    <div class="form-group col-md-4">
+                                        <div class="custom-control custom-switch">
+                                            <input type="checkbox" class=" form-check-input" data-toggle="switchbutton"
+                                                data-onstyle="primary" name="employee_audit_log_enabled"
+                                                id="employee_audit_log_enabled"
+                                                {{ ($settings['employee_audit_log_enabled'] ?? 'on') == 'on' ? 'checked="checked"' : '' }}>
+                                            <label class=" col-form-label p-0"
+                                                for="employee_audit_log_enabled">{{ __('Employee Data Change Audit Log') }}</label>
+                                        </div>
+                                    </div>
+                                    <div class="form-group col-md-4">
+                                        <div class="custom-control custom-switch">
+                                            <input type="checkbox" class="form-check-input" data-toggle="switchbutton"
+                                                data-onstyle="primary" name="attendance_punch_image_cleanup_enabled"
+                                                id="attendance_punch_image_cleanup_enabled"
+                                                {{ ($settings['attendance_punch_image_cleanup_enabled'] ?? 'off') == 'on' ? 'checked="checked"' : '' }}>
+                                            <label class=" col-form-label p-0"
+                                                for="attendance_punch_image_cleanup_enabled">{{ __('Auto-remove old attendance punch images') }}</label>
+                                        </div>
+                                    </div>
+                                    <div class="form-group col-md-4" id="attendance_punch_image_retention_wrap">
+                                        {{ Form::label('attendance_punch_image_retention_days', __('Keep punch images for (days)'), ['class' => 'col-form-label']) }}
+                                        {{ Form::number('attendance_punch_image_retention_days', $settings['attendance_punch_image_retention_days'] ?? 3, ['class' => 'form-control', 'min' => 1, 'max' => 365, 'step' => 1]) }}
+                                        <small class="text-muted">{{ __('Attendance records stay. Only clock-in/out photos older than this many days are removed (example: today 22, days 10 → remove 12 and older).') }}</small>
+                                    </div>
                                     <div class="col-12">
                                         <h6 class=" ">
                                             <i data-feather="layout" class="me-2"></i>{{ __('Office Week Off') }}

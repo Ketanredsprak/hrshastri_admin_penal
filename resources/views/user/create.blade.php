@@ -37,16 +37,53 @@
                 {!! Form::password('password', ['class' => 'form-control','placeholder'=>'Enter password','id' => 'password']) !!}
             </div>
         </div>
-        <div class="form-group">
+
+        <div class="form-group col-12">
+            <label class="form-label d-block">{{ __('Billing Mode') }} <span class="text-danger">*</span></label>
+            <div class="d-flex flex-wrap gap-3">
+                <label class="form-check border rounded p-3 flex-fill mb-0" style="cursor:pointer;min-width:220px;">
+                    <input class="form-check-input me-2" type="radio" name="billing_mode" id="billing_mode_global" value="global" checked>
+                    <span class="fw-semibold">{{ __('Global Subscription Plan') }}</span>
+                    <div class="small text-muted mt-1">{{ __('Use Basic / Monthly / Yearly plans. Subscription lock applies on expiry. No CRM employee invoice.') }}</div>
+                </label>
+                <label class="form-check border rounded p-3 flex-fill mb-0" style="cursor:pointer;min-width:220px;">
+                    <input class="form-check-input me-2" type="radio" name="billing_mode" id="billing_mode_custom" value="custom">
+                    <span class="fw-semibold">{{ __('Custom Employee / User Plan') }}</span>
+                    <div class="small text-muted mt-1">{{ __('Auto-selects Unlimited plan (#9). Set per-company employee & user price. Manual CRM invoices only.') }}</div>
+                </label>
+            </div>
+        </div>
+
+        <div class="form-group" id="global_plan_wrap">
             {{ Form::label('plan_id', __('Plans'), ['class' => 'form-label']) }} <span class="text-danger">*</span>
             <div class="form-icon-user">
                 <select name="plan_id" class="form-control select2" id="plan_id">
                     <option value="">{{ __('Please select as plan') }}</option>
                     @foreach ($plans as $key => $plan)
-                    <option value="{{ $key }}">{{ $plan }}</option>
+                        @if ((int) $key !== 9)
+                            <option value="{{ $key }}">{{ $plan }}</option>
+                        @endif
                     @endforeach
                 </select>
                 <span class="dropdown-wrapper" aria-hidden="true"></span>
+            </div>
+        </div>
+
+        <div id="custom_plan_wrap" class="d-none">
+            <input type="hidden" name="custom_plan_id" value="9">
+            <div class="alert alert-light border small mb-3">
+                {{ __('Plan') }}: <strong>{{ $plans[9] ?? __('Unlimited Plan with monthly invoice') }} (#9)</strong>
+                — {{ __('No subscription lock. Invoice manually from Company Invoices.') }}
+            </div>
+            <div class="row">
+                <div class="form-group col-md-6">
+                    {{ Form::label('price_per_employee', __('Employee Price'), ['class' => 'form-label']) }} <span class="text-danger">*</span>
+                    {!! Form::number('price_per_employee', null, ['class' => 'form-control', 'step' => '0.01', 'min' => '0', 'placeholder' => 'e.g. 100', 'id' => 'price_per_employee']) !!}
+                </div>
+                <div class="form-group col-md-6">
+                    {{ Form::label('price_per_user', __('User Price'), ['class' => 'form-label']) }} <span class="text-danger">*</span>
+                    {!! Form::number('price_per_user', null, ['class' => 'form-control', 'step' => '0.01', 'min' => '0', 'placeholder' => 'e.g. 150', 'id' => 'price_per_user']) !!}
+                </div>
             </div>
         </div>
         @endif
@@ -81,3 +118,31 @@
     <input type="submit" value="{{ __('Create') }}" class="btn  btn-primary">
 </div>
 {!! Form::close() !!}
+
+@if(\Auth::user()->type == 'super admin')
+<script>
+(function () {
+    function toggleBillingMode() {
+        var mode = document.querySelector('input[name="billing_mode"]:checked');
+        var isCustom = mode && mode.value === 'custom';
+        var globalWrap = document.getElementById('global_plan_wrap');
+        var customWrap = document.getElementById('custom_plan_wrap');
+        var planSelect = document.getElementById('plan_id');
+        if (!globalWrap || !customWrap) return;
+        if (isCustom) {
+            globalWrap.classList.add('d-none');
+            customWrap.classList.remove('d-none');
+            if (planSelect) planSelect.removeAttribute('required');
+        } else {
+            globalWrap.classList.remove('d-none');
+            customWrap.classList.add('d-none');
+            if (planSelect) planSelect.setAttribute('required', 'required');
+        }
+    }
+    document.querySelectorAll('input[name="billing_mode"]').forEach(function (el) {
+        el.addEventListener('change', toggleBillingMode);
+    });
+    toggleBillingMode();
+})();
+</script>
+@endif

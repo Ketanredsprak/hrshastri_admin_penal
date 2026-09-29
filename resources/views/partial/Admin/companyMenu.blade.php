@@ -6,6 +6,51 @@
     $profile = \App\Models\Utility::get_file('uploads/avatar/');
     $currantLang = $users->currentLanguage();
     $emailTemplate = App\Models\EmailTemplate::first();
+
+    $navSegment = Request::segment(1);
+    $navOpen = function (array $segments) use ($navSegment) {
+        return in_array($navSegment, $segments, true) ? 'dash-trigger' : '';
+    };
+    $payrollNavOpen = $navOpen([
+        'setsalary', 'allowanceoption', 'commission_option', 'loans', 'otherpaymentotion',
+        'deductionoption', 'statutory-deductions', 'payslip', 'my-payslip',
+    ]);
+    $attendanceNavOpen = $navOpen([
+        'timesheet', 'leave', 'applywfm', 'earlyandlate_leave', 'getpass',
+        'attendanceemployee', 'company-weekoff',
+    ]);
+    $attendanceSubNavOpen = $navOpen(['attendanceemployee', 'company-weekoff']);
+    $visitClaimNavOpen = $navOpen(['my_visit', 'my_claim']);
+    $announcementNavOpen = $navOpen(['announcement', 'holiday', 'event']);
+    $grievanceNavOpen = $navOpen(['complaint', 'ticket']);
+    $performanceNavOpen = $navOpen(['indicator', 'appraisal', 'goaltracking']);
+    $recruitmentNavOpen = $navOpen([
+        'job', 'job-application', 'candidates-job-applications', 'custom-question', 'interview-schedule',
+    ]);
+    $financeNavOpen = $navOpen([
+        'accountlist', 'accountbalance', 'payees', 'payer', 'deposit', 'expense', 'transferbalance', 'approved-claims',
+    ]);
+    $employeeExitNavOpen = $navOpen(['resignation', 'termination']);
+    $staffRequestNavOpen = $navOpen([
+        'timesheet_request', 'leaverequest', 'applywfm_request', 'earlyandlate_leave_request',
+        'getpass_request', 'resignation_request', 'my_visit_request', 'my_claim_request',
+    ]);
+    $reportNavOpen = $navOpen(['report', 'employee-attendance-geofencing-report', 'esic_register_reports', 'wage_reports_index', 'late-coming-report', 'new-joinee-report', 'resigned-employee-report']);
+    $systemSetupNavOpen = $navOpen([
+        'settings', 'branch', 'department', 'designation', 'leavetype', 'document', 'paysliptype',
+        'goaltype', 'trainingtype', 'awardtype', 'loanoption', 'terminationtype', 'job-category', 'job-stage',
+        'performanceType', 'competencies', 'expensetype', 'incometype', 'paymenttype', 'contract_type',
+        'commuting_type', 'city_tier', 'category_type', 'visit_type', 'grade_type', 'letter_setting', 'plans', 'order',
+    ]);
+    $hrSetupNavOpen = $navOpen([
+        'branch', 'department', 'designation', 'leavetype', 'document', 'paysliptype', 'goaltype', 'trainingtype',
+        'awardtype', 'loanoption', 'terminationtype', 'job-category', 'job-stage', 'performanceType', 'competencies',
+        'expensetype', 'incometype', 'paymenttype', 'contract_type', 'commuting_type', 'city_tier', 'category_type',
+        'visit_type', 'grade_type',
+    ]);
+    $staffNavOpen = $navOpen(['user', 'roles']);
+    $settingsSubNavOpen = $navOpen(['settings']);
+    $letterNavOpen = $navOpen(['letter_setting']);
 @endphp
 
 
@@ -51,7 +96,7 @@
             <!-- user-->
             @if (Gate::check('Manage User') || Gate::check('Manage Role'))
 
-                <li class="dash-item dash-hasmenu">
+                <li class="dash-item dash-hasmenu {{ $staffNavOpen }}">
                     <a href="#!" class="dash-link"><span class="dash-micon"><i class="ti ti-users"></i></span><span
                             class="dash-mtext">{{ __('Staff') }}</span><span class="dash-arrow"><i
                                 data-feather="chevron-right"></i></span></a>
@@ -80,12 +125,19 @@
                 </li>
             @endif
 
+            @if ((Gate::check('View Employee Data Log') || \Auth::user()->type == 'company') && \Auth::user()->type != 'employee')
+                <li class="dash-item {{ Request::segment(1) == 'employee-data-log' ? 'active' : '' }}">
+                    <a href="{{ route('employee-data-log.index') }}" class="dash-link"><span class="dash-micon"><i
+                                class="ti ti-history"></i></span><span
+                            class="dash-mtext">{{ __('Employee Data Log') }}</span></a>
+                </li>
+            @endif
+
             <!-- employee List -->
 
             <!-- payroll-->
             @if (Gate::check('Manage Set Salary') || Gate::check('Manage Pay Slip'))
-                <li
-                    class="dash-item dash-hasmenu  {{ Request::segment(1) == 'setsalary' ? 'dash-trigger active' : '' }}">
+                <li class="dash-item dash-hasmenu {{ $payrollNavOpen }}">
                     <a href="#!" class="dash-link">
                         <span class="dash-micon">
                             <i class="ti ti-receipt">
@@ -111,7 +163,7 @@
                                 href="{{ route('commission_option.index') }}">{{ __('Commission ') }}</a>
                         </li>
 
-                        <li class="dash-item {{ Request::segment(1) == 'loans.index' ? 'active' : '-' }}">
+                        <li class="dash-item {{ Request::segment(1) == 'loans' ? 'active' : '-' }}">
                             <a class="dash-link" href="{{ route('loans') }}">{{ __('Loan ') }}</a>
                         </li>
 
@@ -126,19 +178,17 @@
                                 href="{{ route('deductionoption.index') }}">{{ __('Deduction ') }}</a>
                         </li>
 
-                        <li class="dash-item">
+                        <li class="dash-item {{ Request::segment(1) == 'statutory-deductions' ? 'active' : '-' }}">
                             <a class="dash-link"
                                 href="{{ route('statutory-deductions') }}">{{ __('Statutory Deductions') }}</a>
                         </li>
 
-                        <li class="dash-item">
+                        <li class="dash-item {{ Request::segment(1) == 'payslip' ? 'active' : '-' }}">
                             <a class="dash-link" href="{{ route('payslip.index') }}">{{ __('Generate Payroll') }}</a>
                         </li>
 
                         @if (Gate::check('My Pay Slip'))
-                            <li
-                                class="dash-item dash-hasmenu {{ Request::segment(1) == 'setsalary' ? 'dash-trigger active' : '' }}">
-
+                            <li class="dash-item {{ Request::segment(1) == 'my-payslip' ? 'active' : '-' }}">
                                 <a class="dash-link" href="{{ route('my-payslip.index') }}">{{ __('My Payslip') }}</a>
                             </li>
                         @endif
@@ -155,7 +205,7 @@
                     Gate::check('Manage Gate Pass') ||
                     Gate::check('Manage Apply WFH') ||
                     Gate::check('Manage Early & Late Comming'))
-                <li class="dash-item dash-hasmenu">
+                <li class="dash-item dash-hasmenu {{ $attendanceNavOpen }}">
                     <a href="#!" class="dash-link"><span class="dash-micon"><i class="ti ti-clock"></i></span><span
                             class="dash-mtext">{{ __('Attendance & Leaves') }}</span><span class="dash-arrow"><i
                                 data-feather="chevron-right"></i></span></a>
@@ -178,7 +228,7 @@
                                 <a class="dash-link"
                                     href="{{ route('leave.my_leave_balance') }}">{{ __('My Leave Balance') }}</a>
                             </li>
-                        @endcan
+                        @endif
 
 
                         @if (\Auth::user()->type == 'employee')
@@ -214,7 +264,7 @@
                         @endcan
 
                         @can('Manage Attendance')
-                            <li class="dash-item dash-hasmenu">
+                            <li class="dash-item dash-hasmenu {{ $attendanceSubNavOpen }}">
                                 <a href="#!" class="dash-link"><span
                                         class="dash-mtext">{{ __('Attendance') }}</span><span class="dash-arrow"><i
                                             data-feather="chevron-right"></i></span></a>
@@ -252,8 +302,7 @@
 
         <!-- My Visit & Claim-->
         @if (Gate::check('Manage Visit Request') || Gate::check('Manage Claim Request'))
-            <li
-                class="dash-item dash-hasmenu  {{ Request::segment(1) == 'setsalary' ? 'dash-trigger active' : '' }}">
+            <li class="dash-item dash-hasmenu {{ $visitClaimNavOpen }}">
                 <a href="#!" class="dash-link">
                     <span class="dash-micon"><i class="ti ti-file"></i></span>
                     <span class="dash-mtext">{{ __('My Visit & Claim') }}</span>
@@ -277,7 +326,7 @@
 
 
         @if (Gate::check('Manage Holiday') || Gate::check('Manage Announcement') || Gate::check('Manage Event'))
-            <li class="dash-item dash-hasmenu">
+            <li class="dash-item dash-hasmenu {{ $announcementNavOpen }}">
                 <a href="#!" class="dash-link"><span class="dash-micon"><i
                             class="ti ti-book"></i></span><span
                         class="dash-mtext">{{ __('Announcement') }}</span><span class="dash-arrow"><i
@@ -322,7 +371,7 @@
 
         <!-- Grievance Desk-->
         @if (Gate::check('Manage Complaint') || Gate::check('Manage Ticket'))
-            <li class="dash-item dash-hasmenu">
+            <li class="dash-item dash-hasmenu {{ $grievanceNavOpen }}">
                 <a href="#!" class="dash-link"><span class="dash-micon"><i
                             class="ti ti-border-all"></i></span><span
                         class="dash-mtext">{{ __('Grievance Desk') }}</span><span class="dash-arrow"><i
@@ -372,7 +421,7 @@
 
         <!-- performance-->
         @if (Gate::check('Manage Indicator') || Gate::check('Manage Appraisal') || Gate::check('Manage Goal Tracking'))
-            <li class="dash-item dash-hasmenu">
+            <li class="dash-item dash-hasmenu {{ $performanceNavOpen }}">
                 <a href="#!" class="dash-link"><span class="dash-micon"><i
                             class="ti ti-3d-cube-sphere"></i></span><span
                         class="dash-mtext">{{ __('Performance') }}</span><span class="dash-arrow"><i
@@ -442,7 +491,7 @@
                 Gate::check('Manage Interview Schedule') ||
                 Gate::check('Manage Career'))
             <li
-                class="dash-item dash-hasmenu  {{ Request::segment(1) == 'job' || Request::segment(1) == 'job-application' ? 'dash-trigger active' : '' }} ">
+                class="dash-item dash-hasmenu {{ $recruitmentNavOpen }}">
                 <a href="#!" class="dash-link"><span class="dash-micon"><i
                             class="ti ti-users"></i></span><span
                         class="dash-mtext">{{ __('Recruitment') }}</span><span class="dash-arrow"><i
@@ -517,7 +566,7 @@
                 Gate::check('Manage Deposit') ||
                 Gate::check('Manage Expense') ||
                 Gate::check('Manage Transfer Balance'))
-            <li class="dash-item dash-hasmenu">
+            <li class="dash-item dash-hasmenu {{ $financeNavOpen }}">
                 <a href="#!" class="dash-link"><span class="dash-micon"><i
                             class="ti ti-wallet"></i></span><span
                         class="dash-mtext">{{ __('Finance') }}</span><span class="dash-arrow"><i
@@ -592,7 +641,7 @@
 
         <!-- Employee Exit-->
         @if (Gate::check('Manage Resignation') || Gate::check('Manage Termination'))
-            <li class="dash-item dash-hasmenu">
+            <li class="dash-item dash-hasmenu {{ $employeeExitNavOpen }}">
                 <a href="#!" class="dash-link"><span class="dash-micon"><i
                             class="ti ti-arrow-ramp-right"></i></span><span
                         class="dash-mtext">{{ __('Employee Exit') }}</span><span class="dash-arrow"><i
@@ -695,7 +744,7 @@
                 Gate::check('Manage Resignation Request'))
 
             @if (\Auth::user()->type != 'employee')
-                <li class="dash-item dash-hasmenu">
+                <li class="dash-item dash-hasmenu {{ $staffRequestNavOpen }}">
                     <a href="#!" class="dash-link"><span class="dash-micon">
                             <i class="ti ti-user-check"></i></span><span
                             class="dash-mtext">{{ __('Staff Request') }}</span><span class="dash-arrow"><i
@@ -802,7 +851,7 @@
         <!--report-->
 
         @if (Gate::check('Manage Report'))
-            <li class="dash-item dash-hasmenu">
+            <li class="dash-item dash-hasmenu {{ $reportNavOpen }}">
                 <a href="#!" class="dash-link"><span class="dash-micon"><i
                             class="ti ti-list"></i></span><span
                         class="dash-mtext">{{ __('Report') }}</span><span class="dash-arrow"><i
@@ -887,8 +936,7 @@
         <!--------------------- Start System Setup ----------------------------------->
 
         @if (Gate::check('Manage Plan') || Gate::check('Manage Order') || Gate::check('Manage Company Settings'))
-            <li
-                class="dash-item dash-hasmenu {{ Request::segment(1) == 'settings' ? ' active dash-trigger' : '' }}">
+            <li class="dash-item dash-hasmenu {{ $systemSetupNavOpen }}">
                 <a href="#!" class="dash-link ">
                     <span class="dash-micon"><i class="ti ti-settings"></i></span><span
                         class="dash-mtext">{{ __('System Setup') }}</span><span class="dash-arrow">
@@ -897,8 +945,7 @@
 
                 <ul class="dash-submenu">
                     @if (Gate::check('Manage Company Settings'))
-                        <li
-                            class="dash-item dash-hasmenu {{ Request::segment(1) == 'settings' ? ' active dash-trigger' : '' }}">
+                        <li class="dash-item dash-hasmenu {{ $settingsSubNavOpen }}">
                             <a href="#!" class="dash-link patch_link">
                                 <span class="dash-mtext">{{ __('Settings') }}</span>
                                 <span class="dash-arrow"><i data-feather="chevron-right"></i></span>
@@ -932,7 +979,7 @@
                         </li>
 
 
-                        <li class="dash-item dash-hasmenu">
+                        <li class="dash-item dash-hasmenu {{ $hrSetupNavOpen }}">
                             <a href="#!" class="dash-link patch_link2"><span
                                     class="dash-mtext">{{ __('HR Setup') }}</span><span class="dash-arrow"><i
                                         data-feather="chevron-right"></i></span></a>
@@ -1014,8 +1061,7 @@
                         </li>
 
 
-                        <li
-                            class="dash-item dash-hasmenu {{ Request::segment(1) == 'letter_setting' ? ' active' : '' }}">
+                        <li class="dash-item dash-hasmenu {{ $letterNavOpen }}">
                             <a href="#!" class="dash-link patch_link3"><span
                                     class="dash-mtext">{{ __('Letter setting') }}</span><span
                                     class="dash-arrow"><i data-feather="chevron-right"></i></span></a>
@@ -1044,7 +1090,7 @@
 
                     @if (Gate::check('Manage Plan'))
                         <li
-                            class="dash-item{{ Request::route()->getName() == 'plans.index' || Request::route()->getName() == 'stripe' ? ' active' : '' }}">
+                            class="dash-item{{ (Request::route() && (Request::route()->getName() == 'plans.index' || Request::route()->getName() == 'stripe')) ? ' active' : '' }}">
                             <a href="{{ route('plans.index') }}"
                                 class="dash-link">{{ __('Setup Subscription Plan') }}</a>
                         </li>

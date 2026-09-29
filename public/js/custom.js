@@ -7,6 +7,78 @@
 
 "use strict";
 
+/**
+ * Keep sidebar parent menus expanded for the current page and after theme menuclick().
+ */
+function normalizeSidebarUrl(url) {
+    if (!url) {
+        return '';
+    }
+    return url.split(/[?#]/)[0].replace(/\/$/, '');
+}
+
+function openDashMenuAncestors(startEl) {
+    if (!startEl || !startEl.closest) {
+        return;
+    }
+    var parentSubmenu = startEl.closest('.dash-submenu');
+    while (parentSubmenu) {
+        var parentItem = parentSubmenu.parentElement;
+        if (parentItem && parentItem.classList.contains('dash-hasmenu')) {
+            parentItem.classList.add('dash-trigger');
+            parentItem.classList.remove('active');
+            var parentLink = parentItem.querySelector(':scope > .dash-link');
+            if (parentLink) {
+                parentLink.classList.remove('active');
+            }
+            parentSubmenu.style.display = 'block';
+        }
+        parentSubmenu = parentItem ? parentItem.closest('.dash-submenu') : null;
+    }
+}
+
+function hrshastriCleanupSidebarParentActive() {
+    document.querySelectorAll('.dash-sidebar .dash-hasmenu.active').forEach(function (parentItem) {
+        if (parentItem.querySelector('.dash-submenu .dash-item.active, .dash-submenu .dash-link.active')) {
+            parentItem.classList.remove('active');
+            var parentLink = parentItem.querySelector(':scope > .dash-link');
+            if (parentLink) {
+                parentLink.classList.remove('active');
+            }
+        }
+    });
+}
+
+function hrshastriOpenSidebarMenus() {
+    if (document.body.classList.contains('minimenu')) {
+        return;
+    }
+
+    var pageUrl = normalizeSidebarUrl(window.location.href);
+
+    document.querySelectorAll('.dash-sidebar .dash-navbar a.dash-link[href]').forEach(function (link) {
+        var href = link.getAttribute('href');
+        if (!href || href === '#!' || href.indexOf('javascript:') === 0) {
+            return;
+        }
+        var linkUrl = normalizeSidebarUrl(link.href);
+        if (linkUrl === pageUrl) {
+            link.classList.add('active');
+            var item = link.closest('.dash-item');
+            if (item) {
+                item.classList.add('active');
+            }
+            openDashMenuAncestors(link);
+        }
+    });
+
+    document.querySelectorAll('.dash-sidebar .dash-submenu .dash-item.active').forEach(function (activeItem) {
+        openDashMenuAncestors(activeItem.querySelector('.dash-link') || activeItem);
+    });
+
+    hrshastriCleanupSidebarParentActive();
+}
+
 $(function () {
     if ($('.custom-scroll').length) {
         $(".custom-scroll").niceScroll();
@@ -19,6 +91,10 @@ $(function () {
 });
 
 $(document).ready(function () {
+    hrshastriOpenSidebarMenus();
+    window.setTimeout(hrshastriOpenSidebarMenus, 0);
+    window.setTimeout(hrshastriOpenSidebarMenus, 250);
+
     if ($(".datatable").length > 0) {
         new simpleDatatables.DataTable(".datatable");
     }

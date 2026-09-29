@@ -37,30 +37,37 @@ class LeaveController extends Controller
 {
      public function my_leave_balance(request $request)
      {
+          $monthAndYear = $request->monthAndYear ?? date('Y-m');
+          $leave_counts = collect();
+
           try
           {
                $user     = Auth::user();
                $employee = Employee::where('user_id', '=', $user->id)->first();
 
-               $leave_counts =  LeaveType::where('play_slab_id', $employee->play_slab_id)->where('created_by', Auth::user()->creatorId())->get();
+               if (!$employee) {
+                    return view('leave.my_leave_balance', compact('leave_counts', 'monthAndYear'))
+                         ->with('error', __('Employee profile not found for this account.'));
+               }
 
-               $monthAndYear = $request->monthAndYear ?? date("Y-m");
+               $leave_counts = LeaveType::where('play_slab_id', $employee->play_slab_id)
+                    ->where('created_by', Auth::user()->creatorId())
+                    ->get();
 
-               $month = date("m", strtotime($monthAndYear));
-               $year = date("Y", strtotime($monthAndYear));
+               $month = date('m', strtotime($monthAndYear));
+               $year = date('Y', strtotime($monthAndYear));
 
-
-               if (!empty($leave_counts))
+               if ($leave_counts->isNotEmpty())
                {
                     foreach ($leave_counts as $row)
                     {
-                         $userLeaveBalance = UserLeaveBalanceYear::where("leave_type_id", $row->id)->where("leaves_year", $year)->where("user_id", $employee->id)->sum("pending_leaves");
+                         $userLeaveBalance = UserLeaveBalanceYear::where('leave_type_id', $row->id)->where('leaves_year', $year)->where('user_id', $employee->id)->sum('pending_leaves');
                          $row->used_leaved = $userLeaveBalance;
 
                          $applied_leaves = LocalLeave::where('leave_type_id', $row->id)
                               ->where('employee_id', $employee->id)
-                              ->whereYear("start_date", $year)
-                              ->whereMonth("start_date", $month)
+                              ->whereYear('start_date', $year)
+                              ->whereMonth('start_date', $month)
                               ->where('status', 'Approved')
                               ->sum('total_leave_days');
                          $row->applied_leaves = $applied_leaves;
@@ -71,11 +78,13 @@ class LeaveController extends Controller
           }
           catch (Exception $ex)
           {
-               return view('leave.my_leave_balance')->with('error', showExceptionMessage($ex));
+               return view('leave.my_leave_balance', compact('leave_counts', 'monthAndYear'))
+                    ->with('error', showExceptionMessage($ex));
           }
           catch (Throwable $ex)
           {
-               return view('leave.my_leave_balance')->with('error', showExceptionMessage($ex));
+               return view('leave.my_leave_balance', compact('leave_counts', 'monthAndYear'))
+                    ->with('error', showExceptionMessage($ex));
           }
      }
 
@@ -323,25 +332,29 @@ class LeaveController extends Controller
                {
                     $employees = Employee::where('user_id', '=', Auth::user()->id)->get();
                     $employeesData = Employee::where('user_id', '=', Auth::user()->id)->get()->first();
+                    if (!$employeesData)
+                    {
+                         return response()->json(['error' => __('Employee profile not found.')], 401);
+                    }
                     $leavetypes      = LeaveType::where('play_slab_id', $employeesData->play_slab_id)->where('created_by', '=', Auth::user()->creatorId())->get();
                     $leavetypes_days = LeaveType::where('play_slab_id', $employeesData->play_slab_id)->where('created_by', '=', Auth::user()->creatorId())->get();
                }
                else
                {
-                    $employees = Employee::where('user_id', '=', Auth::user()->id)->get();
-                    $employeesData = Employee::where('user_id', '=', Auth::user()->id)->get()->first();
-                    // $leavetypes      = LeaveType::where('created_by', '=', Auth::user()->creatorId())->get();
-                    // $leavetypes_days = LeaveType::where('created_by', '=', Auth::user()->creatorId())->get();
-                    $leavetypes      = LeaveType::where('play_slab_id', $employeesData->play_slab_id)->where('created_by', '=', Auth::user()->creatorId())->get();
-                    $leavetypes_days = LeaveType::where('play_slab_id', $employeesData->play_slab_id)->where('created_by', '=', Auth::user()->creatorId())->get();
+                    // Company / HR: no personal employee record — load all leave types for the company
+                    $employees = Employee::where('created_by', '=', Auth::user()->creatorId())->get();
+                    $employeesData = null;
+                    $leavetypes      = LeaveType::where('created_by', '=', Auth::user()->creatorId())->get();
+                    $leavetypes_days = LeaveType::where('created_by', '=', Auth::user()->creatorId())->get();
                     $users           = User::where('type', '!=', 'employee')->where('created_by', '=', Auth::user()->creatorId())->get()->pluck('name', 'id',);
                }
 
                $year = date("Y");
                foreach ($leavetypes as $row)
                {
-                    $userLeaveBalance = UserLeaveBalanceYear::where("leave_type_id", $row->id)->where("leaves_year", $year)->where("user_id", $employeesData->id)->sum("pending_leaves");
-                    $row->used_leaved = $userLeaveBalance;
+                    $row->used_leaved = $employeesData
+                         ? UserLeaveBalanceYear::where("leave_type_id", $row->id)->where("leaves_year", $year)->where("user_id", $employeesData->id)->sum("pending_leaves")
+                         : 0;
                }
                return view('leave.create', compact('employees', 'leavetypes', 'leavetypes_days', 'users'));
           }
