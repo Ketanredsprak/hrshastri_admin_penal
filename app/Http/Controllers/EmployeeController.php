@@ -217,6 +217,11 @@ class EmployeeController extends Controller
 
                                    $cn = (Auth::user()->hasPermissionTo('Delete Employee')) ? Form::open(['method' => 'DELETE', 'route' => ['employee.destroy', $row->id], 'id' => 'delete-form-' . $row->id, 'class' => 'd-inline']) . '<div class="action-btn bg-danger ms-1"><a href="#" class="btn btn-sm align-items-center bs-pass-para" data-bs-toggle="tooltip" title="" data-bs-original-title="Delete" aria-label="Delete"><i class="ti ti-trash text-white"></i></a></div></form>' : '';
 
+                                   $form16 = '';
+                                   if (config('form16.enabled') && (Auth::user()->hasPermissionTo('Manage Employee') || Auth::user()->type == 'company')) {
+                                        $form16 = '<div class="action-btn bg-warning ms-1"><a href="' . route('form16.start', Crypt::encrypt($row->id)) . '" class="btn btn-sm align-items-center" data-bs-toggle="tooltip" title="" data-bs-original-title="' . __('Form 16') . '"><i class="ti ti-file-certificate text-white"></i></a></div>';
+                                   }
+
                                    $phone_configuration = '';
                                    if (!empty(Auth::user()->user_device_configurations)) {
                                         $phone_configuration = '
@@ -233,7 +238,7 @@ class EmployeeController extends Controller
                                              </div>';
                                    }
 
-                                   return (($row->is_active == 1) ? '<div class="d-inline-flex align-items-center">' . $btn . $cn . $phone_configuration . '</div>' : '<i class="ti ti-lock"></i>');
+                                   return (($row->is_active == 1) ? '<div class="d-inline-flex align-items-center">' . $btn . $form16 . $cn . $phone_configuration . '</div>' : '<i class="ti ti-lock"></i>');
                               })
                               ->rawColumns(['employee_id', 'branch_id', 'department_id', 'designation_id', 'playslab', 'company_doj', 'delete_employe', 'edit_employe'])
                               ->make(true);

@@ -89,13 +89,18 @@ class CrmInvoiceController extends Controller
             'description' => 'nullable|string|max:500',
             'employee_description' => 'nullable|string|max:500',
             'user_description' => 'nullable|string|max:500',
+            'exclude_users' => 'nullable|boolean',
         ]);
 
         $company = User::where('type', 'company')->findOrFail($data['company_id']);
         if (!$request->filled('active_employees_count')) {
             $data['active_employees_count'] = $service->countActiveEmployees($company->id);
         }
-        if (!$request->filled('active_users_count')) {
+        // If "Do not charge users" is checked, force Active Users = 0.
+        if ($request->boolean('exclude_users')) {
+            $data['exclude_users'] = true;
+            $data['active_users_count'] = 0;
+        } elseif (!$request->filled('active_users_count')) {
             $data['active_users_count'] = $service->countActiveUsers($company->id);
         }
 
@@ -159,7 +164,13 @@ class CrmInvoiceController extends Controller
             'description' => 'nullable|string|max:500',
             'employee_description' => 'nullable|string|max:500',
             'user_description' => 'nullable|string|max:500',
+            'exclude_users' => 'nullable|boolean',
         ]);
+
+        if ($request->boolean('exclude_users')) {
+            $data['exclude_users'] = true;
+            $data['active_users_count'] = 0;
+        }
 
         try {
             $service->updateInvoice($invoice, $data, Auth::id());

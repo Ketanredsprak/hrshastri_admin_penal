@@ -30,6 +30,16 @@
 @endsection
 @section('content')
     <div class="row">
+        <div class="col-12 mb-3">
+            <div class="d-flex flex-wrap align-items-end justify-content-between gap-2">
+                <div>
+                    <p class="text-muted small text-uppercase fw-semibold mb-1" style="letter-spacing:.08em;">{{ __('Overview') }}</p>
+                    <h4 class="mb-0 fw-bold" style="letter-spacing:-0.02em;">{{ __('Dashboard') }}</h4>
+                    <p class="text-muted mb-0 mt-1">{{ __('Workforce, attendance, and today’s HR signals in one place.') }}</p>
+                </div>
+            </div>
+        </div>
+
         @if (session('status'))
             <div class="col-12 mb-3">
                 <div class="alert alert-success alert-dismissible fade show shadow-sm" role="alert" style="border-radius: 10px; border-left: 4px solid #10b981;">
@@ -247,12 +257,21 @@
                         <div class="shift-info-bar">
                             <span class="shift-badge shift-badge-primary">
                                 <i class="ti ti-sun-moon"></i>
-                                {{ __('My ' . $officeTime['text'] . ' Time: ' . date('h:i A', strtotime($officeTime['startTime'])) . ' to ' . date('h:i A', strtotime($officeTime['endTime']))) }}
+                                {{ __('My') }} {{ $officeTime['text'] }} {{ __('Time') }}:
+                                {{ date('h:i A', strtotime($officeTime['startTime'])) }}
+                                {{ __('to') }}
+                                {{ date('h:i A', strtotime($officeTime['endTime'])) }}
                             </span>
                             @if ($officeTime['flexiHours'] || $officeTime['flexiDays'])
                                 <span class="shift-badge shift-badge-subtle">
                                     <i class="ti ti-calendar-time"></i>
-                                    {{ ($officeTime['flexiHours'] ? 'Company Flexi Time: ' . $officeTime['flexiHours'] : '') . ($officeTime['flexiDays'] && $officeTime['usedFlexiHoursDays'] ? ' , ' . ' Company Flexi Days: ' . $officeTime['usedFlexiHoursDays'] . '  /  ' . $officeTime['flexiDays'] : '') }}
+                                    @if ($officeTime['flexiHours'])
+                                        {{ __('Company Flexi Time') }}: {{ $officeTime['flexiHours'] }}
+                                    @endif
+                                    @if ($officeTime['flexiDays'] && $officeTime['usedFlexiHoursDays'])
+                                        @if ($officeTime['flexiHours']), @endif
+                                        {{ __('Company Flexi Days') }}: {{ $officeTime['usedFlexiHoursDays'] }} / {{ $officeTime['flexiDays'] }}
+                                    @endif
                                 </span>
                             @endif
                         </div>

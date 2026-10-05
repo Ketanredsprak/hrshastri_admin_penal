@@ -111,6 +111,14 @@ class CrmInvoice extends Model
         return sprintf('%04d-%02d', $this->billing_year, $this->billing_month);
     }
 
+    /**
+     * True when this invoice did not charge for user seats (qty = 0).
+     */
+    public function usersNotBilled(): bool
+    {
+        return (int) ($this->active_users_count ?? 0) === 0;
+    }
+
     public function statusBadgeClass(): string
     {
         return match ($this->status) {

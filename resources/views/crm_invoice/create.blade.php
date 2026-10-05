@@ -14,6 +14,8 @@
 <div class="crm-invoice-module">
     <div class="row justify-content-center">
         <div class="col-xl-10 col-lg-11">
+            @include('crm_invoice.partials.admin_help', ['helpId' => 'crmCreateHelp', 'helpOpen' => true])
+
             <div class="card">
                 <div class="card-header">
                     <h5 class="mb-0">{{ __('Create Company Invoice') }}</h5>
@@ -27,7 +29,7 @@
                             {{ __('No custom-billing companies found. Create a company with “Custom Employee / User Plan” first.') }}
                         </div>
                     @else
-                    <form method="post" action="{{ route('crm.invoices.store') }}">
+                    <form method="post" action="{{ route('crm.invoices.store') }}" id="crmInvoiceCreateForm">
                         @csrf
                         <div class="row g-3">
                             <div class="col-12">
@@ -55,14 +57,38 @@
                                 <label class="form-label">{{ __('Price per Employee') }}</label>
                                 <input type="number" step="0.01" name="price_per_employee" id="crmEmpPrice" class="form-control" value="{{ old('price_per_employee') }}">
                             </div>
-                            <div class="col-md-6 col-lg-3">
-                                <label class="form-label">{{ __('Active Users') }}</label>
-                                <input type="number" name="active_users_count" id="crmUserCount" class="form-control" min="0" value="{{ old('active_users_count') }}">
+
+                            <div class="col-12">
+                                <div class="border rounded p-3 bg-light">
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input" type="checkbox" name="exclude_users" value="1"
+                                            id="crmExcludeUsers" @checked(old('exclude_users') || old('active_users_count') === '0' || old('active_users_count') === 0)>
+                                        <label class="form-check-label fw-semibold" for="crmExcludeUsers">
+                                            {{ __('Do not charge for Users (set Active Users = 0)') }}
+                                        </label>
+                                    </div>
+                                    <p class="small text-muted mb-3">
+                                        {{ __('Use this when the company should only pay for employees this period. A note is added on the invoice automatically, and the Users line is not included.') }}
+                                    </p>
+                                    <div class="row g-3">
+                                        <div class="col-md-6 col-lg-3">
+                                            <label class="form-label">{{ __('Active Users') }}</label>
+                                            <input type="number" name="active_users_count" id="crmUserCount" class="form-control" min="0"
+                                                value="{{ old('active_users_count', old('exclude_users') ? 0 : null) }}">
+                                            <small class="text-muted" id="crmDetectedUsersHint"></small>
+                                        </div>
+                                        <div class="col-md-6 col-lg-3">
+                                            <label class="form-label">{{ __('Price per User') }}</label>
+                                            <input type="number" step="0.01" name="price_per_user" id="crmUserPrice" class="form-control" value="{{ old('price_per_user') }}">
+                                        </div>
+                                    </div>
+                                    <div class="alert alert-warning mt-3 mb-0 py-2 d-none" id="crmUsersZeroAlert">
+                                        <i class="ti ti-info-circle me-1"></i>
+                                        {{ __('Users will not be billed. Invoice note will include: “User seats not billed on this invoice (Active Users = 0).”') }}
+                                    </div>
+                                </div>
                             </div>
-                            <div class="col-md-6 col-lg-3">
-                                <label class="form-label">{{ __('Price per User') }}</label>
-                                <input type="number" step="0.01" name="price_per_user" id="crmUserPrice" class="form-control" value="{{ old('price_per_user') }}">
-                            </div>
+
                             <div class="col-md-6">
                                 <label class="form-label">{{ __('Invoice Date') }}</label>
                                 <input type="date" name="invoice_date" class="form-control" value="{{ old('invoice_date', date('Y-m-d')) }}">
@@ -97,7 +123,8 @@
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">{{ __('Notes') }}</label>
-                                <textarea name="notes" class="form-control" rows="3">{{ old('notes', $settings->default_notes) }}</textarea>
+                                <textarea name="notes" id="crmNotes" class="form-control" rows="3">{{ old('notes', $settings->default_notes) }}</textarea>
+                                <small class="text-muted">{{ __('If users are not charged, the system appends an automatic note here.') }}</small>
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">{{ __('Payment Instructions') }}</label>
@@ -119,21 +146,79 @@
 
 @push('script-page')
 <script>
-document.getElementById('crmCompanyId')?.addEventListener('change', function () {
-    const id = this.value;
-    if (!id) return;
-    fetch(`{{ route('crm.invoices.company-count') }}?company_id=${id}`)
-        .then(r => r.json())
-        .then(data => {
-            document.getElementById('crmEmpCount').value = data.active_employees ?? 0;
-            document.getElementById('crmUserCount').value = data.active_users ?? 0;
-            if (data.price_per_employee !== null && data.price_per_employee !== undefined) {
-                document.getElementById('crmEmpPrice').value = data.price_per_employee;
+(function () {
+    const excludeEl = document.getElementById('crmExcludeUsers');
+    const userCountEl = document.getElementById('crmUserCount');
+    const userPriceEl = document.getElementById('crmUserPrice');
+    const alertEl = document.getElementById('crmUsersZeroAlert');
+    const hintEl = document.getElementById('crmDetectedUsersHint');
+    let lastDetectedUsers = null;
+    let lastDetectedUserPrice = null;
+
+    function syncExcludeUsersUi() {
+        const exclude = !!(excludeEl && excludeEl.checked);
+        const zeroManual = userCountEl && String(userCountEl.value) === '0';
+        if (exclude && userCountEl) {
+            userCountEl.value = 0;
+            userCountEl.readOnly = true;
+        } else if (userCountEl) {
+            userCountEl.readOnly = false;
+            if (lastDetectedUsers !== null && (userCountEl.value === '' || userCountEl.value === '0') && !zeroManual) {
+                // keep as-is after uncheck unless empty
             }
-            if (data.price_per_user !== null && data.price_per_user !== undefined) {
-                document.getElementById('crmUserPrice').value = data.price_per_user;
-            }
-        });
-});
+        }
+        if (alertEl) {
+            alertEl.classList.toggle('d-none', !(exclude || zeroManual));
+        }
+    }
+
+    excludeEl?.addEventListener('change', function () {
+        if (this.checked) {
+            if (userCountEl) userCountEl.value = 0;
+        } else if (userCountEl && lastDetectedUsers !== null) {
+            userCountEl.value = lastDetectedUsers;
+        }
+        syncExcludeUsersUi();
+    });
+
+    userCountEl?.addEventListener('input', function () {
+        if (String(this.value) === '0' && excludeEl && !excludeEl.checked) {
+            // optional: do not auto-check; just show alert
+        }
+        if (String(this.value) !== '0' && excludeEl && excludeEl.checked) {
+            excludeEl.checked = false;
+        }
+        syncExcludeUsersUi();
+    });
+
+    document.getElementById('crmCompanyId')?.addEventListener('change', function () {
+        const id = this.value;
+        if (!id) return;
+        fetch(`{{ route('crm.invoices.company-count') }}?company_id=${id}`)
+            .then(r => r.json())
+            .then(data => {
+                document.getElementById('crmEmpCount').value = data.active_employees ?? 0;
+                lastDetectedUsers = data.active_users ?? 0;
+                lastDetectedUserPrice = data.price_per_user ?? null;
+                if (hintEl) {
+                    hintEl.textContent = `{{ __('Detected in system') }}: ${lastDetectedUsers} {{ __('active users') }}`;
+                }
+                if (!(excludeEl && excludeEl.checked)) {
+                    document.getElementById('crmUserCount').value = lastDetectedUsers;
+                } else {
+                    document.getElementById('crmUserCount').value = 0;
+                }
+                if (data.price_per_employee !== null && data.price_per_employee !== undefined) {
+                    document.getElementById('crmEmpPrice').value = data.price_per_employee;
+                }
+                if (data.price_per_user !== null && data.price_per_user !== undefined) {
+                    document.getElementById('crmUserPrice').value = data.price_per_user;
+                }
+                syncExcludeUsersUi();
+            });
+    });
+
+    syncExcludeUsersUi();
+})();
 </script>
 @endpush

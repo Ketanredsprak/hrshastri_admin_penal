@@ -9,6 +9,16 @@
 
 @section('content')
 <div class="row">
+    <div class="col-12 mb-3">
+        <div class="d-flex flex-wrap align-items-end justify-content-between gap-2">
+            <div>
+                <p class="text-muted small text-uppercase fw-semibold mb-1" style="letter-spacing:.08em;">{{ __('Overview') }}</p>
+                <h4 class="mb-0 fw-bold" style="letter-spacing:-0.02em;">{{ __('Platform Dashboard') }}</h4>
+                <p class="text-muted mb-0 mt-1">{{ __('Companies, orders, plans, and recent login activity at a glance.') }}</p>
+            </div>
+        </div>
+    </div>
+
     <div class="col-sm-12">
 
         <div class="row">

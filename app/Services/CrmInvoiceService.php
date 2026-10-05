@@ -109,6 +109,55 @@ class CrmInvoiceService
         return sprintf('%s — %s (%s)', $product, $label, $period);
     }
 
+    /**
+     * Standard note when user seats are excluded from billing (qty = 0).
+     */
+    public function usersNotBilledNote(): string
+    {
+        return 'User seats not billed on this invoice (Active Users = 0).';
+    }
+
+    /**
+     * Apply "Do not charge users" / Active Users = 0 rules.
+     * When exclude_users is on (or qty is 0), force qty to 0 and append invoice note.
+     */
+    public function applyUserBillingOptions(array $data, ?int $detectedUserCount = null): array
+    {
+        if (!empty($data['exclude_users'])) {
+            $data['active_users_count'] = 0;
+        }
+
+        $userQty = array_key_exists('active_users_count', $data)
+            ? (int) $data['active_users_count']
+            : null;
+
+        $excludeUsers = !empty($data['exclude_users']) || $userQty === 0;
+
+        if ($excludeUsers) {
+            $data['active_users_count'] = 0;
+            $note = trim((string) ($data['notes'] ?? ''));
+            $marker = $this->usersNotBilledNote();
+            if ($note === '' || stripos($note, 'User seats not billed') === false) {
+                $data['notes'] = $note === '' ? $marker : ($note . "\n" . $marker);
+            }
+            if ($detectedUserCount !== null && $detectedUserCount > 0) {
+                $extra = sprintf('Detected active users in system: %d (not charged).', $detectedUserCount);
+                if (stripos((string) $data['notes'], 'Detected active users') === false) {
+                    $data['notes'] .= "\n" . $extra;
+                }
+            }
+        }
+
+        $data['exclude_users'] = $excludeUsers;
+
+        return $data;
+    }
+
+    public function shouldBillUsers(int $userQty): bool
+    {
+        return $userQty > 0;
+    }
+
     public function resolveCompanyDetails(User $company): array
     {
         $settings = [];
@@ -446,8 +495,17 @@ class CrmInvoiceService
         $details = $this->resolveCompanyDetails($company);
         $profile = $this->billingProfileFor($company->id);
 
+        $detectedUsers = $this->countActiveUsers($company->id);
+        $data = $this->applyUserBillingOptions($data, $detectedUsers);
+
         $empQty = (int) ($data['active_employees_count'] ?? $this->countActiveEmployees($company->id));
-        $userQty = (int) ($data['active_users_count'] ?? $this->countActiveUsers($company->id));
+        $userQty = array_key_exists('active_users_count', $data)
+            ? (int) $data['active_users_count']
+            : $detectedUsers;
+
+        if (!empty($data['exclude_users'])) {
+            $userQty = 0;
+        }
 
         $empPrice = isset($data['price_per_employee'])
             ? (float) $data['price_per_employee']
@@ -455,6 +513,11 @@ class CrmInvoiceService
         $userPrice = isset($data['price_per_user'])
             ? (float) $data['price_per_user']
             : (float) ($profile->price_per_user ?? 0);
+
+        // When users are not billed, keep price snapshot but charge 0.
+        if (!$this->shouldBillUsers($userQty)) {
+            $userQty = 0;
+        }
 
         $empLine = round($empQty * $empPrice, 2);
         $userLine = round($userQty * $userPrice, 2);
@@ -521,7 +584,7 @@ class CrmInvoiceService
                 'sort_order' => 1,
             ]));
 
-            if ($userQty > 0 || $userPrice > 0) {
+            if ($this->shouldBillUsers($userQty)) {
                 CrmInvoiceItem::create(array_merge($userTax, [
                     'invoice_id' => $invoice->id,
                     'description' => $this->buildLineDescription(
@@ -552,10 +615,23 @@ class CrmInvoiceService
             throw new \RuntimeException('Paid or cancelled invoices cannot be edited.');
         }
 
+        $detectedUsers = null;
+        if (!empty($invoice->company_id)) {
+            $detectedUsers = $this->countActiveUsers((int) $invoice->company_id);
+        }
+        $data = $this->applyUserBillingOptions($data, $detectedUsers);
+
         $empQty = (int) ($data['active_employees_count'] ?? $invoice->active_employees_count);
         $userQty = (int) ($data['active_users_count'] ?? $invoice->active_users_count ?? 0);
+        if (!empty($data['exclude_users'])) {
+            $userQty = 0;
+        }
         $empPrice = (float) ($data['price_per_employee'] ?? $invoice->price_per_employee);
         $userPrice = (float) ($data['price_per_user'] ?? $invoice->price_per_user ?? 0);
+
+        if (!$this->shouldBillUsers($userQty)) {
+            $userQty = 0;
+        }
 
         $empLine = round($empQty * $empPrice, 2);
         $userLine = round($userQty * $userPrice, 2);
@@ -632,7 +708,7 @@ class CrmInvoiceService
                 ]));
             }
             if ($items->count() >= 2) {
-                if ($userQty > 0 || $userPrice > 0) {
+                if ($this->shouldBillUsers($userQty)) {
                     $items[1]->update(array_merge($userTax, [
                         'description' => $this->buildLineDescription('user', $year, $month, $userDesc, $settings),
                         'quantity' => max($userQty, 0),
@@ -642,7 +718,7 @@ class CrmInvoiceService
                 } else {
                     $items[1]->delete();
                 }
-            } elseif ($userQty > 0 || $userPrice > 0) {
+            } elseif ($this->shouldBillUsers($userQty)) {
                 CrmInvoiceItem::create(array_merge($userTax, [
                     'invoice_id' => $invoice->id,
                     'description' => $this->buildLineDescription('user', $year, $month, $userDesc, $settings),

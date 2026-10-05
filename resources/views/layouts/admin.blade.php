@@ -67,6 +67,7 @@
     @endif
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/css/toastr.min.css" />
     <link rel="stylesheet" href="{{ asset('css/custom.css') }}?v={{ filemtime(public_path('css/custom.css')) }}">
+    <link rel="stylesheet" href="{{ asset('css/admin-saas.css') }}?v={{ @filemtime(public_path('css/admin-saas.css')) }}">
     @stack('css-page')
 
     @yield('header-section')
@@ -269,7 +270,7 @@
     <script src="{{ asset('assets/js/plugins/bootstrap.min.js') }}"></script>
     <script src="{{ asset('assets/js/plugins/feather.min.js') }}"></script>
     <script src="{{ asset('assets/js/plugins/bootstrap-switch-button.min.js') }}"></script>
-    <script src="{{ asset('assets/js/dash.js') }}"></script>
+    <script src="{{ asset('assets/js/dash.js') }}?v={{ @filemtime(public_path('assets/js/dash.js')) }}"></script>
     <script src="{{ asset('assets/js/plugins/sweetalert2.all.min.js') }}"></script>
     <script src="{{ asset('assets/js/plugins/simple-datatables.js') }}"></script>
     <script src="{{ asset('assets/js/plugins/flatpickr.min.js') }}"></script>

@@ -1,22 +1,187 @@
--- Subscription Point Changes Start --
--- Date : 18-09-2026 --
+-- =============================================================================
+-- HR Shastri – PRODUCTION DB UPDATES (Sep 2026)
+-- Run before deploying latest code. Skip Duplicate column/table errors.
+-- =============================================================================
 
+-- -----------------------------------------------------------------------------
+-- 1) Custom subscription limits (18-09-2026)
+-- -----------------------------------------------------------------------------
 ALTER TABLE `users`
   ADD COLUMN `custom_max_users` INT NULL DEFAULT NULL AFTER `plan`,
   ADD COLUMN `custom_max_employees` INT NULL DEFAULT NULL AFTER `custom_max_users`;
 
-http://127.0.0.1:8000/sync-subscription-limits?action=sync_all
+-- After deploy (browser): /sync-subscription-limits?action=sync_all
 
--- Subscription Point Changes End --
+-- -----------------------------------------------------------------------------
+-- 2) Employee before/after change logs
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `employee_data_change_logs` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `employee_id` BIGINT UNSIGNED NOT NULL,
+  `company_id` BIGINT UNSIGNED NOT NULL,
+  `changed_by_user_id` BIGINT UNSIGNED NULL,
+  `actor_type` VARCHAR(32) NULL,
+  `source` VARCHAR(32) NOT NULL DEFAULT 'web_admin',
+  `action` VARCHAR(16) NOT NULL DEFAULT 'update',
+  `snapshot_before` JSON NULL,
+  `snapshot_after` JSON NULL,
+  `modules_touched` JSON NULL,
+  `request_meta` JSON NULL,
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `employee_data_change_logs_employee_id_index` (`employee_id`),
+  KEY `employee_data_change_logs_company_id_index` (`company_id`),
+  KEY `employee_data_change_logs_changed_by_user_id_index` (`changed_by_user_id`),
+  KEY `employee_data_change_logs_company_id_created_at_index` (`company_id`, `created_at`),
+  KEY `employee_data_change_logs_employee_id_created_at_index` (`employee_id`, `created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-Employee Before and After Change Logs
-new table for log: employee_data_change_logs
+-- -----------------------------------------------------------------------------
+-- 3) CRM invoice base tables (ONLY if not already on production)
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `crm_invoice_settings` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `price_per_employee` DECIMAL(12,2) NOT NULL DEFAULT 200.00,
+  `currency` VARCHAR(10) NOT NULL DEFAULT 'INR',
+  `due_days` INT NOT NULL DEFAULT 15,
+  `invoice_prefix` VARCHAR(20) NOT NULL DEFAULT 'HRSI',
+  `next_number` INT NOT NULL DEFAULT 1,
+  `seller_name` VARCHAR(255) NULL,
+  `seller_address` TEXT NULL,
+  `seller_email` VARCHAR(255) NULL,
+  `seller_phone` VARCHAR(50) NULL,
+  `product_name` VARCHAR(255) NULL DEFAULT 'HR Shastri',
+  `logo_path` VARCHAR(255) NULL,
+  `payment_instructions` TEXT NULL,
+  `auto_email_on_generate` TINYINT(1) NOT NULL DEFAULT 1,
+  `skip_zero_employee` TINYINT(1) NOT NULL DEFAULT 1,
+  `created_at` TIMESTAMP NULL DEFAULT NULL,
+  `updated_at` TIMESTAMP NULL DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- =============================================================================
--- CRM Invoice CGST / SGST (percentage) - Date: 28-09-2026
--- Full file: docs/SQL_CRM_INVOICE_CGST_SGST.sql
--- =============================================================================
+CREATE TABLE IF NOT EXISTS `crm_invoices` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `invoice_number` VARCHAR(50) NOT NULL,
+  `company_id` BIGINT UNSIGNED NOT NULL,
+  `company_name` VARCHAR(255) NOT NULL,
+  `company_email` VARCHAR(255) NULL,
+  `company_address` TEXT NULL,
+  `company_phone` VARCHAR(50) NULL,
+  `billing_year` SMALLINT NOT NULL,
+  `billing_month` TINYINT NOT NULL,
+  `invoice_date` DATE NOT NULL,
+  `due_date` DATE NOT NULL,
+  `source` ENUM('auto','manual') NOT NULL DEFAULT 'auto',
+  `status` ENUM('draft','generated','sent','paid','cancelled') NOT NULL DEFAULT 'generated',
+  `auto_period_key` VARCHAR(64) NULL,
+  `active_employees_count` INT NOT NULL DEFAULT 0,
+  `price_per_employee` DECIMAL(12,2) NOT NULL,
+  `subtotal` DECIMAL(14,2) NOT NULL DEFAULT 0.00,
+  `tax_amount` DECIMAL(14,2) NOT NULL DEFAULT 0.00,
+  `total_amount` DECIMAL(14,2) NOT NULL DEFAULT 0.00,
+  `currency` VARCHAR(10) NOT NULL DEFAULT 'INR',
+  `notes` TEXT NULL,
+  `payment_instructions` TEXT NULL,
+  `pdf_path` VARCHAR(255) NULL,
+  `paid_at` DATETIME NULL,
+  `paid_by` BIGINT UNSIGNED NULL,
+  `created_by` BIGINT UNSIGNED NULL,
+  `updated_by` BIGINT UNSIGNED NULL,
+  `created_at` TIMESTAMP NULL DEFAULT NULL,
+  `updated_at` TIMESTAMP NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `crm_invoices_invoice_number_unique` (`invoice_number`),
+  UNIQUE KEY `crm_invoices_auto_period_key_unique` (`auto_period_key`),
+  KEY `idx_crm_inv_company` (`company_id`),
+  KEY `idx_crm_inv_status` (`status`),
+  KEY `idx_crm_inv_period` (`billing_year`, `billing_month`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS `crm_invoice_items` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `invoice_id` BIGINT UNSIGNED NOT NULL,
+  `description` VARCHAR(500) NOT NULL,
+  `quantity` INT NOT NULL DEFAULT 1,
+  `unit_price` DECIMAL(12,2) NOT NULL,
+  `line_total` DECIMAL(14,2) NOT NULL,
+  `sort_order` INT NOT NULL DEFAULT 0,
+  `created_at` TIMESTAMP NULL DEFAULT NULL,
+  `updated_at` TIMESTAMP NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `fk_crm_item_invoice` (`invoice_id`),
+  CONSTRAINT `fk_crm_item_invoice` FOREIGN KEY (`invoice_id`) REFERENCES `crm_invoices` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `crm_invoice_email_logs` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `invoice_id` BIGINT UNSIGNED NOT NULL,
+  `recipients` TEXT NOT NULL,
+  `subject` VARCHAR(255) NULL,
+  `status` ENUM('queued','sent','failed') NOT NULL DEFAULT 'queued',
+  `error_message` TEXT NULL,
+  `sent_by` BIGINT UNSIGNED NULL,
+  `sent_at` DATETIME NULL,
+  `created_at` TIMESTAMP NULL DEFAULT NULL,
+  `updated_at` TIMESTAMP NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `fk_crm_email_invoice` (`invoice_id`),
+  CONSTRAINT `fk_crm_email_invoice` FOREIGN KEY (`invoice_id`) REFERENCES `crm_invoices` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT INTO `crm_invoice_settings`
+  (`price_per_employee`,`currency`,`due_days`,`invoice_prefix`,`next_number`,`seller_name`,`product_name`,`payment_instructions`,`auto_email_on_generate`,`skip_zero_employee`,`created_at`,`updated_at`)
+SELECT 200,'INR',15,'HRSI',1,'HR Shastri','HR Shastri',
+  'Please pay via bank transfer / UPI and share the UTR with support.',
+  1,1,NOW(),NOW()
+FROM DUAL
+WHERE NOT EXISTS (SELECT 1 FROM `crm_invoice_settings` LIMIT 1);
+
+-- -----------------------------------------------------------------------------
+-- 4) Company billing profiles + invoice user columns
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `company_billing_profiles` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `company_id` BIGINT UNSIGNED NOT NULL,
+  `billing_mode` ENUM('global','custom') NOT NULL DEFAULT 'global',
+  `price_per_employee` DECIMAL(12,2) NULL,
+  `price_per_user` DECIMAL(12,2) NULL,
+  `invoice_plan_id` BIGINT UNSIGNED NULL,
+  `manual_invoice_only` TINYINT(1) NOT NULL DEFAULT 0,
+  `created_at` TIMESTAMP NULL DEFAULT NULL,
+  `updated_at` TIMESTAMP NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `company_billing_profiles_company_id_unique` (`company_id`),
+  KEY `idx_billing_mode` (`billing_mode`),
+  CONSTRAINT `fk_billing_company` FOREIGN KEY (`company_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+ALTER TABLE `crm_invoices`
+  ADD COLUMN `active_users_count` INT NOT NULL DEFAULT 0 AFTER `active_employees_count`;
+
+ALTER TABLE `crm_invoices`
+  ADD COLUMN `price_per_user` DECIMAL(12,2) NULL AFTER `price_per_employee`;
+
+ALTER TABLE `crm_invoice_settings`
+  ADD COLUMN `auto_generate_enabled` TINYINT(1) NOT NULL DEFAULT 0 AFTER `auto_email_on_generate`;
+
+UPDATE `crm_invoice_settings` SET `auto_generate_enabled` = 0;
+
+UPDATE `plans`
+SET `duration` = 'Unlimited', `max_users` = -1, `max_employees` = -1
+WHERE `id` = 9;
+
+INSERT INTO `company_billing_profiles` (`company_id`, `billing_mode`, `manual_invoice_only`, `created_at`, `updated_at`)
+SELECT u.id, 'global', 0, NOW(), NOW()
+FROM `users` u
+WHERE u.type = 'company'
+  AND NOT EXISTS (
+    SELECT 1 FROM `company_billing_profiles` b WHERE b.company_id = u.id
+  );
+
+-- -----------------------------------------------------------------------------
+-- 5) CGST / SGST (28-09-2026)
+-- -----------------------------------------------------------------------------
 ALTER TABLE `crm_invoice_settings`
   ADD COLUMN `cgst_percent` DECIMAL(8,2) NOT NULL DEFAULT 0 AFTER `price_per_employee`;
 
@@ -35,11 +200,9 @@ ALTER TABLE `crm_invoices`
 ALTER TABLE `crm_invoices`
   ADD COLUMN `sgst_amount` DECIMAL(14,2) NOT NULL DEFAULT 0 AFTER `cgst_amount`;
 
--- =============================================================================
--- Zoho-style TAX INVOICE fields - Date: 29-09-2026
--- Full file: docs/SQL_CRM_TAX_INVOICE_ZOHO.sql
--- =============================================================================
-
+-- -----------------------------------------------------------------------------
+-- 6) Zoho-style TAX INVOICE (29-09-2026)
+-- -----------------------------------------------------------------------------
 ALTER TABLE `crm_invoice_settings`
   ADD COLUMN `seller_gstin` VARCHAR(20) NULL AFTER `seller_phone`,
   ADD COLUMN `seller_state` VARCHAR(100) NULL AFTER `seller_gstin`,
@@ -73,3 +236,22 @@ ALTER TABLE `crm_invoice_items`
   ADD COLUMN `cgst_amount` DECIMAL(14,2) NOT NULL DEFAULT 0 AFTER `cgst_percent`,
   ADD COLUMN `sgst_percent` DECIMAL(8,2) NOT NULL DEFAULT 0 AFTER `cgst_amount`,
   ADD COLUMN `sgst_amount` DECIMAL(14,2) NOT NULL DEFAULT 0 AFTER `sgst_percent`;
+
+UPDATE `crm_invoice_settings` SET
+  `seller_name` = COALESCE(NULLIF(`seller_name`, ''), 'HR SHASTRI TECH LLP'),
+  `seller_address` = COALESCE(NULLIF(`seller_address`, ''), '5th Floor, Darshanam Oxy Park\nVasna Bhayli Road\nVadodara Gujarat 390015\nIndia'),
+  `seller_gstin` = COALESCE(`seller_gstin`, '24AAQFH2769H1Z1'),
+  `seller_state` = COALESCE(`seller_state`, 'Gujarat'),
+  `seller_state_code` = COALESCE(`seller_state_code`, '24'),
+  `bank_name` = COALESCE(`bank_name`, 'AXIS BANK'),
+  `bank_account_no` = COALESCE(`bank_account_no`, '922020049777281'),
+  `bank_ifsc` = COALESCE(`bank_ifsc`, 'UTIB0001491'),
+  `bank_swift` = COALESCE(`bank_swift`, 'AXISINBB013'),
+  `default_hsn_sac` = COALESCE(`default_hsn_sac`, '997331'),
+  `default_terms` = COALESCE(`default_terms`, 'Due on Receipt'),
+  `default_notes` = COALESCE(`default_notes`, 'Thanks for your business.'),
+  `invoice_prefix` = 'INV',
+  `use_fy_numbering` = 1,
+  `cgst_percent` = IF(`cgst_percent` = 0, 9, `cgst_percent`),
+  `sgst_percent` = IF(`sgst_percent` = 0, 9, `sgst_percent`)
+WHERE `id` = 1;

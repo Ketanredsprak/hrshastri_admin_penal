@@ -24,6 +24,8 @@ use App\Http\Controllers\SetSalaryController;
 use App\Http\Controllers\EmailTemplateController;
 use App\Http\Controllers\StripePaymentController;
 use App\Http\Controllers\CrmInvoiceController;
+use App\Http\Controllers\Form16Controller;
+use App\Http\Controllers\TestNotificationController;
 use App\Http\Controllers\DepartmentController;
 use App\Http\Controllers\DesignationController;
 use App\Http\Controllers\DocumentController;
@@ -491,6 +493,32 @@ Route::group(['middleware' => ['verified', 'company_check']], function ()
      Route::get('employee-data-log/{id}', [EmployeeDataChangeLogController::class, 'show'])
           ->name('employee-data-log.show')
           ->middleware(['auth', 'XSS']);
+
+     // Form 16 routes stay registered (direct URL / testing). Sidebar + Employee List stay hidden
+     // until FORM16_ENABLED=true in .env.
+     Route::middleware(['auth', 'XSS'])->prefix('form16')->name('form16.')->group(function () {
+          Route::get('/', [Form16Controller::class, 'index'])->name('index');
+          Route::get('/employee/{employee}', [Form16Controller::class, 'start'])->name('start');
+          Route::post('/init', [Form16Controller::class, 'init'])->name('init');
+          Route::get('/{id}', [Form16Controller::class, 'show'])->name('show');
+          Route::get('/{id}/refresh', [Form16Controller::class, 'refresh'])->name('refresh');
+          Route::post('/{id}/part-a', [Form16Controller::class, 'uploadPartA'])->name('part-a.upload');
+          Route::post('/{id}/part-a/delete', [Form16Controller::class, 'deletePartA'])->name('part-a.delete');
+          Route::post('/{id}/generate', [Form16Controller::class, 'generate'])->name('generate');
+          Route::post('/{id}/verify', [Form16Controller::class, 'verify'])->name('verify');
+          Route::post('/{id}/issue', [Form16Controller::class, 'issue'])->name('issue');
+          Route::match(['get', 'post'], '/{id}/regenerate', [Form16Controller::class, 'regenerate'])->name('regenerate');
+          Route::get('/{id}/preview', [Form16Controller::class, 'preview'])->name('preview');
+          Route::get('/{id}/download', [Form16Controller::class, 'download'])->name('download');
+          Route::post('/{id}/send', [Form16Controller::class, 'send'])->name('send');
+     });
+
+     // Test push notifications (no DB — session log only)
+     Route::middleware(['auth', 'XSS'])->prefix('test-notification')->name('test.notification.')->group(function () {
+          Route::get('/', [TestNotificationController::class, 'index'])->name('index');
+          Route::post('/send', [TestNotificationController::class, 'send'])->name('send');
+          Route::post('/clear-log', [TestNotificationController::class, 'clearLog'])->name('clear-log');
+     });
 
      Route::resource('department', DepartmentController::class)->middleware(
           [

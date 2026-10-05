@@ -389,66 +389,92 @@ function menuclick() {
     for (var j = 0; j < elem.length; j++) {
       elem[j].style.display = "none";
     }
+
+    // Only parent items with a submenu should toggle — leaf links must navigate normally.
     var pclinkclick = document.querySelectorAll(
-      ".dash-navbar > li:not(.dash-caption)"
+      ".dash-navbar > li.dash-hasmenu:not(.dash-caption)"
     );
     for (var i = 0; i < pclinkclick.length; i++) {
       pclinkclick[i].addEventListener("click", function (event) {
+        var linkEl = event.target.closest ? event.target.closest("a.dash-link") : null;
+        var href = linkEl ? (linkEl.getAttribute("href") || "") : "";
+        // If user clicked a real page link (not toggle), allow navigation.
+        if (href && href !== "#" && href !== "#!" && href.indexOf("javascript:") !== 0) {
+          return;
+        }
+        event.preventDefault();
         event.stopPropagation();
         var targetElement = event.target;
-        if (targetElement.tagName == "SPAN") {
-          targetElement = targetElement.parentNode;
+        if (targetElement.tagName == "SPAN" || targetElement.tagName == "I" || targetElement.tagName == "svg" || targetElement.tagName == "path") {
+          targetElement = targetElement.closest("a.dash-link") || targetElement.parentNode;
         }
-        if (targetElement.parentNode.classList.contains("dash-trigger")) {
-          targetElement.parentNode.classList.remove("dash-trigger");
-          // targetElement.parentNode.children[1].style.display = "none";
-          slideUp(targetElement.parentNode.children[1], 200);
+        if (!targetElement || !targetElement.parentNode) {
+          return;
+        }
+        var parentLi = targetElement.closest("li.dash-hasmenu") || targetElement.parentNode;
+        var submenu = parentLi.children[1];
+        if (!submenu || !submenu.classList || !submenu.classList.contains("dash-submenu")) {
+          return;
+        }
+        if (parentLi.classList.contains("dash-trigger")) {
+          parentLi.classList.remove("dash-trigger");
+          slideUp(submenu, 200);
         } else {
-          var tc = document.querySelectorAll("li.dash-trigger");
+          var tc = document.querySelectorAll(".dash-navbar > li.dash-trigger");
           for (var t = 0; t < tc.length; t++) {
             var c = tc[t];
             c.classList.remove("dash-trigger");
-            slideUp(c.children[1], 200);
+            if (c.children[1]) {
+              slideUp(c.children[1], 200);
+            }
           }
-          targetElement.parentNode.classList.add("dash-trigger");
-          var tmp = targetElement.children[1];
-          if (tmp) {
-            slideDown(targetElement.parentNode.children[1], 200);
-          }
+          parentLi.classList.add("dash-trigger");
+          slideDown(submenu, 200);
         }
       });
     }
     var pcsublinkclick = document.querySelectorAll(
-      ".dash-navbar > li:not(.dash-caption) li"
+      ".dash-navbar > li:not(.dash-caption) li.dash-hasmenu"
     );
     for (var i = 0; i < pcsublinkclick.length; i++) {
       pcsublinkclick[i].addEventListener("click", function (event) {
-        var targetElement = event.target;
-        if (targetElement.tagName == "SPAN") {
-          targetElement = targetElement.parentNode;
+        var linkEl = event.target.closest ? event.target.closest("a.dash-link") : null;
+        var href = linkEl ? (linkEl.getAttribute("href") || "") : "";
+        if (href && href !== "#" && href !== "#!" && href.indexOf("javascript:") !== 0) {
+          return;
         }
+        event.preventDefault();
         event.stopPropagation();
-        if (targetElement.parentNode.classList.contains("dash-trigger")) {
-          targetElement.parentNode.classList.remove("dash-trigger");
-          slideUp(targetElement.parentNode.children[1], 200);
+        var targetElement = event.target;
+        if (targetElement.tagName == "SPAN" || targetElement.tagName == "I" || targetElement.tagName == "svg" || targetElement.tagName == "path") {
+          targetElement = targetElement.closest("a.dash-link") || targetElement.parentNode;
+        }
+        if (!targetElement || !targetElement.parentNode) {
+          return;
+        }
+        var parentLi = targetElement.closest("li.dash-hasmenu") || targetElement.parentNode;
+        var submenu = parentLi.children[1];
+        if (!submenu || !submenu.classList || !submenu.classList.contains("dash-submenu")) {
+          return;
+        }
+        if (parentLi.classList.contains("dash-trigger")) {
+          parentLi.classList.remove("dash-trigger");
+          slideUp(submenu, 200);
         } else {
-          var tc = targetElement.parentNode.parentNode.children;
+          var tc = parentLi.parentNode ? parentLi.parentNode.children : [];
           for (var t = 0; t < tc.length; t++) {
             var c = tc[t];
+            if (!c || c.tagName != "LI") {
+              continue;
+            }
             c.classList.remove("dash-trigger");
-            if (c.tagName == "LI") {
-              c = c.children[0];
-            }
-            if (c.parentNode.classList.contains("dash-hasmenu")) {
-              slideUp(c.parentNode.children[1], 200);
+            if (c.classList.contains("dash-hasmenu") && c.children[1]) {
+              slideUp(c.children[1], 200);
             }
           }
-          targetElement.parentNode.classList.add("dash-trigger");
-          var tmp = targetElement.parentNode.children[1];
-          if (tmp) {
-            tmp.removeAttribute("style");
-            slideDown(tmp, 200);
-          }
+          parentLi.classList.add("dash-trigger");
+          submenu.removeAttribute("style");
+          slideDown(submenu, 200);
         }
       });
     }
@@ -837,6 +863,9 @@ for (var t = 0; t < tc.length; t++) {
 // =======================================================
 // =======================================================
 let slideUp = (target, duration = 0) => {
+  if (!target || !target.style) {
+    return;
+  }
   target.style.transitionProperty = "height, margin, padding";
   target.style.transitionDuration = duration + "ms";
   target.style.boxSizing = "border-box";
@@ -850,6 +879,9 @@ let slideUp = (target, duration = 0) => {
   target.style.marginBottom = 0;
 };
 let slideDown = (target, duration = 0) => {
+  if (!target || !target.style) {
+    return;
+  }
   target.style.removeProperty("display");
   let display = window.getComputedStyle(target).display;
 

@@ -26,7 +26,7 @@ class PlanController extends Controller
         // and even when subscription is expired (Isactive/CheckPlan redirects them here).
         $user = Auth::user();
         if ($user->can('Manage Plan') || $user->type == 'company') {
-            $plans                 = Plan::get();
+            $plans                 = Plan::orderBy('price', 'asc')->get();
             $admin_payment_setting = Utility::getAdminPaymentSetting();
 
             $activeEmployees = 0;
@@ -74,6 +74,8 @@ class PlanController extends Controller
                         'duration' => 'required',
                         'max_users' => 'required|numeric',
                         'max_employees' => 'required|numeric',
+                        'modules' => 'required|array|min:1',
+                        'modules.*' => 'integer|exists:modules,id',
                     ]
                 );
                 if ($validator->fails()) {
@@ -84,11 +86,14 @@ class PlanController extends Controller
                 try {
                     DB::beginTransaction();
                     $post = $request->all();
-                    $modules = Module::whereIn('id', $post['modules'])->pluck('name', 'id')->toArray();
+                    $selectedModuleIds = $request->input('modules', []);
+                    $modules = Module::whereIn('id', $selectedModuleIds)->pluck('name', 'id')->toArray();
                     $permissions = Permission::all()->pluck('name', 'id')->toArray();
 
+                    unset($post['modules'], $post['checkall']);
+
                     $roles = Role::create([
-                        'name' => 'Role ' . $plan->name,
+                        'name' => 'Role ' . ($post['name'] ?? 'Plan'),
                         'created_by' => Auth::user()->creatorId(),
                     ]);
                 
@@ -215,6 +220,8 @@ class PlanController extends Controller
                             'duration' => 'required',
                             'max_users' => 'required|numeric',
                             'max_employees' => 'required|numeric',
+                            'modules' => 'required|array|min:1',
+                            'modules.*' => 'integer|exists:modules,id',
                         ]
                     );
                     if ($validator->fails()) {
@@ -225,70 +232,35 @@ class PlanController extends Controller
                         DB::beginTransaction();
 
                         $post = $request->all();
+                        $selectedModuleIds = $request->input('modules', []);
+                        unset($post['modules'], $post['checkall']);
 
-                        $modules = Module::whereIn('id', $post['modules'])->pluck('name', 'id')->toArray();
+                        $modules = Module::whereIn('id', $selectedModuleIds)->pluck('name', 'id')->toArray();
 
                         $permissions = Permission::all()->pluck('name', 'id')->toArray();
                         $permission_ids = [];
-                        foreach ($modules as $key => $module) {
+                        foreach ($modules as $moduleId => $module) {
                             PlansModule::updateOrCreate([
                                 'plans_id' => $plan->id,
-                                'modules_id' => $key,
+                                'modules_id' => $moduleId,
                             ], [
                                 'plans_id' => $plan->id,
-                                'modules_id' => $key,
+                                'modules_id' => $moduleId,
                             ]);
-                            if (in_array('Manage ' . $module, (array) $permissions)) {
-                                if ($key = array_search('Manage ' . $module, $permissions)) {
-                                    $permission_ids[] = $key;
-                                }
-                            }
-                            if (in_array('Create ' . $module, (array) $permissions)) {
-                                if ($key = array_search('Create ' . $module, $permissions)) {
-                                    $permission_ids[] = $key;
-                                }
-                            }
-                            if (in_array('Edit ' . $module, (array) $permissions)) {
-                                if ($key = array_search('Edit ' . $module, $permissions)) {
-                                    $permission_ids[] = $key;
-                                }
-                            }
-                            if (in_array('Delete ' . $module, (array) $permissions)) {
-                                if ($key = array_search('Delete ' . $module, $permissions)) {
-                                    $permission_ids[] = $key;
-                                }
-                            }
-                            if (in_array('Show ' . $module, (array) $permissions)) {
-                                if ($key = array_search('Show ' . $module, $permissions)) {
-                                    $permission_ids[] = $key;
-                                }
-                            }
-                            if (in_array('Move ' . $module, (array) $permissions)) {
-                                if ($key = array_search('Move ' . $module, $permissions)) {
-                                    $permission_ids[] = $key;
-                                }
-                            }
-                            if (in_array('Client Permission ' . $module, (array) $permissions)) {
-                                if ($key = array_search('Client Permission ' . $module, $permissions)) {
-                                    $permission_ids[] = $key;
-                                }
-                            }
-                            if (in_array('Invite User ' . $module, (array) $permissions)) {
-                                if ($key = array_search('Invite User ' . $module, $permissions)) {
-                                    $permission_ids[] = $key;
-                                }
-                            }
-                            if (in_array('Buy ' . $module, (array) $permissions)) {
-                                if ($key = array_search('Buy ' . $module, $permissions)) {
-                                    $permission_ids[] = $key;
-                                }
-                            }
-                            if (in_array('Add ' . $module, (array) $permissions)) {
-                                if ($key = array_search('Add ' . $module, $permissions)) {
-                                    $permission_ids[] = $key;
+                            foreach (['Manage ', 'Create ', 'Edit ', 'Delete ', 'Show ', 'Move ', 'Client Permission ', 'Invite User ', 'Buy ', 'Add '] as $prefix) {
+                                $permissionName = $prefix . $module;
+                                if (in_array($permissionName, (array) $permissions)) {
+                                    $permissionId = array_search($permissionName, $permissions);
+                                    if ($permissionId !== false) {
+                                        $permission_ids[] = $permissionId;
+                                    }
                                 }
                             }
                         }
+
+                        PlansModule::where('plans_id', $plan->id)
+                            ->whereNotIn('modules_id', array_keys($modules))
+                            ->delete();
 
                         $roles = Role::find($plan->role_id);
                         if(empty($roles)){
@@ -296,6 +268,8 @@ class PlanController extends Controller
                                 'name' => 'Role ' . $plan->name,
                                 'created_by' => Auth::user()->creatorId(),
                             ]);
+                            $plan->role_id = $roles->id;
+                            $post['role_id'] = $roles->id;
                         }
                         $roles->syncPermissions($permission_ids);
 

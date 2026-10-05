@@ -741,6 +741,14 @@
                                         @enderror
                                     </div>
 
+                                    <div class="form-group col-md-4">
+                                        {{ Form::label('company_pan_number', __('Company PAN'), ['class' => 'col-form-label']) }}
+                                        {{ Form::text('company_pan_number', null, ['class' => 'form-control ', 'placeholder' => 'Enter Company PAN (for Form 16)']) }}
+                                        @error('company_pan_number')
+                                            <span class="invalid-company_pan_number" role="alert"><strong
+                                                    class="text-danger">{{ $message }}</strong></span>
+                                        @enderror
+                                    </div>
 
                                     <div class="form-group col-md-4">
                                         {{ Form::label('company_pec_numbar', __('PEC '), ['class' => 'col-form-label']) }}

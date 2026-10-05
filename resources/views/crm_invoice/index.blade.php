@@ -22,6 +22,8 @@
 
 @section('content')
 <div class="crm-invoice-module">
+    @include('crm_invoice.partials.admin_help', ['helpId' => 'crmIndexHelp', 'helpOpen' => false])
+
     <div class="card mb-3">
         <div class="card-body">
             <form method="get" class="row g-3 align-items-end">
@@ -74,6 +76,7 @@
                             <th>{{ __('Company') }}</th>
                             <th>{{ __('Period') }}</th>
                             <th class="text-end">{{ __('Emp.') }}</th>
+                            <th class="text-end">{{ __('Users') }}</th>
                             <th class="text-end">{{ __('Total') }}</th>
                             <th>{{ __('Status') }}</th>
                             <th class="text-end">{{ __('Action') }}</th>
@@ -99,6 +102,13 @@
                                     <div class="text-muted small">{{ __('Due') }} {{ optional($inv->due_date)->format('d M Y') }}</div>
                                 </td>
                                 <td class="text-end">{{ number_format($inv->active_employees_count) }}</td>
+                                <td class="text-end">
+                                    @if($inv->usersNotBilled())
+                                        <span class="badge bg-warning text-dark" title="{{ __('User seats not billed') }}">0</span>
+                                    @else
+                                        {{ number_format((int) $inv->active_users_count) }}
+                                    @endif
+                                </td>
                                 <td class="text-end text-nowrap fw-semibold">₹{{ number_format($inv->total_amount, 2) }}</td>
                                 <td>
                                     <span class="badge {{ $inv->statusBadgeClass() }}">{{ ucfirst($inv->status) }}</span>
@@ -121,7 +131,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="7" class="text-center text-muted py-5">
+                                <td colspan="8" class="text-center text-muted py-5">
                                     <div class="mb-2"><i class="ti ti-file-invoice" style="font-size:1.6rem"></i></div>
                                     {{ __('No invoices found.') }}
                                     <div class="mt-2">

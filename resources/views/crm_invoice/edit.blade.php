@@ -20,6 +20,8 @@
 <div class="crm-invoice-module">
     <div class="row justify-content-center">
         <div class="col-xl-10 col-lg-11">
+            @include('crm_invoice.partials.admin_help', ['helpId' => 'crmEditHelp', 'helpOpen' => false])
+
             <div class="card">
                 <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
                     <div>
@@ -29,7 +31,7 @@
                     <span class="badge {{ $invoice->statusBadgeClass() }}">{{ ucfirst($invoice->status) }}</span>
                 </div>
                 <div class="card-body">
-                    <form method="post" action="{{ route('crm.invoices.update', $invoice->id) }}">
+                    <form method="post" action="{{ route('crm.invoices.update', $invoice->id) }}" id="crmInvoiceEditForm">
                         @csrf
                         @method('PUT')
                         <div class="row g-3">
@@ -89,14 +91,39 @@
                                 <label class="form-label">{{ __('Price per Employee') }}</label>
                                 <input type="number" step="0.01" name="price_per_employee" class="form-control" value="{{ old('price_per_employee', $invoice->price_per_employee) }}" required>
                             </div>
-                            <div class="col-md-6 col-lg-3">
-                                <label class="form-label">{{ __('Active Users') }}</label>
-                                <input type="number" name="active_users_count" class="form-control" min="0" value="{{ old('active_users_count', $invoice->active_users_count) }}" required>
+
+                            <div class="col-12">
+                                <div class="border rounded p-3 bg-light">
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input" type="checkbox" name="exclude_users" value="1"
+                                            id="crmExcludeUsers"
+                                            @checked(old('exclude_users', (int) $invoice->active_users_count === 0))>
+                                        <label class="form-check-label fw-semibold" for="crmExcludeUsers">
+                                            {{ __('Do not charge for Users (set Active Users = 0)') }}
+                                        </label>
+                                    </div>
+                                    <p class="small text-muted mb-3">
+                                        {{ __('Tick this (or set Active Users to 0) when user seats should not be billed. User line is removed and a note is added on the invoice.') }}
+                                    </p>
+                                    <div class="row g-3">
+                                        <div class="col-md-6 col-lg-3">
+                                            <label class="form-label">{{ __('Active Users') }}</label>
+                                            <input type="number" name="active_users_count" id="crmUserCount" class="form-control" min="0"
+                                                value="{{ old('active_users_count', $invoice->active_users_count) }}" required>
+                                        </div>
+                                        <div class="col-md-6 col-lg-3">
+                                            <label class="form-label">{{ __('Price per User') }}</label>
+                                            <input type="number" step="0.01" name="price_per_user" id="crmUserPrice" class="form-control"
+                                                value="{{ old('price_per_user', $invoice->price_per_user) }}" required>
+                                        </div>
+                                    </div>
+                                    <div class="alert alert-warning mt-3 mb-0 py-2 {{ (int) old('active_users_count', $invoice->active_users_count) === 0 ? '' : 'd-none' }}" id="crmUsersZeroAlert">
+                                        <i class="ti ti-info-circle me-1"></i>
+                                        {{ __('Users will not be billed. Invoice note will include: “User seats not billed on this invoice (Active Users = 0).”') }}
+                                    </div>
+                                </div>
                             </div>
-                            <div class="col-md-6 col-lg-3">
-                                <label class="form-label">{{ __('Price per User') }}</label>
-                                <input type="number" step="0.01" name="price_per_user" class="form-control" value="{{ old('price_per_user', $invoice->price_per_user) }}" required>
-                            </div>
+
                             <div class="col-md-6">
                                 <label class="form-label">{{ __('Invoice Date') }}</label>
                                 <input type="date" name="invoice_date" class="form-control" value="{{ old('invoice_date', optional($invoice->invoice_date)->format('Y-m-d')) }}" required>
@@ -114,10 +141,12 @@
                                 <label class="form-label">{{ __('Users Line Description') }}</label>
                                 <input type="text" name="user_description" class="form-control"
                                     value="{{ old('user_description', optional($invoice->items->get(1))->description) }}">
+                                <small class="text-muted">{{ __('Ignored when Active Users = 0 (no user line).') }}</small>
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">{{ __('Notes') }}</label>
                                 <textarea name="notes" class="form-control" rows="3">{{ old('notes', $invoice->notes) }}</textarea>
+                                <small class="text-muted">{{ __('If users are not charged, the system appends an automatic note here.') }}</small>
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">{{ __('Payment Instructions') }}</label>
@@ -135,3 +164,41 @@
     </div>
 </div>
 @endsection
+
+@push('script-page')
+<script>
+(function () {
+    const excludeEl = document.getElementById('crmExcludeUsers');
+    const userCountEl = document.getElementById('crmUserCount');
+    const alertEl = document.getElementById('crmUsersZeroAlert');
+    let previousUsers = userCountEl ? userCountEl.value : '0';
+
+    function syncUi() {
+        const exclude = !!(excludeEl && excludeEl.checked);
+        const zero = userCountEl && String(userCountEl.value) === '0';
+        if (exclude && userCountEl) {
+            userCountEl.value = 0;
+            userCountEl.readOnly = true;
+        } else if (userCountEl) {
+            userCountEl.readOnly = false;
+        }
+        if (alertEl) alertEl.classList.toggle('d-none', !(exclude || zero));
+    }
+
+    excludeEl?.addEventListener('change', function () {
+        if (this.checked) {
+            previousUsers = userCountEl?.value || previousUsers;
+            if (userCountEl) userCountEl.value = 0;
+        } else if (userCountEl && String(previousUsers) !== '0') {
+            userCountEl.value = previousUsers;
+        }
+        syncUi();
+    });
+    userCountEl?.addEventListener('input', function () {
+        if (String(this.value) !== '0' && excludeEl?.checked) excludeEl.checked = false;
+        syncUi();
+    });
+    syncUi();
+})();
+</script>
+@endpush

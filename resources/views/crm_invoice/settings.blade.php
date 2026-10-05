@@ -18,6 +18,8 @@
 
 @section('content')
 <div class="crm-invoice-module">
+    @include('crm_invoice.partials.admin_help', ['helpId' => 'crmSettingsHelp', 'helpOpen' => false])
+
     <div class="row justify-content-center">
         <div class="col-xl-10 col-lg-11">
             <div class="card">

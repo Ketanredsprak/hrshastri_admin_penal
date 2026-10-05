@@ -65,8 +65,13 @@
                 <div class="card-body py-3">
                     <div class="text-muted small">{{ __('Employees') }}</div>
                     <div class="fw-semibold mt-1">{{ number_format($invoice->active_employees_count) }} × ₹{{ number_format($invoice->price_per_employee, 2) }}</div>
-                    @if((int) ($invoice->active_users_count ?? 0) > 0 || (float) ($invoice->price_per_user ?? 0) > 0)
-                        <div class="text-muted small mt-2">{{ __('Users') }}</div>
+                    <div class="text-muted small mt-2">{{ __('Users') }}</div>
+                    @if($invoice->usersNotBilled())
+                        <div class="fw-semibold">
+                            0
+                            <span class="badge bg-warning text-dark ms-1">{{ __('Not billed') }}</span>
+                        </div>
+                    @else
                         <div class="fw-semibold">{{ number_format((int) $invoice->active_users_count) }} × ₹{{ number_format((float) $invoice->price_per_user, 2) }}</div>
                     @endif
                 </div>

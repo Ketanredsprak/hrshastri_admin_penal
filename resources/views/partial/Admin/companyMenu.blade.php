@@ -71,6 +71,10 @@
     <div class="navbar-content">
         <ul class="dash-navbar">
 
+            <li class="dash-caption">
+                <label>{{ __('Overview') }}</label>
+            </li>
+
             <!-- dashboard-->
             <li class="dash-item">
                 <a href="{{ route('home') }}" class="dash-link"><span class="dash-micon"><i
@@ -92,6 +96,10 @@
                 </li>
                 {{-- Employee Details --}}
             @endif
+
+            <li class="dash-caption">
+                <label>{{ __('People') }}</label>
+            </li>
 
             <!-- user-->
             @if (Gate::check('Manage User') || Gate::check('Manage Role'))
@@ -133,7 +141,19 @@
                 </li>
             @endif
 
+            @if (config('form16.enabled') && Gate::check('Manage Employee') && \Auth::user()->type != 'employee')
+                <li class="dash-item {{ Request::segment(1) == 'form16' ? 'active' : '' }}">
+                    <a href="{{ route('form16.index') }}" class="dash-link"><span class="dash-micon"><i
+                                class="ti ti-file-certificate"></i></span><span
+                            class="dash-mtext">{{ __('Form 16') }}</span></a>
+                </li>
+            @endif
+
             <!-- employee List -->
+
+            <li class="dash-caption">
+                <label>{{ __('Operations') }}</label>
+            </li>
 
             <!-- payroll-->
             @if (Gate::check('Manage Set Salary') || Gate::check('Manage Pay Slip'))
@@ -849,6 +869,10 @@
 
 
         <!--report-->
+
+        <li class="dash-caption">
+            <label>{{ __('Insights') }}</label>
+        </li>
 
         @if (Gate::check('Manage Report'))
             <li class="dash-item dash-hasmenu {{ $reportNavOpen }}">
