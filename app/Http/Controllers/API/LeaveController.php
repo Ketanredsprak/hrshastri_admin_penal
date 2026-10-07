@@ -61,7 +61,7 @@ class LeaveController extends Controller
           {
 
                $user     = Auth::user();
-               $employee = Employee::where('user_id', '=', $user->id)->first();
+               $employee = $user->employee ?: Employee::where('user_id', '=', $user->id)->first();
 
                $year = $request->year ?? 0;
 

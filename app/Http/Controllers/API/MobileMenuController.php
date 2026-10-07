@@ -26,10 +26,14 @@ class MobileMenuController extends Controller
      {
           try
           {
+               $companyId = Auth::user()->creatorId();
                $menuData = MobileMenu::select("*", "icon as icon_url")
-                    ->whereHas('CompanyMobileMenu', function ($query)
+                    ->whereExists(function ($query) use ($companyId)
                     {
-                         $query->where('company_id', Auth::user()->creatorId());
+                         $query->select(DB::raw(1))
+                              ->from('company_mobile_menu')
+                              ->whereColumn('company_mobile_menu.menu_id', 'mobile_menu.id')
+                              ->where('company_mobile_menu.company_id', $companyId);
                     })
                     ->where("parent_id", 0)
                     ->orderBy("sequence_number", "ASC")
@@ -52,8 +56,7 @@ class MobileMenuController extends Controller
                $showAddEmployeeAttendanceScreen = false;
 
 
-               $customer_data =  User::find(Auth::id());
-               // $emp = Employee::select("*", "employee_profile as employee_profile_image")->where('user_id', '=', $customer_data->id)->first();
+               $customer_data = Auth::user();
 
                if (Auth::user()->type != 'employee' && $customer_data->hasPermissionTo('Add Multiple Employee Attendance', 'web'))
                {
@@ -62,10 +65,14 @@ class MobileMenuController extends Controller
 
                $hideScreensArray = ["AddEmployeeAttendanceScreen"];
 
+               $companyId = Auth::user()->creatorId();
                $menuData = MobileMenu::select("*", "icon as icon_url")
-                    ->whereHas('CompanyMobileMenu', function ($query)
+                    ->whereExists(function ($query) use ($companyId)
                     {
-                         $query->where('company_id', Auth::user()->creatorId());
+                         $query->select(DB::raw(1))
+                              ->from('company_mobile_menu')
+                              ->whereColumn('company_mobile_menu.menu_id', 'mobile_menu.id')
+                              ->where('company_mobile_menu.company_id', $companyId);
                     })
                     ->when(!$showAddEmployeeAttendanceScreen, function ($query) use ($hideScreensArray)
                     {

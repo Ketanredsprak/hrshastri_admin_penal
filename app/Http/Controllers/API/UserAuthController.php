@@ -97,8 +97,7 @@ class UserAuthController extends Controller
                     );
                }
 
-               $user_device_configurations = User::where("id", Auth::user()->id)->first()->user_device_configurations ?? "";
-               $user_device_configurations = json_decode($user_device_configurations);
+               $user_device_configurations = json_decode(Auth::user()->user_device_configurations ?? "");
 
                $attendanceEmployee = $attendanceEmployee->orderBy('id', 'desc')->get();
                if (!empty($attendanceEmployee))
@@ -143,16 +142,16 @@ class UserAuthController extends Controller
 
                // get employee working hours
 
-               $officeTime['startTime'] = timeFormat(Utility::getValByName('company_start_time'));
-               $officeTime['endTime']   = timeFormat(Utility::getValByName('company_end_time'));
-
-               $officeTime['flexiHours'] = Utility::getValByName('company_flexi_hours');
-               $officeTime['flexiDays'] = Utility::getValByName('company_flexi_days');
+               $settings = Utility::settings();
+               $officeTime['startTime'] = timeFormat($settings['company_start_time'] ?? '');
+               $officeTime['endTime']   = timeFormat($settings['company_end_time'] ?? '');
+               $officeTime['flexiHours'] = $settings['company_flexi_hours'] ?? '';
+               $officeTime['flexiDays'] = $settings['company_flexi_days'] ?? '';
 
                // dd(Utility::getValByName('company_start_time'));
 
                // check if employee is assigned to any shift calculate according that shift
-               $workingShiftEmployees = WorkingShiftEmployees::where("employee_id", !empty(Auth::user()->employee) ? Auth::user()->employee->id : 0)->first();
+               $workingShiftEmployees = WorkingShiftEmployees::where("employee_id", $employeeId)->first();
                $employeeShift = null;
                if ($workingShiftEmployees != null)
                {
@@ -1412,7 +1411,6 @@ class UserAuthController extends Controller
      {
           try
           {
-               $userData =  User::find(Auth::id());
                $employee = Employee::select("*", "employee_profile as employee_profile_image")
                     ->with(
                          'employeeDocuments',
@@ -1420,15 +1418,13 @@ class UserAuthController extends Controller
                          'education',
                          'dependent'
                     )
-                    ->with('branch', 'department', 'designation')->with("playslab")->where('user_id', $userData->id)->first();
+                    ->with('branch', 'department', 'designation')->with("playslab")->where('user_id', Auth::id())->first();
 
                $employee->employee_code = Auth::user()->employeeIdFormat($employee->employee_id);
-               // $employee->avatar = employee(!empty($emp->avatar) ? asset(Storage::url('uploads/avatar')) . '/' . $emp->avatar : "");
                $employee->office_staff_name = ($employee->office_staff == 1 ? "Office Staff" : "Field Staff");
                $employee->salary = Auth::user()->priceFormat($employee->salary);
 
-               $employeeUserData = User::where('id', $employee->user_id)->first();
-               $employee->login_status = $employeeUserData->login_status ?? 0;
+               $employee->login_status = Auth::user()->login_status ?? 0;
 
                $employee->maritalStatusList = [
                     "Single",
@@ -1751,32 +1747,15 @@ class UserAuthController extends Controller
 
           try
           {
-               $emp = User::find(Auth::id());
-               $employee = Employee::select("*", "employee_profile as employee_profile_image")->where('user_id', ($emp->id ?? 0))->first();
+               $emp = Auth::user();
+               $employee = Employee::select("*", "employee_profile as employee_profile_image")
+                    ->with('branch')
+                    ->where('user_id', ($emp->id ?? 0))
+                    ->first();
 
                if ($employee != null)
                {
                     $employeeId = $employee->id;
-
-                    $lastClockInImageUrl = "";
-
-                    $checkLastAttendance = AttendanceEmployee::select(
-                         "id",
-                         "image",
-                         "employee_id"
-                    )
-                         ->where('employee_id', $employee->id)
-                         ->where('image', '!=', null)
-                         ->orderByRaw("date DESC, id DESC")
-                         ->first();
-
-                    if ($checkLastAttendance != null)
-                    {
-                         if ($checkLastAttendance->image != null || !empty($checkLastAttendance->image))
-                         {
-                              $lastClockInImageUrl = getFilePathPrefix() . 'images/clock_in_out/' . $checkLastAttendance->employee_id . '/' . $checkLastAttendance->image;
-                         }
-                    }
 
                     $settings = Utility::settings();
 
@@ -1801,16 +1780,11 @@ class UserAuthController extends Controller
                          }
                     }
 
-                    // get employee working hours
+                    $officeTime['startTime'] = timeFormat($settings['company_start_time'] ?? '');
+                    $officeTime['endTime']   = timeFormat($settings['company_end_time'] ?? '');
+                    $officeTime['flexiHours'] = $settings['company_flexi_hours'] ?? '';
+                    $officeTime['flexiDays'] = $settings['company_flexi_days'] ?? '';
 
-                    $officeTime['startTime'] = timeFormat(Utility::getValByName('company_start_time'));
-                    $officeTime['endTime']   = timeFormat(Utility::getValByName('company_end_time'));
-
-                    $officeTime['flexiHours'] = Utility::getValByName('company_flexi_hours');
-                    $officeTime['flexiDays'] = Utility::getValByName('company_flexi_days');
-
-
-                    // check if employee is assigned to any shift calculate according that shift
                     $workingShiftEmployees = WorkingShiftEmployees::where("employee_id", $employeeId)->first();
                     $employeeShift = null;
                     if ($workingShiftEmployees != null)
@@ -1825,8 +1799,6 @@ class UserAuthController extends Controller
                               $officeTime['flexiDays'] = $employeeShift->flexi_days;
                          }
                     }
-                    // get employee working hours
-
 
                     $workingData = $officeTime;
 
@@ -1837,9 +1809,6 @@ class UserAuthController extends Controller
                          }])
                          ->get();
 
-
-
-                    // Work anniversary list
                     $workAnniversaryList = Employee::select("id", "name", "employee_profile", "employee_profile as employee_profile_image")
                          ->whereDay("company_doj", date("d"))
                          ->whereYear("company_doj", '!=', date("Y"))
@@ -1850,9 +1819,6 @@ class UserAuthController extends Controller
                          ->orderBy("name", "ASC")
                          ->get();
 
-                    // Work anniversary list
-
-                    // Marriage anniversary list
                     $marriageAnniversaryList = Employee::select("id", "name", "employee_profile", "employee_profile as employee_profile_image")
                          ->whereDay("marriage_anniversary_date", date("d"))
                          ->whereMonth("marriage_anniversary_date", date("m"))
@@ -1862,39 +1828,35 @@ class UserAuthController extends Controller
                          ->orderBy("name", "ASC")
                          ->get();
 
-                    // Marriage anniversary list
-
                     $is_custom_weekoffs = $employee->is_custom_weekoffs;
                     $employee_weekoffs_data = $employee->weekoffs_data;
 
-                    $setting = Utility::settings();
-
                     $company_weekoffs_data = [];
-                    if ($setting['company_office_week_off_monday'] == 'on')
+                    if ($settings['company_office_week_off_monday'] == 'on')
                     {
                          $company_weekoffs_data[] = "Monday";
                     }
-                    if ($setting['company_office_week_off_tuesday'] == 'on')
+                    if ($settings['company_office_week_off_tuesday'] == 'on')
                     {
                          $company_weekoffs_data[] = "Tuesday";
                     }
-                    if ($setting['company_office_week_off_wednesday'] == 'on')
+                    if ($settings['company_office_week_off_wednesday'] == 'on')
                     {
                          $company_weekoffs_data[] = "Wednesday";
                     }
-                    if ($setting['company_office_week_off_thusday'] == 'on')
+                    if ($settings['company_office_week_off_thusday'] == 'on')
                     {
                          $company_weekoffs_data[] = "Thursday";
                     }
-                    if ($setting['company_office_week_off_friday'] == 'on')
+                    if ($settings['company_office_week_off_friday'] == 'on')
                     {
                          $company_weekoffs_data[] = "Friday";
                     }
-                    if ($setting['company_office_week_off_saturday'] == 'on')
+                    if ($settings['company_office_week_off_saturday'] == 'on')
                     {
                          $company_weekoffs_data[] = "Saturday";
                     }
-                    if ($setting['company_office_week_off_sunday'] == 'on')
+                    if ($settings['company_office_week_off_sunday'] == 'on')
                     {
                          $company_weekoffs_data[] = "Sunday";
                     }
@@ -1904,16 +1866,15 @@ class UserAuthController extends Controller
                          ->where('branch_id', $employee->branch_id)
                          ->get();
 
-                    $employeeUserData = User::where('id', $employee->user_id)->first();
-
-
-                    // Last CLoci In Data
-
                     $checkLastAttendance = AttendanceEmployee::select("id", "employee_id", "clock_in_date_time", "clock_out_date_time", "clock_in_latitude", "clock_in_longitude", "clock_out_latitude", "clock_out_longitude", "clock_in", "clock_out", "image", "image as clocked_in_image", "clock_out_image", "clock_out_image as clocked_out_image", "date")->where('employee_id', '=', $employee->id)
-                         // ->where('geofencing_status', '=', $employee->geofencing_status)
                          ->orderByRaw("date DESC, id DESC")
                          ->first();
-                    // Last CLoci In Data
+
+                    $lastClockInImageUrl = "";
+                    if ($checkLastAttendance != null && !empty($checkLastAttendance->image))
+                    {
+                         $lastClockInImageUrl = getFilePathPrefix() . 'images/clock_in_out/' . $checkLastAttendance->employee_id . '/' . $checkLastAttendance->image;
+                    }
 
                     $response = [
                          'status' => 1,
@@ -1963,7 +1924,7 @@ class UserAuthController extends Controller
                               "company_weekoffs_data" => $company_weekoffs_data,
                               "holidays" => $holidays,
                               "default_image" => asset(Storage::url('uploads/avatar')) . '/avatar.png',
-                              "login_status" => $employeeUserData->login_status ?? 0,
+                              "login_status" => $emp->login_status ?? 0,
                               "last_clock_in_out_data" => $checkLastAttendance,
                          ]
                     ];
@@ -2447,8 +2408,7 @@ class UserAuthController extends Controller
           $response = [];
           try
           {
-               $emp = User::find(Auth::id());
-               $employee = Employee::where('user_id', ($emp->id ?? 0))->first();
+               $employee = Auth::user()->employee ?: Employee::where('user_id', Auth::id())->first();
 
                if ($employee == null)
                {
@@ -2461,6 +2421,7 @@ class UserAuthController extends Controller
                else
                {
                     $setting = Utility::settings();
+                    $creatorId = Auth::user()->creatorId();
 
                     $weefOffArray = [];
                     if ($setting['company_office_week_off_monday'] == 'on')
@@ -2495,16 +2456,15 @@ class UserAuthController extends Controller
                     $calenderDate = $request->calender_date ?? date("Y-m-d");
                     $month = date('m', strtotime($calenderDate));
                     $year = date('Y', strtotime($calenderDate));
+                    $monthStart = $year . '-' . $month . '-01';
+                    $monthEnd = date('Y-m-t', strtotime($monthStart));
 
                     $num_of_days = date('t', mktime(0, 0, 0, $month, 1, $year));
+                    $dates = [];
                     for ($i = 1; $i <= $num_of_days; $i++)
                     {
                          $dates[] = str_pad($i, 2, '0', STR_PAD_LEFT);
                     }
-
-                    $employeesAttendance = [];
-                    $totalPresent        = $totalLeave = $totalEarlyLeave = 0;
-                    $ovetimeHours        = $overtimeMins = $earlyleaveHours = $earlyleaveMins = $lateHours = $lateMins = 0;
 
                     $is_custom_weekoffs = $employee->is_custom_weekoffs ?? 0;
                     $employee_weekoffs_data = json_decode($employee->weekoffs_data) ?? [];
@@ -2517,21 +2477,59 @@ class UserAuthController extends Controller
                     $holidayColorCode = "#ffa21d";
                     $absentColorCode = "#ff3a6e";
 
+                    $monthLeaves = Leave::where('employee_id', $employee->id)
+                         ->where('status', 'Approved')
+                         ->where('created_by', $creatorId)
+                         ->where('start_date', '<=', $monthEnd)
+                         ->where('end_date', '>=', $monthStart)
+                         ->orderBy('id')
+                         ->get();
+
+                    // Preserve original per-day SQL:
+                    // (status=1 AND created_by=X AND start_date=D) OR (end_date=D AND created_by=X)
+                    $monthHolidays = Holiday::where('created_by', $creatorId)
+                         ->where(function ($q) use ($monthStart, $monthEnd)
+                         {
+                              $q->where(function ($inner) use ($monthStart, $monthEnd)
+                              {
+                                   $inner->where('status', 1)
+                                        ->whereBetween('start_date', [$monthStart, $monthEnd]);
+                              })->orWhereBetween('end_date', [$monthStart, $monthEnd]);
+                         })
+                         ->orderBy('id')
+                         ->get();
+
+                    $attendanceByDate = AttendanceEmployee::where('employee_id', $employee->id)
+                         ->whereBetween('date', [$monthStart, $monthEnd])
+                         ->orderBy('id')
+                         ->get()
+                         ->groupBy(function ($row)
+                         {
+                              return $row->getRawOriginal('date') ?: $row->date;
+                         })
+                         ->map(function ($rows)
+                         {
+                              return $rows->first();
+                         });
+
                     foreach ($dates as $date)
                     {
                          $dateFormat = $year . '-' . $month . '-' . $date;
                          $days = date('l', strtotime($dateFormat));
 
-                         $localLeave = Leave::where('employee_id', $employee->id)->where('status', 'Approved')
-                              ->where('start_date', '<=', $dateFormat)->where('end_date', '>=', $dateFormat)
-                              ->where('created_by', Auth::user()->creatorId())
-                              ->first();
+                         $localLeave = $monthLeaves->first(function ($leave) use ($dateFormat)
+                         {
+                              $start = $leave->getRawOriginal('start_date') ?: $leave->start_date;
+                              $end = $leave->getRawOriginal('end_date') ?: $leave->end_date;
+                              return $start <= $dateFormat && $end >= $dateFormat;
+                         });
 
-                         $holiday = Holiday::where('status', 1)
-                              ->where('created_by', Auth::user()->creatorId())
-                              ->where('start_date', '=', $dateFormat)->orWhere('end_date', '=', $dateFormat)
-                              ->where('created_by', Auth::user()->creatorId())
-                              ->first();
+                         $holiday = $monthHolidays->first(function ($row) use ($dateFormat)
+                         {
+                              $start = $row->getRawOriginal('start_date') ?: $row->start_date;
+                              $end = $row->getRawOriginal('end_date') ?: $row->end_date;
+                              return ((int) $row->status === 1 && $start == $dateFormat) || ($end == $dateFormat);
+                         });
 
                          if ($holiday != null)
                          {
@@ -2539,35 +2537,19 @@ class UserAuthController extends Controller
                               $branch_ids = json_decode($row->branch_id) ?? [];
                               $department_ids = json_decode($row->department_id) ?? [];
 
-                              // $row->branch_id = $branch_ids;
-                              // $row->department_id = $department_ids;
-
                               $holidayData = [];
 
-
-                              // scenarios
-                              // scenarios 1 : if all branched selected, all departments selected and all employees selected | then show announcement to employee
-                              // scenarios 2 : if not all branches selected, but for all departments are selected | then show announcement to employee
-                              // scenarios 2.1 : if all employees are selected or if specific employee then check logged in employee is added in list or not and its branch is equal to announcement branch
-
-
-                              // if all branchs, all departments
                               if (in_array(0, $branch_ids) && in_array(0, $department_ids))
                               {
                                    $holidayData = $row;
                               }
-
-                              // if not all branches, but for all departments
                               else if (!in_array(0, $branch_ids) && in_array(0, $department_ids))
                               {
-                                   // check if all employees are allowed or if specific employee then check logged in employee is added in list or not and its branch is equal to announcement branch
                                    if (in_array($employee->branch_id, $branch_ids))
                                    {
                                         $holidayData = $row;
                                    }
                               }
-
-                              // if not all branched and not all departments
                               else if (!in_array(0, $branch_ids) && !in_array(0, $department_ids))
                               {
                                    if (in_array($employee->branch_id, $branch_ids) && in_array($employee->department_id, $department_ids))
@@ -2575,7 +2557,6 @@ class UserAuthController extends Controller
                                         $holidayData = $row;
                                    }
                               }
-                              // if all branched and not all departments
                               else if (in_array(0, $branch_ids) && !in_array(0, $department_ids))
                               {
                                    if (in_array($employee->department_id, $department_ids))
@@ -2587,29 +2568,25 @@ class UserAuthController extends Controller
                               $holiday = $holidayData;
                          }
 
-                         // check is week off
                          $isWeekOff = false;
-                         if ($is_custom_weekoffs == 1) // if 1 then check custom week off of employee
+                         if ($is_custom_weekoffs == 1)
                          {
                               if (in_array($dateFormat, $employee_weekoffs_data))
                               {
                                    $isWeekOff = true;
                               }
                          }
-                         else // if 0 then check company week off
+                         else
                          {
                               if (in_array($days, $weefOffArray))
                               {
                                    $isWeekOff = true;
                               }
                          }
-                         // check is week off
 
-
-                         // check if have applied leave on current date
                          if (!empty($localLeave))
                          {
-                              if ($localLeave->total_leave_days == "0.5") // check if leave if for half day
+                              if ($localLeave->total_leave_days == "0.5")
                               {
                                    $calenderData[] = [
                                         "date" => $dateFormat,
@@ -2618,9 +2595,8 @@ class UserAuthController extends Controller
                                         "colorCode" => $leaveColorCode,
                                    ];
                               }
-                              else // check if leave if for full or multiple days
+                              else
                               {
-
                                    $period = CarbonPeriod::create($localLeave->getRawOriginal("start_date"), $localLeave->getRawOriginal("end_date"));
                                    foreach ($period as $rangeDate)
                                    {
@@ -2635,9 +2611,9 @@ class UserAuthController extends Controller
                          }
                          else
                          {
-                              $employeeAttendance = AttendanceEmployee::where('employee_id', $employee->id)->where('date', $dateFormat)->first();
+                              $employeeAttendance = $attendanceByDate[$dateFormat] ?? null;
 
-                              if ($employeeAttendance != null && $employeeAttendance->status == 'Present') // check if present or not
+                              if ($employeeAttendance != null && $employeeAttendance->status == 'Present')
                               {
                                    $calenderData[] = [
                                         "date" => $dateFormat,
@@ -2648,10 +2624,8 @@ class UserAuthController extends Controller
                               }
                               else
                               {
-                                   if ($isWeekOff) // check if is week off
+                                   if ($isWeekOff)
                                    {
-                                        $attendanceStatus[$date] = 'WO';
-
                                         $calenderData[] = [
                                              "date" => $dateFormat,
                                              "statusText" => "WO",
@@ -2676,14 +2650,14 @@ class UserAuthController extends Controller
                                              foreach ($period as $rangeDate)
                                              {
                                                   $addHoliday = true;
-                                                  if ($is_custom_weekoffs == 1) // if 1 then check custom week off of employee
+                                                  if ($is_custom_weekoffs == 1)
                                                   {
                                                        if (in_array($rangeDate->format('Y-m-d'), $employee_weekoffs_data))
                                                        {
                                                             $addHoliday = false;
                                                        }
                                                   }
-                                                  else // if 0 then check company week off
+                                                  else
                                                   {
                                                        $perios_days = date('l', strtotime($rangeDate->format('Y-m-d')));
                                                        if (in_array($perios_days, $weefOffArray))
@@ -2703,7 +2677,7 @@ class UserAuthController extends Controller
                                                   }
                                              }
                                         }
-                                        else // else mark as an apsend
+                                        else
                                         {
                                              if ($dateFormat <= date('Y-m-d'))
                                              {

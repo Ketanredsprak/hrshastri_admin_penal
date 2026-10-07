@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
 class MobileMenu extends Model
@@ -30,10 +31,15 @@ class MobileMenu extends Model
 
      public function SubMenuCompany()
      {
+          $companyId = Auth::check() ? Auth::user()->creatorId() : 0;
+
           return $this->hasMany(MobileMenu::class, 'parent_id')->select("*", "icon as icon_url")
-               ->whereHas('CompanyMobileMenu', function ($query)
+               ->whereExists(function ($query) use ($companyId)
                {
-                    $query->where('company_id', Auth::user()->creatorId());
+                    $query->select(DB::raw(1))
+                         ->from('company_mobile_menu')
+                         ->whereColumn('company_mobile_menu.menu_id', 'mobile_menu.id')
+                         ->where('company_mobile_menu.company_id', $companyId);
                })
                ->orderBy("sequence_number", "ASC")
                ->with("SubMenuCompany");

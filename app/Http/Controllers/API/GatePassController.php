@@ -34,7 +34,16 @@ class GatePassController extends Controller
                {
                     $employeeId = Auth::id();
                }
-               $data = GetPass::find($request->gate_pass_id);
+               $gatePassId = $request->gate_pass_id ?? $request->id;
+               $data = GetPass::find($gatePassId);
+               if ($data == null)
+               {
+                    DB::rollBack();
+                    return ApiResponse([
+                         'status' => 0,
+                         'message' => __("No Data Found"),
+                    ]);
+               }
                $data->name = $request->leave_type_id;
                // $data->employee_id = $employeeId;
 
@@ -91,8 +100,12 @@ class GatePassController extends Controller
           }
           catch (Exception | Throwable $e)
           {
-               Log::info("Gate Pass Update Error", $e);
-               Log::info("Gate Pass Update Error Data", $request->all());
+               Log::error("Gate Pass Update Error", [
+                    'message' => $e->getMessage(),
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine(),
+               ]);
+               Log::error("Gate Pass Update Error Data", $request->all());
                DB::rollBack();
                $response = error_msg(showExceptionMessage($e));
           }
@@ -189,8 +202,12 @@ class GatePassController extends Controller
           }
           catch (Exception | Throwable $e)
           {
-               Log::info("Gate Pass Create Error", $e);
-               Log::info("Gate Pass Create Error Data", $request->all());
+               Log::error("Gate Pass Create Error", [
+                    'message' => $e->getMessage(),
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine(),
+               ]);
+               Log::error("Gate Pass Create Error Data", $request->all());
 
                DB::rollBack();
                $response = error_msg(showExceptionMessage($e));
